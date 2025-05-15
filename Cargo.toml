@@ -8,7 +8,7 @@ homepage = "https://github.com/pendulum-project/nts-pool"
 readme = "./README.md"
 description = "NTS pool key exchange server"
 publish = false
-rust-version = "1.71"
+rust-version = "1.71" # MSRV
 
 [package.metadata.cargo-udeps.ignore]
 normal = [ "ntp-proto", "rustls-platform-verifier", "rustls-pemfile2", "rustls23", "serde", "tokio-rustls", "toml", "tracing", "tracing-subscriber" ]
