@@ -21,12 +21,8 @@ tracing-subscriber = { version = "0.3.0", default-features = false, features = [
 rustls23 = { package = "rustls", version = "0.23.16", features = ["logging", "std", "tls12"] }
 rustls-platform-verifier = "0.5.0"
 serde = { version = "1.0.145", features = ["derive"] }
-ntp-proto = { version = "1.5.0", default_features = false, features = ["__internal-api"] }
+ntp-proto = { version = "1.5.0", default-features = false, features = ["__internal-api", "nts-pool" ] }
 tokio-rustls = { version = "0.26.0", features = ["logging", "tls12"] }
-
-[features]
-default = [ "unstable_nts-pool" ]
-unstable_nts-pool = [ "ntp-proto/nts-pool" ]
 
 [[bin]]
 name = "nts-pool-ke"
