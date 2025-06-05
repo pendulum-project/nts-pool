@@ -3,6 +3,7 @@ extern crate rustls23 as rustls;
 mod cli;
 mod config;
 
+mod nts;
 mod tracing;
 
 use std::{io::ErrorKind, ops::ControlFlow, path::PathBuf, sync::Arc};
