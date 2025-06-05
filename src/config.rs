@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use rustls::pki_types::ServerName;
 use serde::Deserialize;
 use tracing::{info, warn};
 
@@ -96,11 +97,40 @@ fn default_nts_ke_timeout() -> u64 {
     1000
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct KeyExchangeServer {
     pub domain: String,
+    pub server_name: ServerName<'static>,
     pub port: u16,
+}
+
+impl<'de> Deserialize<'de> for KeyExchangeServer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+        struct BareKeyExchangeServer {
+            domain: String,
+            port: u16,
+        }
+
+        let bare = BareKeyExchangeServer::deserialize(deserializer)?;
+
+        let Ok(server_name) = ServerName::try_from(bare.domain.clone()) else {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(&bare.domain),
+                &"Domain name",
+            ));
+        };
+
+        Ok(KeyExchangeServer {
+            domain: bare.domain.to_string(),
+            server_name,
+            port: bare.port,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -144,10 +174,12 @@ mod tests {
             vec![
                 KeyExchangeServer {
                     domain: String::from("foo.bar"),
+                    server_name: ServerName::try_from("foo.bar").unwrap(),
                     port: 1234
                 },
                 KeyExchangeServer {
                     domain: String::from("bar.foo"),
+                    server_name: ServerName::try_from("bar.foo").unwrap(),
                     port: 4321
                 },
             ]
