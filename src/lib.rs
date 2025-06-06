@@ -99,7 +99,7 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
     // tracing setup to ensure logging is fully configured.
     config.check();
 
-    let result = run_nts_pool_ke(config.nts_pool_ke_server).await;
+    let result = run_nts_pool_ke(config.server).await;
 
     match result {
         Ok(v) => Ok(v),
