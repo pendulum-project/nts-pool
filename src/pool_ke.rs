@@ -3,10 +3,8 @@ use std::{
     sync::Arc,
 };
 
-use rustls::{pki_types::pem::PemObject, version::TLS13, ServerConnection};
-use rustls_platform_verifier::Verifier;
+use rustls::ServerConnection;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
-use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tracing::{debug, info};
 
 use crate::{
@@ -63,95 +61,11 @@ pub async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Re
 
 struct NtsPoolKe {
     config: NtsPoolKeConfig,
-    upstream_tls: TlsConnector,
-    server_tls: TlsAcceptor,
 }
 
 impl NtsPoolKe {
     fn new(config: NtsPoolKeConfig) -> std::io::Result<Self> {
-        let certificate_authority_file = std::fs::File::open(&config.certificate_authority_path)
-            .map_err(|e| {
-                std::io::Error::other(format!(
-                    "error reading certificate_authority_path at `{:?}`: {:?}",
-                    config.certificate_authority_path, e
-                ))
-            })?;
-
-        let certificate_chain_file =
-            std::fs::File::open(&config.certificate_chain_path).map_err(|e| {
-                std::io::Error::other(format!(
-                    "error reading certificate_chain_path at `{:?}`: {:?}",
-                    config.certificate_chain_path, e
-                ))
-            })?;
-
-        let private_key_file = std::fs::File::open(&config.private_key_path).map_err(|e| {
-            std::io::Error::other(format!(
-                "error reading key_der_path at `{:?}`: {:?}",
-                config.private_key_path, e
-            ))
-        })?;
-
-        let certificate_authority: Arc<[rustls::pki_types::CertificateDer]> =
-            rustls::pki_types::CertificateDer::pem_reader_iter(&mut std::io::BufReader::new(
-                certificate_authority_file,
-            ))
-            .map(|item| {
-                item.map_err(|err| match err {
-                    rustls::pki_types::pem::Error::Io(error) => error,
-                    _ => std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string()),
-                })
-            })
-            .collect::<std::io::Result<Arc<[rustls::pki_types::CertificateDer]>>>()?;
-
-        let certificate_chain: Vec<rustls::pki_types::CertificateDer> =
-            rustls::pki_types::CertificateDer::pem_reader_iter(&mut std::io::BufReader::new(
-                certificate_chain_file,
-            ))
-            .map(|item| {
-                item.map_err(|err| match err {
-                    rustls::pki_types::pem::Error::Io(error) => error,
-                    _ => std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string()),
-                })
-            })
-            .collect::<std::io::Result<Vec<rustls::pki_types::CertificateDer>>>()?;
-
-        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_reader(
-            &mut std::io::BufReader::new(private_key_file),
-        )
-        .map_err(|err| match err {
-            rustls::pki_types::pem::Error::Io(error) => error,
-            _ => std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string()),
-        })?;
-
-        let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&TLS13])
-            .with_no_client_auth()
-            .with_single_cert(certificate_chain.clone(), private_key.clone_key())
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
-        server_config.alpn_protocols.clear();
-        server_config.alpn_protocols.push(b"ntske/1".to_vec());
-
-        let server_tls = TlsAcceptor::from(Arc::new(server_config));
-
-        let upstream_config_builder =
-            rustls::ClientConfig::builder_with_protocol_versions(&[&TLS13]);
-        let provider = upstream_config_builder.crypto_provider().clone();
-        let verifier = Verifier::new_with_extra_roots(certificate_authority.iter().cloned())
-            .map_err(std::io::Error::other)?
-            .with_provider(provider);
-
-        let upstream_config = upstream_config_builder
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(verifier))
-            .with_client_auth_cert(certificate_chain, private_key)
-            .map_err(std::io::Error::other)?;
-        let upstream_tls = TlsConnector::from(Arc::new(upstream_config));
-
-        Ok(NtsPoolKe {
-            config,
-            upstream_tls,
-            server_tls,
-        })
+        Ok(NtsPoolKe { config })
     }
 
     async fn serve(self: Arc<Self>) -> std::io::Result<()> {
@@ -164,9 +78,12 @@ impl NtsPoolKe {
             let self_clone = self.clone();
 
             tokio::spawn(async move {
-                let timeout =
-                    std::time::Duration::from_millis(self_clone.config.key_exchange_timeout_ms);
-                match tokio::time::timeout(timeout, self_clone.handle_client(client_stream)).await {
+                match tokio::time::timeout(
+                    self_clone.config.key_exchange_timeout,
+                    self_clone.handle_client(client_stream),
+                )
+                .await
+                {
                     Err(_) => ::tracing::debug!(?source_address, "NTS Pool KE timed out"),
                     Ok(Err(err)) => ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed"),
                     Ok(Ok(())) => ::tracing::debug!(?source_address, "NTS Pool KE completed"),
@@ -177,7 +94,7 @@ impl NtsPoolKe {
 
     async fn handle_client(&self, client_stream: tokio::net::TcpStream) -> Result<(), PoolError> {
         // handle the initial client to pool
-        let mut client_stream = self.server_tls.accept(client_stream).await?;
+        let mut client_stream = self.config.server_tls.accept(client_stream).await?;
 
         let client_request = match ClientRequest::parse(&mut client_stream).await {
             Ok(client_request) => client_request,
@@ -322,6 +239,7 @@ impl NtsPoolKe {
         let server_stream =
             tokio::net::TcpStream::connect((server.domain.as_str(), server.port)).await?;
         let mut server_stream = self
+            .config
             .upstream_tls
             .connect(server.server_name.clone(), server_stream)
             .await?;
@@ -365,6 +283,7 @@ impl NtsPoolKe {
         let server_stream =
             tokio::net::TcpStream::connect((server.domain.as_str(), server.port)).await?;
         let mut server_stream = self
+            .config
             .upstream_tls
             .connect(server.server_name.clone(), server_stream)
             .await?;
