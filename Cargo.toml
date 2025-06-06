@@ -11,17 +11,17 @@ publish = false
 rust-version = "1.87" # MSRV
 
 [package.metadata.cargo-udeps.ignore]
-normal = [ "ntp-proto", "rustls-platform-verifier", "rustls-pemfile2", "rustls23", "serde", "tokio-rustls", "toml", "tracing", "tracing-subscriber" ]
+normal = [ "ntp-proto", "rustls-platform-verifier", "rustls-pemfile2", "rustls", "serde", "tokio-rustls", "toml", "tracing", "tracing-subscriber" ]
 
 [dependencies]
 tokio = { version = "1.32", features = ["rt-multi-thread", "io-util", "fs", "net", "macros", "time" ] }
 toml = { version = ">=0.6.0,<0.9.0", default-features = false, features = ["parse"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["std", "fmt", "ansi"] }
-rustls23 = { package = "rustls", version = "0.23.16", features = ["logging", "std", "tls12"] }
+rustls = { version = "0.23.16", features = ["logging", "std"] }
 rustls-platform-verifier = "0.5.0"
 serde = { version = "1.0.145", features = ["derive"] }
-tokio-rustls = { version = "0.26.0", features = ["logging", "tls12"] }
+tokio-rustls = { version = "0.26.0", features = ["logging"] }
 
 [[bin]]
 name = "nts-pool-ke"
