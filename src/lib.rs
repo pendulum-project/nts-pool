@@ -1,5 +1,3 @@
-extern crate rustls23 as rustls;
-
 mod cli;
 mod config;
 
@@ -15,8 +13,11 @@ use std::{
 use ::tracing::{debug, info};
 use cli::NtsPoolKeOptions;
 use config::{Config, NtsPoolKeConfig};
-use rustls::{pki_types::CertificateDer, version::TLS13, ServerConnection};
-use rustls23::pki_types::pem::PemObject;
+use rustls::{
+    pki_types::{pem::PemObject, CertificateDer},
+    version::TLS13,
+    ServerConnection,
+};
 use rustls_platform_verifier::Verifier;
 use tokio::{
     io::AsyncWriteExt,
@@ -172,7 +173,7 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
 async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Result<()> {
     let certificate_authority_file =
         std::fs::File::open(&nts_pool_ke_config.certificate_authority_path).map_err(|e| {
-            io_error(&format!(
+            std::io::Error::other(format!(
                 "error reading certificate_authority_path at `{:?}`: {:?}",
                 nts_pool_ke_config.certificate_authority_path, e
             ))
@@ -180,7 +181,7 @@ async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Result
 
     let certificate_chain_file = std::fs::File::open(&nts_pool_ke_config.certificate_chain_path)
         .map_err(|e| {
-            io_error(&format!(
+            std::io::Error::other(format!(
                 "error reading certificate_chain_path at `{:?}`: {:?}",
                 nts_pool_ke_config.certificate_chain_path, e
             ))
@@ -188,7 +189,7 @@ async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Result
 
     let private_key_file =
         std::fs::File::open(&nts_pool_ke_config.private_key_path).map_err(|e| {
-            io_error(&format!(
+            std::io::Error::other(format!(
                 "error reading key_der_path at `{:?}`: {:?}",
                 nts_pool_ke_config.private_key_path, e
             ))
@@ -235,10 +236,6 @@ async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Result
         nts_pool_ke_config.key_exchange_timeout_ms,
     )
     .await
-}
-
-fn io_error(msg: &str) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, msg)
 }
 
 async fn pool_key_exchange_server(
