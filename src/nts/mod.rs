@@ -289,6 +289,80 @@ impl FixedKeyRequest {
 
         Ok(())
     }
+
+    #[cfg(test)]
+    pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+        let mut c2s = None;
+        let mut s2c = None;
+        let mut algorithm = None;
+        let mut protocol = None;
+
+        loop {
+            let record = NtsRecord::parse(&mut reader).await?;
+
+            match record {
+                NtsRecord::EndOfMessage => break,
+                NtsRecord::FixedKeyRequest {
+                    c2s: c2s_rem,
+                    s2c: s2c_rem,
+                } => {
+                    if c2s.is_some() || s2c.is_some() {
+                        return Err(NtsError::Invalid);
+                    }
+
+                    c2s = Some(c2s_rem);
+                    s2c = Some(s2c_rem);
+                }
+                NtsRecord::AeadAlgorithm { algorithm_ids } => {
+                    if algorithm.is_some() || algorithm_ids.len() != 1 {
+                        return Err(NtsError::Invalid);
+                    }
+
+                    algorithm = Some(algorithm_ids[0]);
+                }
+                NtsRecord::NextProtocol { protocol_ids } => {
+                    if protocol.is_some() || protocol_ids.len() != 1 {
+                        return Err(NtsError::Invalid);
+                    }
+
+                    protocol = Some(protocol_ids[0]);
+                }
+                // Error
+                NtsRecord::Error { errorcode } => return Err(NtsError::Error(errorcode)),
+                // Warning
+                NtsRecord::Warning { warningcode } => match warningcode {
+                    WarningCode::Unknown(code) => return Err(NtsError::UnknownWarning(code)),
+                },
+                // Unknown critical
+                NtsRecord::Unknown { critical: true, .. } => {
+                    return Err(NtsError::UnrecognizedCriticalRecord)
+                }
+                // Ignored
+                NtsRecord::KeepAlive
+                | NtsRecord::Unknown { .. }
+                | NtsRecord::Server { .. }
+                | NtsRecord::Port { .. } => {}
+                // Not allowed
+                NtsRecord::NewCookie { .. }
+                | NtsRecord::SupportedNextProtocolList { .. }
+                | NtsRecord::SupportedAlgorithmList { .. }
+                | NtsRecord::NtpServerDeny { .. } => return Err(NtsError::Invalid),
+            }
+        }
+
+        if let (Some(algorithm), Some(protocol), Some(c2s), Some(s2c)) =
+            (algorithm, protocol, c2s, s2c)
+        {
+            Ok(Self {
+                c2s,
+                s2c,
+                protocol,
+                algorithm,
+            })
+        } else {
+            Err(NtsError::Invalid)
+        }
+    }
 }
 
 pub struct KeyExchangeResponse {
