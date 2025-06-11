@@ -70,10 +70,16 @@ impl NtsPoolKe {
 
     async fn serve(self: Arc<Self>) -> std::io::Result<()> {
         let listener = TcpListener::bind(self.config.listen).await?;
+        let connectionpermits = Arc::new(tokio::sync::Semaphore::new(self.config.max_connections));
 
         info!("listening on '{:?}'", listener.local_addr());
 
         loop {
+            let permit = connectionpermits
+                .clone()
+                .acquire_owned()
+                .await
+                .expect("Semaphore shouldn't be closed");
             let (client_stream, source_address) = listener.accept().await?;
             let self_clone = self.clone();
 
@@ -88,6 +94,7 @@ impl NtsPoolKe {
                     Ok(Err(err)) => ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed"),
                     Ok(Ok(())) => ::tracing::debug!(?source_address, "NTS Pool KE completed"),
                 }
+                drop(permit);
             });
         }
     }

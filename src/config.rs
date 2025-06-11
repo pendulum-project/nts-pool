@@ -105,10 +105,17 @@ struct BareNtsPoolKeConfig {
     listen: SocketAddr,
     /// Which upstream servers to use.
     key_exchange_servers: Box<[KeyExchangeServer]>,
+    /// Maximum amount of parallel connections (incoming)
+    #[serde(default = "default_max_connections")]
+    max_connections: usize,
 }
 
 fn default_nts_ke_timeout() -> u64 {
     1000
+}
+
+fn default_max_connections() -> usize {
+    100
 }
 
 #[derive(Clone)]
@@ -118,6 +125,7 @@ pub struct NtsPoolKeConfig {
     pub listen: SocketAddr,
     pub key_exchange_servers: Box<[KeyExchangeServer]>,
     pub key_exchange_timeout: Duration,
+    pub max_connections: usize,
 }
 
 fn load_certificates(
@@ -192,6 +200,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
             listen: bare.listen,
             key_exchange_servers: bare.key_exchange_servers,
             key_exchange_timeout: std::time::Duration::from_millis(bare.key_exchange_timeout),
+            max_connections: bare.max_connections,
         })
     }
 }
