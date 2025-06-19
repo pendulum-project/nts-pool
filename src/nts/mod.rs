@@ -990,6 +990,36 @@ mod tests {
     }
 
     #[test]
+    fn test_key_exchange_response_reject_multiple() {
+        assert!(pwrap(
+            KeyExchangeResponse::parse,
+            &[0x80, 1, 0, 4, 0, 0, 0x80, 1, 0x80, 4, 0, 2, 0, 15, 0x80, 0, 0, 0]
+        )
+        .is_err());
+
+        assert!(pwrap(
+            KeyExchangeResponse::parse,
+            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 4, 0, 15, 0, 17, 0x80, 0, 0, 0]
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_key_exchange_response_reject_repeated() {
+        assert!(pwrap(
+            KeyExchangeResponse::parse,
+            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 15, 0x80, 4, 0, 2, 0, 17, 0x80, 0, 0, 0]
+        )
+        .is_err());
+
+        assert!(pwrap(
+            KeyExchangeResponse::parse,
+            &[0x80, 1, 0, 2, 0, 0, 0x80, 1, 0, 2, 0x80, 1, 0x80, 4, 0, 2, 0, 15, 0x80, 0, 0, 0]
+        )
+        .is_err());
+    }
+
+    #[test]
     fn test_key_exchange_response_reject_problematic() {
         assert!(pwrap(
             KeyExchangeResponse::parse,
