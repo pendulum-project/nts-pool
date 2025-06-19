@@ -12,7 +12,12 @@ rust-version.workspace = true
 [dependencies]
 askama = { workspace = true }
 axum = { workspace = true }
-reqwest = { workspace = true, features = ["json"] }
+reqwest = { workspace = true, default-features = false, features = [
+    "charset",
+    "http2",
+    "json",
+    "rustls-tls-native-roots",
+] }
 tokio = { workspace = true, default-features = true, features = ["full"] }
 tower-http = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
