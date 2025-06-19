@@ -1,5 +1,5 @@
 use axum::{routing::get, Json, Router};
-use shared::Servers;
+use nts_pool_management_shared::Servers;
 
 async fn root() -> Json<Servers> {
     Json(Servers {

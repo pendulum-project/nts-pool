@@ -1,27 +1,48 @@
 [package]
 name = "nts-pool-ke"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0 OR MIT"
-repository = "https://github.com/pendulum-project/nts-pool"
-homepage = "https://github.com/pendulum-project/nts-pool"
-readme = "./README.md"
-description = "NTS pool key exchange server"
-publish = false
-rust-version = "1.87" # MSRV
+description.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true # MSRV
 
 [package.metadata.cargo-udeps.ignore]
-normal = [ "ntp-proto", "rustls-platform-verifier", "rustls-pemfile2", "rustls", "serde", "tokio-rustls", "toml", "tracing", "tracing-subscriber" ]
+normal = [
+    "ntp-proto",
+    "rustls-platform-verifier",
+    "rustls-pemfile2",
+    "rustls",
+    "serde",
+    "tokio-rustls",
+    "toml",
+    "tracing",
+    "tracing-subscriber",
+]
 
 [dependencies]
-tokio = { version = "1.32", features = ["rt-multi-thread", "io-util", "fs", "net", "macros", "time", "sync" ] }
-toml = { version = ">=0.6.0,<0.9.0", default-features = false, features = ["parse"] }
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.0", default-features = false, features = ["std", "fmt", "ansi"] }
-rustls = { version = "0.23.16", features = ["logging", "std"] }
-rustls-platform-verifier = "0.5.0"
-serde = { version = "1.0.145", features = ["derive"] }
-tokio-rustls = { version = "0.26.0", features = ["logging"] }
+tokio = { workspace = true, default-features = false, features = [
+    "rt-multi-thread",
+    "io-util",
+    "fs",
+    "net",
+    "macros",
+    "time",
+    "sync",
+] }
+toml = { workspace = true, default-features = false, features = ["parse"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, default-features = false, features = [
+    "std",
+    "fmt",
+    "ansi",
+] }
+rustls = { workspace = true, features = ["logging", "std"] }
+rustls-platform-verifier = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio-rustls = { workspace = true, features = ["logging"] }
 
 [[bin]]
 name = "nts-pool-ke"
