@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{Arc, atomic::AtomicUsize},
 };
 
 use rustls::ServerConnection;
@@ -338,9 +338,9 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use rustls::{
-        pki_types::{pem::PemObject, ServerName},
-        version::TLS13,
         RootCertStore,
+        pki_types::{ServerName, pem::PemObject},
+        version::TLS13,
     };
     use tokio::{
         io::AsyncWriteExt,
@@ -364,7 +364,7 @@ mod tests {
         .collect::<Result<Vec<rustls::pki_types::CertificateDer>, _>>()
         .unwrap();
 
-        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(&format!(
+        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(format!(
             "{}/testdata/{}.key",
             env!("CARGO_MANIFEST_DIR"),
             name

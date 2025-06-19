@@ -138,7 +138,7 @@ impl ClientRequest {
                 NtsRecord::NtpServerDeny { denied } => denied_servers.push(denied),
                 // Unknown critical
                 NtsRecord::Unknown { critical: true, .. } => {
-                    return Err(NtsError::UnrecognizedCriticalRecord)
+                    return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
                 NtsRecord::Unknown { .. }
@@ -230,7 +230,7 @@ impl ServerInformationResponse {
                 },
                 // Unknown critical
                 NtsRecord::Unknown { critical: true, .. } => {
-                    return Err(NtsError::UnrecognizedCriticalRecord)
+                    return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
                 NtsRecord::KeepAlive
@@ -335,7 +335,7 @@ impl FixedKeyRequest {
                 },
                 // Unknown critical
                 NtsRecord::Unknown { critical: true, .. } => {
-                    return Err(NtsError::UnrecognizedCriticalRecord)
+                    return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
                 NtsRecord::KeepAlive
@@ -430,7 +430,7 @@ impl KeyExchangeResponse {
                 },
                 // Unknown critical
                 NtsRecord::Unknown { critical: true, .. } => {
-                    return Err(NtsError::UnrecognizedCriticalRecord)
+                    return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
                 NtsRecord::Unknown { .. } | NtsRecord::KeepAlive => {}
@@ -604,22 +604,28 @@ mod tests {
 
     #[test]
     fn test_client_request_rejects_incomplete() {
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4]
+            )
+            .is_err()
+        );
         assert!(pwrap(ClientRequest::parse, &[0x80, 1, 0, 2, 0, 0, 0x80, 0, 0, 0]).is_err());
         assert!(pwrap(ClientRequest::parse, &[0x80, 4, 0, 2, 0, 4, 0x80, 0, 0, 0]).is_err());
     }
 
     #[test]
     fn test_client_request_rejects_unknown_critical() {
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 50, 0, 2, 1, 2, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 50, 0, 2, 1, 2, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -675,47 +681,74 @@ mod tests {
 
     #[test]
     fn test_client_request_rejects_problematic() {
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 2, 0, 2, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 4, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 1, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 2, 0, 4, 1, 2, 3, 4, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ClientRequest::parse,
-            &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 2, 0, 2, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 4, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 1, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 2, 0, 4, 1, 2, 3, 4, 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_server_information_request() {
         let mut buf = vec![];
-        assert!(swrap(
-            ServerInformationRequest::serialize,
-            ServerInformationRequest,
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                ServerInformationRequest::serialize,
+                ServerInformationRequest,
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(buf, [0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x80, 0, 0, 0]);
     }
 
@@ -738,62 +771,94 @@ mod tests {
 
     #[test]
     fn test_server_information_request_rejects_incomplete() {
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 4, 0, 2, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0x80, 0, 0, 0]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[0xC0, 4, 0, 2, 0, 0, 0x80, 0, 0, 0]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_server_information_request_rejects_unknown_critical() {
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 40, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 40, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_server_information_request_rejects_problematic() {
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[
-                0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x40, 3, 0, 2, b'h', b'i', 0x80,
-                0, 0, 0
-            ]
-        )
-        .is_err());
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 5, 0, 2, 1, 2, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 4, 0, 2, 0, 1, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            ServerInformationResponse::parse,
-            &[0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 1, 0, 2, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0xC0, 2, 0, 2, 1, 2, 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x40, 3, 0, 2, b'h', b'i',
+                    0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 5, 0, 2, 1, 2, 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 4, 0, 2, 0, 1, 0x80, 0, 0,
+                    0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 1, 0, 2, 0, 0, 0x80, 0, 0,
+                    0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -880,20 +945,24 @@ mod tests {
     #[test]
     fn test_fixed_key_request() {
         let mut buf = vec![];
-        assert!(swrap(
-            FixedKeyRequest::serialize,
-            FixedKeyRequest {
-                c2s: vec![1, 2],
-                s2c: vec![3, 4],
-                protocol: 1,
-                algorithm: 2
-            },
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                FixedKeyRequest::serialize,
+                FixedKeyRequest {
+                    c2s: vec![1, 2],
+                    s2c: vec![3, 4],
+                    protocol: 1,
+                    algorithm: 2
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(
             buf,
-            [0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0, 1, 0x80, 4, 0, 2, 0, 2, 0x80, 0, 0, 0]
+            [
+                0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0, 1, 0x80, 4, 0, 2, 0, 2, 0x80, 0, 0, 0
+            ]
         );
     }
 
@@ -972,84 +1041,128 @@ mod tests {
 
     #[test]
     fn test_key_exchange_response_reject_incomplete() {
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4]
-        )
-        .is_err());
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 4, 0, 2, 0, 4, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[0x80, 1, 0, 2, 0, 0, 0x80, 0, 0, 0]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[0x80, 4, 0, 2, 0, 4, 0x80, 0, 0, 0]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_key_exchange_response_reject_multiple() {
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 4, 0, 0, 0x80, 1, 0x80, 4, 0, 2, 0, 15, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 4, 0, 0, 0x80, 1, 0x80, 4, 0, 2, 0, 15, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
 
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 4, 0, 15, 0, 17, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 4, 0, 15, 0, 17, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_key_exchange_response_reject_repeated() {
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 15, 0x80, 4, 0, 2, 0, 17, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 15, 0x80, 4, 0, 2, 0, 17, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
 
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 1, 0, 2, 0x80, 1, 0x80, 4, 0, 2, 0, 15, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 1, 0, 2, 0x80, 1, 0x80, 4, 0, 2, 0, 15, 0x80, 0, 0,
+                    0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_key_exchange_response_reject_problematic() {
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 4, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 1, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0]
-        )
-        .is_err());
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 3, 0, 2, b'h', b'i', 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 4, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 1, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 3, 0, 2, b'h', b'i', 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_key_exchange_response_reject_unknown_critical() {
-        assert!(pwrap(
-            KeyExchangeResponse::parse,
-            &[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 50, 0, 0, 0x80, 0, 0, 0]
-        )
-        .is_err());
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 50, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1104,36 +1217,40 @@ mod tests {
     #[test]
     fn test_key_exchange_response_serialize() {
         let mut buf = vec![];
-        assert!(swrap(
-            KeyExchangeResponse::serialize,
-            KeyExchangeResponse {
-                protocol: 0,
-                algorithm: 4,
-                cookies: vec![],
-                server: None,
-                port: None
-            },
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                KeyExchangeResponse::serialize,
+                KeyExchangeResponse {
+                    protocol: 0,
+                    algorithm: 4,
+                    cookies: vec![],
+                    server: None,
+                    port: None
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(
             buf,
             [0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 0, 0, 0]
         );
 
         let mut buf = vec![];
-        assert!(swrap(
-            KeyExchangeResponse::serialize,
-            KeyExchangeResponse {
-                protocol: 0,
-                algorithm: 4,
-                cookies: vec![vec![1, 2, 3], vec![4, 5]],
-                server: None,
-                port: None
-            },
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                KeyExchangeResponse::serialize,
+                KeyExchangeResponse {
+                    protocol: 0,
+                    algorithm: 4,
+                    cookies: vec![vec![1, 2, 3], vec![4, 5]],
+                    server: None,
+                    port: None
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(
             buf,
             [
@@ -1143,54 +1260,64 @@ mod tests {
         );
 
         let mut buf = vec![];
-        assert!(swrap(
-            KeyExchangeResponse::serialize,
-            KeyExchangeResponse {
-                protocol: 0,
-                algorithm: 4,
-                cookies: vec![],
-                server: Some("hi".to_string()),
-                port: None
-            },
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                KeyExchangeResponse::serialize,
+                KeyExchangeResponse {
+                    protocol: 0,
+                    algorithm: 4,
+                    cookies: vec![],
+                    server: Some("hi".to_string()),
+                    port: None
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(
             buf,
-            [0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0]
+            [
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0
+            ]
         );
 
         let mut buf = vec![];
-        assert!(swrap(
-            KeyExchangeResponse::serialize,
-            KeyExchangeResponse {
-                protocol: 0,
-                algorithm: 4,
-                cookies: vec![],
-                server: None,
-                port: Some(15)
-            },
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                KeyExchangeResponse::serialize,
+                KeyExchangeResponse {
+                    protocol: 0,
+                    algorithm: 4,
+                    cookies: vec![],
+                    server: None,
+                    port: Some(15)
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(
             buf,
-            [0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 7, 0, 2, 0, 15, 0x80, 0, 0, 0]
+            [
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 7, 0, 2, 0, 15, 0x80, 0, 0, 0
+            ]
         );
 
         let mut buf = vec![];
-        assert!(swrap(
-            KeyExchangeResponse::serialize,
-            KeyExchangeResponse {
-                protocol: 0,
-                algorithm: 4,
-                cookies: vec![vec![1, 2, 3], vec![4, 5]],
-                server: Some("hi".to_string()),
-                port: Some(15)
-            },
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                KeyExchangeResponse::serialize,
+                KeyExchangeResponse {
+                    protocol: 0,
+                    algorithm: 4,
+                    cookies: vec![vec![1, 2, 3], vec![4, 5]],
+                    server: Some("hi".to_string()),
+                    port: Some(15)
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(
             buf,
             [
@@ -1203,12 +1330,14 @@ mod tests {
     #[test]
     fn test_no_agreement_response() {
         let mut buf = vec![];
-        assert!(swrap(
-            NoAgreementResponse::serialize,
-            NoAgreementResponse,
-            &mut buf
-        )
-        .is_ok());
+        assert!(
+            swrap(
+                NoAgreementResponse::serialize,
+                NoAgreementResponse,
+                &mut buf
+            )
+            .is_ok()
+        );
         assert_eq!(buf, [0x80, 1, 0, 0, 0x80, 0, 0, 0]);
     }
 }

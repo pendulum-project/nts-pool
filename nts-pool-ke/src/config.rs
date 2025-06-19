@@ -8,7 +8,7 @@ use std::{
 };
 
 use rustls::{
-    pki_types::{pem::PemObject, ServerName},
+    pki_types::{ServerName, pem::PemObject},
     version::TLS13,
 };
 use rustls_platform_verifier::Verifier;
