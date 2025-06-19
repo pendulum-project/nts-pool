@@ -1,0 +1,20 @@
+:root {
+  /* font */
+  --font-size-body: 1rem;
+  --bold: 600;
+
+  /* colors */
+  --primary: orange;
+  --secondary: #202020;
+  --grey: #cccccc;
+  --background: #f4f4f4;
+  --background-alt: #ffffff;
+  --white: #ffffff;
+
+  /* spacing */
+  --space-xs: 0.5rem;
+  --space-sm: 1rem;
+  --space-md: 2.5rem;
+
+  --border-radius: 0.75rem;
+}
