@@ -16,7 +16,7 @@ reqwest = { workspace = true, default-features = false, features = [
     "charset",
     "http2",
     "json",
-    "rustls-tls-native-roots",
+    "rustls-tls-native-roots-no-provider",
 ] }
 tokio = { workspace = true, default-features = true, features = ["full"] }
 tower-http = { workspace = true, features = ["fs"] }
