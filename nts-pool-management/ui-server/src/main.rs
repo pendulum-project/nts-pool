@@ -1,5 +1,10 @@
 use askama::Template;
-use axum::{http::StatusCode, response::{Html, IntoResponse, Response}, routing::get, Router};
+use axum::{
+    Router,
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
+    routing::get,
+};
 use nts_pool_management_shared::Servers;
 
 #[derive(Template)]
@@ -9,7 +14,7 @@ struct RootTemplate;
 #[derive(Template)]
 #[template(path = "servers_page.html")]
 struct ServersPageTemplate {
-    servers: Vec<String>
+    servers: Vec<String>,
 }
 
 #[derive(Template)]
@@ -42,9 +47,14 @@ async fn root() -> impl IntoResponse {
 }
 
 async fn servers_page() -> impl IntoResponse {
-    let response: Servers = reqwest::get("http://localhost:3033").await.unwrap().json::<Servers>().await.unwrap();
+    let response: Servers = reqwest::get("http://localhost:3033")
+        .await
+        .unwrap()
+        .json::<Servers>()
+        .await
+        .unwrap();
     HtmlTemplate(ServersPageTemplate {
-        servers: response.servers
+        servers: response.servers,
     })
 }
 
