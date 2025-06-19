@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{http::StatusCode, response::{Html, IntoResponse, Response}, routing::get, Router};
-use shared::Servers;
+use nts_pool_management_shared::Servers;
 
 #[derive(Template)]
 #[template(path = "index.html")]

@@ -1,0 +1,47 @@
+[workspace]
+members = [
+    "nts-pool-ke",
+    "nts-pool-management/shared",
+    "nts-pool-management/api-server",
+    "nts-pool-management/ui-server",
+]
+resolver = "3"
+
+# Global settings for our crates
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/pendulum-project/nts-pool"
+homepage = "https://github.com/pendulum-project/nts-pool"
+readme = "./README.md"
+description = "Pool management system for NTS servers"
+publish = false
+rust-version = "1.85"                                       # MSRV
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+lto = true
+panic = "abort"
+debug = 2
+
+[workspace.dependencies]
+askama = "0.14.0"
+axum = "0.8.4"
+reqwest = { version = "0.12.15" }
+serde = { version = "1.0.145" }
+serde_json = "1.0.140"
+tower-http = { version = "0.6.4" }
+tokio = { version = "1.32", default-features = false }
+toml = { version = ">=0.6.0,<0.9.0", default-features = false }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.0", default-features = false }
+rustls = { version = "0.23.16" }
+rustls-platform-verifier = "0.5.0"
+tokio-rustls = { version = "0.26.0" }
+
+# our own crates used as dependencies, same version as the workspace version
+# NOTE: keep this part at the bottom of the file, do not change this line
+nts-pool-management-shared = { version = "0.1.0", path = "nts-pool-management/shared" }
