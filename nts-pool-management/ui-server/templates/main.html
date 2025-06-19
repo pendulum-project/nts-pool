@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>NTS Pool</title>
+    <link rel="stylesheet" href="assets/index.css" />
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <div class="appcontainer">
+      <nav>
+        <menu>
+          <li>
+            <a {% block nav_dns_zones %}{% endblock %} href="/dns-zones">DNS zones</a>
+          </li>
+          <li>
+            <a {% block nav_servers %}{% endblock %} href="/servers">Servers</a>
+          </li>
+        </menu>
+        <div>
+          <span class="username">Username</span> <a href="#">Logout</a>
+        </div>
+      </nav>
+      <header>
+        {% block header %}{% endblock %}
+      </header>
+      <main>
+        {% block content %}{% endblock %}
+      </main>
+      <footer>
+        {% block footer %}
+        <section>NTS Pool</section>
+        <section><a href="https://github.com/pendulum-project/">GitHub</a></section>
+        <section>Active servers: 5392</section>
+        {% endblock %}
+      </footer>
+    </div>
+  </body>
+</html>

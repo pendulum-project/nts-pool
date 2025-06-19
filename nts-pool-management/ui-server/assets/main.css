@@ -1,0 +1,71 @@
+.appcontainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100vh;
+}
+
+header {
+  background-color: var(--background-alt);
+  padding: var(--space-md) var(--space-md);
+  display: flex;
+  width: 100vw;
+  flex: 0;
+}
+
+main {
+  background-color: var(--background);
+  padding: var(--space-md) var(--space-md) 0 var(--space-md);
+  flex: auto;
+}
+
+main section {
+  margin-bottom: var(--space-md);
+}
+
+nav {
+  background-color: var(--secondary);
+  color: var(--white);
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: 0;
+  padding: 0 var(--space-md);
+  
+  menu {
+    display: flex;
+    padding: 0;
+    box-sizing: content-box;
+    a {
+      display: inline-block;
+      width: 100%;
+      text-decoration: none;
+      color: inherit;
+      padding: var(--space-sm);
+      transition: border-bottom-color 150ms ease-in-out, transform 150ms ease;
+      border-bottom-color: var(--secondary);
+    }
+
+    a[aria-current="page"] {
+      border-bottom: 4px solid var(--primary);
+    }
+  }
+  
+  li {
+    list-style: none;
+  }
+
+  .username {
+    font-weight: var(--bold);
+  }
+}
+
+footer {
+  display: flex;
+  flex: 0 0 5rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 var(--space-md) 0 var(--space-md);
+  background-color: var(--background-alt);
+}

@@ -1,0 +1,39 @@
+button,
+[type="button"],
+[type="submit"],
+[type="reset"],
+a.btn {
+  display: inline-block;
+  background-color: var(--primary);
+  border: 2px solid var(--primary);
+  border-radius: var(--border-radius);
+  padding: var(--space-sm) var(--space-md);
+  text-decoration: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: color 150ms ease-in-out, transform 150ms ease;
+}
+
+button:hover,
+a.btn:hover,
+[type="button"]:hover,
+[type="submit"]:hover,
+[type="reset"]:hover {
+  color: var(--white);
+  border: 2px solid var(--primary);
+  cursor: pointer;
+}
+
+input[type="text"] {
+  padding: var(--space-sm);
+  border: 2px solid var(--grey);
+  border-radius: var(--border-radius);
+}
+
+input[type="text"]:hover {
+  border: 2px solid var(--primary);
+}
+
+h2 {
+  margin-bottom: var(--space-sm);
+}
