@@ -172,8 +172,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
             .with_no_client_auth()
             .with_single_cert(certificate_chain.clone(), private_key.clone_key())
             .map_err(serde::de::Error::custom)?;
-        server_config.alpn_protocols.clear();
-        server_config.alpn_protocols.push(b"ntske/1".to_vec());
+        server_config.alpn_protocols = vec![b"ntske/1".to_vec()];
 
         let server_tls = TlsAcceptor::from(Arc::new(server_config));
 
@@ -187,11 +186,12 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
             None => Verifier::new(),
         };
 
-        let upstream_config = upstream_config_builder
+        let mut upstream_config = upstream_config_builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(verifier))
             .with_client_auth_cert(certificate_chain, private_key)
             .map_err(serde::de::Error::custom)?;
+        upstream_config.alpn_protocols = vec![b"ntske/1".to_vec()];
         let upstream_tls = TlsConnector::from(Arc::new(upstream_config));
 
         Ok(NtsPoolKeConfig {
