@@ -1,11 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
+    net::SocketAddr,
     sync::atomic::AtomicUsize,
 };
 
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt},
-    net::{TcpStream, unix::SocketAddr},
+    net::TcpStream,
 };
 use tokio_rustls::{TlsConnector, client::TlsStream};
 use tracing::debug;
