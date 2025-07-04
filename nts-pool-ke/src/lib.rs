@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use cli::NtsPoolKeOptions;
 use config::Config;
 
-use crate::pool_ke::run_nts_pool_ke;
+use crate::{pool_ke::run_nts_pool_ke, servers::RoundRobinServerManager};
 
 use self::tracing as daemon_tracing;
 use daemon_tracing::LogLevel;
@@ -101,7 +101,11 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
     // tracing setup to ensure logging is fully configured.
     config.check();
 
-    let result = run_nts_pool_ke(config.server).await;
+    let result = run_nts_pool_ke(
+        config.server.clone(),
+        RoundRobinServerManager::new(config.server),
+    )
+    .await;
 
     match result {
         Ok(v) => Ok(v),

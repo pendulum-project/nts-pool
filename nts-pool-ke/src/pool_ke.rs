@@ -1,38 +1,37 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, atomic::AtomicUsize},
-};
+use std::{net::SocketAddr, sync::Arc};
 
-use rustls::ServerConnection;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
 use tracing::{debug, info};
 
 use crate::{
-    config::{self, KeyExchangeServer, NtsPoolKeConfig},
+    config::NtsPoolKeConfig,
     error::PoolError,
     nts::{
-        AlgorithmDescription, AlgorithmId, ClientRequest, ErrorCode, ErrorResponse,
-        FixedKeyRequest, KeyExchangeResponse, NoAgreementResponse, NtsError, ProtocolId,
-        ServerInformationRequest, ServerInformationResponse,
+        AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
+        KeyExchangeResponse, NoAgreementResponse, NtsError, ProtocolId,
     },
+    servers::{Server, ServerConnection, ServerManager},
 };
 
-pub async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Result<()> {
-    let pool_ke = NtsPoolKe::new(nts_pool_ke_config)?;
+pub async fn run_nts_pool_ke(
+    nts_pool_ke_config: NtsPoolKeConfig,
+    server_manager: impl ServerManager + 'static,
+) -> std::io::Result<()> {
+    let pool_ke = NtsPoolKe::new(nts_pool_ke_config, server_manager)?;
 
     Arc::new(pool_ke).serve().await
 }
 
-struct NtsPoolKe {
+struct NtsPoolKe<S> {
     config: NtsPoolKeConfig,
-    next_start: AtomicUsize,
+    server_manager: S,
 }
 
-impl NtsPoolKe {
-    fn new(config: NtsPoolKeConfig) -> std::io::Result<Self> {
+impl<S: ServerManager + 'static> NtsPoolKe<S> {
+    fn new(config: NtsPoolKeConfig, server_manager: S) -> std::io::Result<Self> {
         Ok(NtsPoolKe {
             config,
-            next_start: AtomicUsize::new(0),
+            server_manager,
         })
     }
 
@@ -58,7 +57,7 @@ impl NtsPoolKe {
             tokio::spawn(async move {
                 match tokio::time::timeout(
                     self_clone.config.key_exchange_timeout,
-                    self_clone.handle_client(client_stream),
+                    self_clone.handle_client(client_stream, source_address),
                 )
                 .await
                 {
@@ -71,7 +70,11 @@ impl NtsPoolKe {
         }
     }
 
-    async fn handle_client(&self, client_stream: tokio::net::TcpStream) -> Result<(), PoolError> {
+    async fn handle_client(
+        &self,
+        client_stream: tokio::net::TcpStream,
+        source_address: SocketAddr,
+    ) -> Result<(), PoolError> {
         // handle the initial client to pool
         let mut client_stream = self.config.server_tls.accept(client_stream).await?;
 
@@ -92,10 +95,12 @@ impl NtsPoolKe {
 
         debug!("Recevied request from client");
 
-        let pick = self.pick_nts_ke_servers(&client_request.denied_servers);
+        let pick = self
+            .server_manager
+            .assign_server(source_address, &client_request.denied_servers);
 
         let (protocol, algorithm) =
-            match self.select_protocol_algorithm(&client_request, pick).await {
+            match self.select_protocol_algorithm(&client_request, &pick).await {
                 Ok(Some(result)) => result,
                 Ok(None) => {
                     NoAgreementResponse.serialize(&mut client_stream).await?;
@@ -135,13 +140,15 @@ impl NtsPoolKe {
                     protocol,
                     algorithm: algorithm.id,
                 },
-                pick,
+                &pick,
             )
             .await
         {
             // These errors indicate the pool did something weird
-            Err(e @ NtsError::Error(ErrorCode::BadRequest))
-            | Err(e @ NtsError::Error(ErrorCode::UnrecognizedCriticalRecord)) => {
+            Err(e @ PoolError::NtsError(NtsError::Error(ErrorCode::BadRequest)))
+            | Err(
+                e @ PoolError::NtsError(NtsError::Error(ErrorCode::UnrecognizedCriticalRecord)),
+            ) => {
                 ErrorResponse {
                     errorcode: ErrorCode::InternalServerError,
                 }
@@ -150,7 +157,7 @@ impl NtsPoolKe {
                 Err(e.into())
             }
             // Pass other errors from the server on unchanged
-            Err(e @ NtsError::Error(errorcode)) => {
+            Err(e @ PoolError::NtsError(NtsError::Error(errorcode))) => {
                 ErrorResponse { errorcode }
                     .serialize(&mut client_stream)
                     .await?;
@@ -167,19 +174,20 @@ impl NtsPoolKe {
             }
             Ok(mut response) => {
                 if response.server.is_none() {
-                    response.server = Some(pick.domain.clone());
+                    response.server = Some(pick.name().to_owned());
                 }
                 response.serialize(&mut client_stream).await?;
                 Ok(())
             }
         };
+
         client_stream.shutdown().await?;
         result
     }
 
     fn extract_keys(
         &self,
-        tls_connection: &ServerConnection,
+        tls_connection: &rustls::ServerConnection,
         protocol: u16,
         algorithm: AlgorithmDescription,
     ) -> Result<(Vec<u8>, Vec<u8>), PoolError> {
@@ -213,26 +221,9 @@ impl NtsPoolKe {
     async fn select_protocol_algorithm(
         &self,
         client_request: &ClientRequest,
-        server: &KeyExchangeServer,
+        server: &S::Server<'_>,
     ) -> Result<Option<(ProtocolId, AlgorithmDescription)>, PoolError> {
-        let server_stream = tokio::net::TcpStream::connect(&server.connection_address).await?;
-        let mut server_stream = self
-            .config
-            .upstream_tls
-            .connect(server.server_name.clone(), server_stream)
-            .await?;
-        ServerInformationRequest
-            .serialize(&mut server_stream)
-            .await?;
-        let support_info = ServerInformationResponse::parse(&mut server_stream).await?;
-        server_stream.shutdown().await?;
-        let supported_protocols: HashSet<ProtocolId> =
-            support_info.supported_protocols.into_iter().collect();
-        let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
-            .supported_algorithms
-            .into_iter()
-            .map(|v| (v.id, v))
-            .collect();
+        let (supported_protocols, supported_algorithms) = server.support().await?;
         let mut protocol = None;
         for candidate_protocol in client_request.protocols.iter() {
             if supported_protocols.contains(candidate_protocol) {
@@ -256,44 +247,22 @@ impl NtsPoolKe {
     async fn perform_upstream_key_exchange(
         &self,
         request: FixedKeyRequest,
-        server: &config::KeyExchangeServer,
-    ) -> Result<KeyExchangeResponse, NtsError> {
-        // TODO: Implement connection reuse
-        let server_stream = tokio::net::TcpStream::connect(&server.connection_address).await?;
-        let mut server_stream = self
-            .config
-            .upstream_tls
-            .connect(server.server_name.clone(), server_stream)
-            .await?;
-
-        request.serialize(&mut server_stream).await?;
-        KeyExchangeResponse::parse(&mut server_stream).await
-    }
-
-    fn pick_nts_ke_servers<'a>(
-        &'a self,
-        denied_servers: &[String],
-    ) -> &'a config::KeyExchangeServer {
-        use std::sync::atomic::Ordering;
-        let start_index = self.next_start.fetch_add(1, Ordering::Relaxed);
-
-        // rotate the serverlist so that an error caused by a single NTS-KE server doesn't
-        // permanently cripple the pool
-        let servers = &self.config.key_exchange_servers;
-        let (left, right) = servers.split_at(start_index % servers.len());
-        let rotated_servers = right.iter().chain(left.iter());
-
-        for server in rotated_servers {
-            if denied_servers.contains(&server.domain) {
-                continue;
+        server: &S::Server<'_>,
+    ) -> Result<KeyExchangeResponse, PoolError> {
+        // This function is needed to teach rust that the lifetimes actually do work.
+        fn workaround_lifetime_bug<'b, C: ServerConnection + 'b>(
+            request: FixedKeyRequest,
+            mut server_stream: C,
+        ) -> impl Future<Output = Result<KeyExchangeResponse, PoolError>> + Send + 'b {
+            async move {
+                request.serialize(&mut server_stream).await?;
+                Ok(KeyExchangeResponse::parse(&mut server_stream).await?)
             }
-
-            return server;
         }
 
-        debug!("All servers denied. Falling back to denied server");
-
-        &servers[start_index % servers.len()]
+        // TODO: Implement connection reuse
+        let server_stream = server.connect().await?;
+        workaround_lifetime_bug(request, server_stream).await
     }
 }
 
@@ -316,6 +285,7 @@ mod tests {
         config::{KeyExchangeServer, NtsPoolKeConfig},
         nts::{FixedKeyRequest, KeyExchangeResponse, ServerInformationResponse},
         pool_ke::NtsPoolKe,
+        servers::RoundRobinServerManager,
     };
 
     fn listen_tls_config(name: &str) -> TlsAcceptor {
@@ -422,7 +392,13 @@ mod tests {
                 max_connections: 1,
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config).unwrap());
+            let pool = Arc::new(
+                NtsPoolKe::new(
+                    pool_config.clone(),
+                    RoundRobinServerManager::new(pool_config),
+                )
+                .unwrap(),
+            );
             pool.serve_inner(pool_listener).await
         });
 
@@ -476,7 +452,13 @@ mod tests {
                 max_connections: 1,
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config).unwrap());
+            let pool = Arc::new(
+                NtsPoolKe::new(
+                    pool_config.clone(),
+                    RoundRobinServerManager::new(pool_config),
+                )
+                .unwrap(),
+            );
             pool.serve_inner(pool_listener).await
         });
 
@@ -532,7 +514,13 @@ mod tests {
                 max_connections: 1,
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config).unwrap());
+            let pool = Arc::new(
+                NtsPoolKe::new(
+                    pool_config.clone(),
+                    RoundRobinServerManager::new(pool_config),
+                )
+                .unwrap(),
+            );
             pool.serve_inner(pool_listener).await
         });
 
@@ -601,7 +589,13 @@ mod tests {
                 max_connections: 1,
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config).unwrap());
+            let pool = Arc::new(
+                NtsPoolKe::new(
+                    pool_config.clone(),
+                    RoundRobinServerManager::new(pool_config),
+                )
+                .unwrap(),
+            );
             pool.serve_inner(pool_listener).await
         });
 
@@ -685,7 +679,13 @@ mod tests {
                 max_connections: 1,
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config).unwrap());
+            let pool = Arc::new(
+                NtsPoolKe::new(
+                    pool_config.clone(),
+                    RoundRobinServerManager::new(pool_config),
+                )
+                .unwrap(),
+            );
             pool.serve_inner(pool_listener).await
         });
 
@@ -741,7 +741,13 @@ mod tests {
                 max_connections: 1,
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config).unwrap());
+            let pool = Arc::new(
+                NtsPoolKe::new(
+                    pool_config.clone(),
+                    RoundRobinServerManager::new(pool_config),
+                )
+                .unwrap(),
+            );
             pool.serve_inner(pool_listener).await
         });
 
