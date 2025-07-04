@@ -282,7 +282,7 @@ mod tests {
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     use crate::{
-        config::{KeyExchangeServer, NtsPoolKeConfig},
+        config::{BackendConfig, KeyExchangeServer, NtsPoolKeConfig},
         nts::{FixedKeyRequest, KeyExchangeResponse, ServerInformationResponse},
         pool_ke::NtsPoolKe,
         servers::RoundRobinServerManager,
@@ -380,24 +380,22 @@ mod tests {
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
                 server_tls: listen_tls_config("pool.test"),
-                upstream_tls: upstream_tls_config(),
                 listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                max_connections: 1,
+            };
+            let backend_config = BackendConfig {
+                upstream_tls: upstream_tls_config(),
                 key_exchange_servers: vec![KeyExchangeServer {
                     domain: "a.test".to_string(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
                 }]
                 .into(),
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
             };
 
             let pool = Arc::new(
-                NtsPoolKe::new(
-                    pool_config.clone(),
-                    RoundRobinServerManager::new(pool_config),
-                )
-                .unwrap(),
+                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
             );
             pool.serve_inner(pool_listener).await
         });
@@ -440,24 +438,22 @@ mod tests {
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
                 server_tls: listen_tls_config("pool.test"),
-                upstream_tls: upstream_tls_config(),
                 listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                max_connections: 1,
+            };
+            let backend_config = BackendConfig {
+                upstream_tls: upstream_tls_config(),
                 key_exchange_servers: vec![KeyExchangeServer {
                     domain: "a.test".to_string(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
                 }]
                 .into(),
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
             };
 
             let pool = Arc::new(
-                NtsPoolKe::new(
-                    pool_config.clone(),
-                    RoundRobinServerManager::new(pool_config),
-                )
-                .unwrap(),
+                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
             );
             pool.serve_inner(pool_listener).await
         });
@@ -502,24 +498,22 @@ mod tests {
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
                 server_tls: listen_tls_config("pool.test"),
-                upstream_tls: upstream_tls_config(),
                 listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                max_connections: 1,
+            };
+            let backend_config = BackendConfig {
+                upstream_tls: upstream_tls_config(),
                 key_exchange_servers: vec![KeyExchangeServer {
                     domain: "a.test".to_string(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
                 }]
                 .into(),
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
             };
 
             let pool = Arc::new(
-                NtsPoolKe::new(
-                    pool_config.clone(),
-                    RoundRobinServerManager::new(pool_config),
-                )
-                .unwrap(),
+                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
             );
             pool.serve_inner(pool_listener).await
         });
@@ -570,8 +564,12 @@ mod tests {
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
                 server_tls: listen_tls_config("pool.test"),
-                upstream_tls: upstream_tls_config(),
                 listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                max_connections: 1,
+            };
+            let backend_config = BackendConfig {
+                upstream_tls: upstream_tls_config(),
                 key_exchange_servers: vec![
                     KeyExchangeServer {
                         domain: "a.test".to_string(),
@@ -585,16 +583,10 @@ mod tests {
                     },
                 ]
                 .into(),
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
             };
 
             let pool = Arc::new(
-                NtsPoolKe::new(
-                    pool_config.clone(),
-                    RoundRobinServerManager::new(pool_config),
-                )
-                .unwrap(),
+                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
             );
             pool.serve_inner(pool_listener).await
         });
@@ -660,8 +652,12 @@ mod tests {
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
                 server_tls: listen_tls_config("pool.test"),
-                upstream_tls: upstream_tls_config(),
                 listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                max_connections: 1,
+            };
+            let backend_config = BackendConfig {
+                upstream_tls: upstream_tls_config(),
                 key_exchange_servers: vec![
                     KeyExchangeServer {
                         domain: "a.test".to_string(),
@@ -675,16 +671,10 @@ mod tests {
                     },
                 ]
                 .into(),
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
             };
 
             let pool = Arc::new(
-                NtsPoolKe::new(
-                    pool_config.clone(),
-                    RoundRobinServerManager::new(pool_config),
-                )
-                .unwrap(),
+                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
             );
             pool.serve_inner(pool_listener).await
         });
@@ -729,24 +719,23 @@ mod tests {
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
                 server_tls: listen_tls_config("pool.test"),
-                upstream_tls: upstream_tls_config(),
                 listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                max_connections: 1,
+            };
+
+            let backend_config = BackendConfig {
+                upstream_tls: upstream_tls_config(),
                 key_exchange_servers: vec![KeyExchangeServer {
                     domain: "a.test".to_string(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
                 }]
                 .into(),
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
             };
 
             let pool = Arc::new(
-                NtsPoolKe::new(
-                    pool_config.clone(),
-                    RoundRobinServerManager::new(pool_config),
-                )
-                .unwrap(),
+                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
             );
             pool.serve_inner(pool_listener).await
         });
