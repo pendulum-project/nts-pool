@@ -103,7 +103,7 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
 
     let result = run_nts_pool_ke(
         config.server.clone(),
-        RoundRobinServerManager::new(config.server),
+        RoundRobinServerManager::new(config.backend),
     )
     .await;
 
