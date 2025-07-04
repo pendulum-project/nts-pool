@@ -12,7 +12,7 @@ use tokio_rustls::{TlsConnector, client::TlsStream};
 use tracing::debug;
 
 use crate::{
-    config::{KeyExchangeServer, NtsPoolKeConfig},
+    config::{BackendConfig, KeyExchangeServer},
     error::PoolError,
     nts::{
         AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest,
@@ -73,7 +73,7 @@ pub struct RoundRobinServerManager {
 }
 
 impl RoundRobinServerManager {
-    pub fn new(config: NtsPoolKeConfig) -> Self {
+    pub fn new(config: BackendConfig) -> Self {
         Self {
             servers: config.key_exchange_servers,
             upstream_tls: config.upstream_tls,
