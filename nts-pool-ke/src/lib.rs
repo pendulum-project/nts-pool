@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod error;
 mod nts;
 mod pool_ke;
 mod tracing;

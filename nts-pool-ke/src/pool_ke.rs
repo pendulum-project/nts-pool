@@ -9,49 +9,13 @@ use tracing::{debug, info};
 
 use crate::{
     config::{self, KeyExchangeServer, NtsPoolKeConfig},
+    error::PoolError,
     nts::{
         AlgorithmDescription, AlgorithmId, ClientRequest, ErrorCode, ErrorResponse,
         FixedKeyRequest, KeyExchangeResponse, NoAgreementResponse, NtsError, ProtocolId,
         ServerInformationRequest, ServerInformationResponse,
     },
 };
-
-#[derive(Debug)]
-enum PoolError {
-    NtsError(NtsError),
-    IO(std::io::Error),
-    Rustls(rustls::Error),
-}
-
-impl From<NtsError> for PoolError {
-    fn from(value: NtsError) -> Self {
-        PoolError::NtsError(value)
-    }
-}
-
-impl From<std::io::Error> for PoolError {
-    fn from(value: std::io::Error) -> Self {
-        PoolError::IO(value)
-    }
-}
-
-impl From<rustls::Error> for PoolError {
-    fn from(value: rustls::Error) -> Self {
-        PoolError::Rustls(value)
-    }
-}
-
-impl std::fmt::Display for PoolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NtsError(e) => e.fmt(f),
-            Self::IO(e) => e.fmt(f),
-            Self::Rustls(e) => e.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for PoolError {}
 
 pub async fn run_nts_pool_ke(nts_pool_ke_config: NtsPoolKeConfig) -> std::io::Result<()> {
     let pool_ke = NtsPoolKe::new(nts_pool_ke_config)?;
