@@ -28,7 +28,7 @@ impl Display for ErrorCode {
             ErrorCode::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             ErrorCode::BadRequest => f.write_str("Bad request"),
             ErrorCode::InternalServerError => f.write_str("Internal server error"),
-            ErrorCode::Unknown(id) => write!(f, "Unknown({})", id),
+            ErrorCode::Unknown(id) => write!(f, "Unknown({id})"),
         }
     }
 }
@@ -95,9 +95,9 @@ impl Display for NtsError {
             NtsError::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             NtsError::Invalid => f.write_str("Invalid request or response"),
             NtsError::UnknownWarning(code) => {
-                write!(f, "Received unknown warning from remote: {}", code)
+                write!(f, "Received unknown warning from remote: {code}")
             }
-            NtsError::Error(error) => write!(f, "Received error from remote: {}", error),
+            NtsError::Error(error) => write!(f, "Received error from remote: {error}"),
         }
     }
 }

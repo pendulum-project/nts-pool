@@ -154,14 +154,14 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 }
                 .serialize(&mut client_stream)
                 .await?;
-                Err(e.into())
+                Err(e)
             }
             // Pass other errors from the server on unchanged
             Err(e @ PoolError::NtsError(NtsError::Error(errorcode))) => {
                 ErrorResponse { errorcode }
                     .serialize(&mut client_stream)
                     .await?;
-                Err(e.into())
+                Err(e)
             }
             // All other errors indicate we are doing something strange
             Err(e) => {
@@ -170,7 +170,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 }
                 .serialize(&mut client_stream)
                 .await?;
-                Err(e.into())
+                Err(e)
             }
             Ok(mut response) => {
                 if response.server.is_none() {
@@ -250,6 +250,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         server: &S::Server<'_>,
     ) -> Result<KeyExchangeResponse, PoolError> {
         // This function is needed to teach rust that the lifetimes actually do work.
+        #[allow(clippy::manual_async_fn)]
         fn workaround_lifetime_bug<'b, C: ServerConnection + 'b>(
             request: FixedKeyRequest,
             mut server_stream: C,
@@ -491,8 +492,7 @@ mod tests {
     }
 
     impl ServerConnection for TestConnection<'_> {
-        fn reuse(self) -> impl Future<Output = ()> + Send {
-            async { /* noop */ }
+        async fn reuse(self) { /* noop */
         }
     }
 
@@ -537,6 +537,7 @@ mod tests {
         let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
         conn.shutdown().await.unwrap();
 
+        #[allow(clippy::await_holding_lock)]
         let timesource_request =
             FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
                 .await
@@ -604,6 +605,7 @@ mod tests {
 
         pool_handle.abort();
 
+        #[allow(clippy::await_holding_lock)]
         let request = FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
             .await
             .unwrap();
@@ -665,6 +667,7 @@ mod tests {
 
         pool_handle.abort();
 
+        #[allow(clippy::await_holding_lock)]
         let request = FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
             .await
             .unwrap();

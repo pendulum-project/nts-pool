@@ -127,8 +127,7 @@ impl<'de> Deserialize<'de> for BackendConfig {
             .map(|path| {
                 load_certificates(&path).map_err(|e| {
                     serde::de::Error::custom(format!(
-                        "error reading additional upstream ca certificates from `{:?}`: {:?}",
-                        path, e
+                        "error reading additional upstream ca certificates from `{path:?}`: {e:?}"
                     ))
                 })
             })
