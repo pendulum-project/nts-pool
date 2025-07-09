@@ -268,7 +268,11 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        net::SocketAddr,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use rustls::{
         RootCertStore,
@@ -276,16 +280,16 @@ mod tests {
         version::TLS13,
     };
     use tokio::{
-        io::AsyncWriteExt,
+        io::{AsyncRead, AsyncWrite, AsyncWriteExt},
         net::{TcpListener, TcpStream},
     };
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     use crate::{
-        config::{BackendConfig, KeyExchangeServer, NtsPoolKeConfig},
-        nts::{FixedKeyRequest, KeyExchangeResponse, ServerInformationResponse},
+        config::NtsPoolKeConfig,
+        nts::{AlgorithmDescription, FixedKeyRequest, KeyExchangeResponse, ProtocolId},
         pool_ke::NtsPoolKe,
-        servers::RoundRobinServerManager,
+        servers::{Server, ServerConnection, ServerManager},
     };
 
     fn listen_tls_config(name: &str) -> TlsAcceptor {
@@ -332,50 +336,181 @@ mod tests {
         TlsConnector::from(Arc::new(upstream_config))
     }
 
-    async fn basic_upstream_server(name: &str, listener: TcpListener) -> (Vec<u8>, Vec<u8>) {
-        let acceptor = listen_tls_config(name);
+    struct TestManagerInner {
+        name: String,
+        supports: (
+            std::collections::HashSet<crate::nts::ProtocolId>,
+            std::collections::HashMap<crate::nts::AlgorithmId, crate::nts::AlgorithmDescription>,
+        ),
+        written: Mutex<Vec<u8>>,
+        response: Vec<u8>,
+        received_denied_servers: Mutex<Vec<String>>,
+        received_addr: Mutex<Option<SocketAddr>>,
+    }
 
-        let conn = listener.accept().await.unwrap().0;
-        let mut conn = acceptor.accept(conn).await.unwrap();
+    #[derive(Clone)]
+    struct TestManager {
+        inner: Arc<TestManagerInner>,
+    }
 
-        let _ = ServerInformationResponse::parse(&mut conn).await.unwrap();
-        conn.write_all(&[
-            0xC0, 0x04, 0, 4, 0, 0, 0, 1, 0xC0, 0x01, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32, 0x80, 0, 0, 0,
-        ])
-        .await
-        .unwrap();
+    impl TestManager {
+        fn new(
+            name: String,
+            response: Vec<u8>,
+            protocols: &[ProtocolId],
+            algorithms: &[AlgorithmDescription],
+        ) -> Self {
+            Self {
+                inner: Arc::new(TestManagerInner {
+                    name,
+                    supports: (
+                        protocols.iter().copied().collect(),
+                        algorithms.iter().copied().map(|v| (v.id, v)).collect(),
+                    ),
+                    written: Mutex::new(vec![]),
+                    response,
+                    received_denied_servers: Mutex::new(vec![]),
+                    received_addr: Mutex::new(None),
+                }),
+            }
+        }
+    }
 
-        conn.shutdown().await.unwrap();
+    impl ServerManager for TestManager {
+        type Server<'a>
+            = TestServer<'a>
+        where
+            Self: 'a;
 
-        let conn = listener.accept().await.unwrap().0;
-        let mut conn = acceptor.accept(conn).await.unwrap();
+        fn assign_server(
+            &self,
+            address: std::net::SocketAddr,
+            denied_servers: &[String],
+        ) -> Self::Server<'_> {
+            *self.inner.received_denied_servers.lock().unwrap() = denied_servers.to_vec();
+            *self.inner.received_addr.lock().unwrap() = Some(address);
+            TestServer {
+                name: &self.inner.name,
+                supports: self.inner.supports.clone(),
+                written: &self.inner.written,
+                read_data: &self.inner.response,
+            }
+        }
+    }
 
-        let request = FixedKeyRequest::parse(&mut conn).await.unwrap();
+    struct TestServer<'a> {
+        name: &'a str,
+        supports: (
+            std::collections::HashSet<crate::nts::ProtocolId>,
+            std::collections::HashMap<crate::nts::AlgorithmId, crate::nts::AlgorithmDescription>,
+        ),
+        written: &'a Mutex<Vec<u8>>,
+        read_data: &'a [u8],
+    }
 
-        let response = KeyExchangeResponse {
-            protocol: request.protocol,
-            algorithm: request.algorithm,
-            cookies: vec![vec![1, 2, 3, 4]],
-            server: None,
-            port: None,
-        };
+    impl Server for TestServer<'_> {
+        type Connection<'a>
+            = TestConnection<'a>
+        where
+            Self: 'a;
 
-        response.serialize(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
+        fn name(&self) -> &str {
+            self.name
+        }
 
-        (request.c2s, request.s2c)
+        async fn support(
+            &self,
+        ) -> Result<
+            (
+                std::collections::HashSet<crate::nts::ProtocolId>,
+                std::collections::HashMap<
+                    crate::nts::AlgorithmId,
+                    crate::nts::AlgorithmDescription,
+                >,
+            ),
+            crate::error::PoolError,
+        > {
+            Ok(self.supports.clone())
+        }
+
+        async fn connect<'a>(&'a self) -> Result<Self::Connection<'a>, crate::error::PoolError> {
+            Ok(TestConnection {
+                written: self.written,
+                read_data: self.read_data,
+            })
+        }
+    }
+
+    struct TestConnection<'a> {
+        written: &'a Mutex<Vec<u8>>,
+        read_data: &'a [u8],
+    }
+
+    impl AsyncRead for TestConnection<'_> {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            let to_write = self.read_data.len().min(buf.remaining());
+
+            let (now, fut) = self.read_data.split_at(to_write);
+            self.read_data = fut;
+            buf.put_slice(now);
+
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncWrite for TestConnection<'_> {
+        fn poll_write(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<Result<usize, std::io::Error>> {
+            let mut written = self.written.lock().unwrap();
+            written.extend_from_slice(buf);
+            std::task::Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            //noop
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            //noop
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
+
+    impl ServerConnection for TestConnection<'_> {
+        fn reuse(self) -> impl Future<Output = ()> + Send {
+            async { /* noop */ }
+        }
     }
 
     #[tokio::test]
     async fn test_keyexchange_basic() {
-        let upstream_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_addr = upstream_listener.local_addr().unwrap();
-
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
-        let upstream_handle =
-            tokio::spawn(async move { basic_upstream_server("a.test", upstream_listener).await });
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+        );
+        let pool_manager = manager.clone();
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
@@ -384,19 +519,8 @@ mod tests {
                 key_exchange_timeout: Duration::from_millis(1000),
                 max_connections: 1,
             };
-            let backend_config = BackendConfig {
-                upstream_tls: upstream_tls_config(),
-                key_exchange_servers: vec![KeyExchangeServer {
-                    domain: "a.test".to_string(),
-                    server_name: ServerName::try_from("a.test").unwrap(),
-                    connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
-                }]
-                .into(),
-            };
 
-            let pool = Arc::new(
-                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
-            );
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -412,28 +536,41 @@ mod tests {
             .unwrap();
         let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
         conn.shutdown().await.unwrap();
+
+        let timesource_request =
+            FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
+                .await
+                .unwrap();
+
+        assert_eq!(timesource_request.algorithm, 0);
+        assert_eq!(timesource_request.protocol, 0);
+        assert_eq!(timesource_request.c2s.len(), 16);
+        assert_eq!(timesource_request.s2c.len(), 16);
         assert_eq!(response.algorithm, 0);
         assert_eq!(response.protocol, 0);
         assert_eq!(response.server.as_deref(), Some("a.test"));
 
         pool_handle.abort();
-
-        let (c2s, s2c) = upstream_handle.await.unwrap();
-
-        assert_eq!(c2s.len(), 16);
-        assert_eq!(s2c.len(), 16);
     }
 
     #[tokio::test]
     async fn test_keyexchange_respects_client_prioritization_1() {
-        let upstream_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_addr = upstream_listener.local_addr().unwrap();
-
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
-        let upstream_handle =
-            tokio::spawn(async move { basic_upstream_server("a.test", upstream_listener).await });
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[1, 0],
+            &[
+                AlgorithmDescription { id: 1, keysize: 32 },
+                AlgorithmDescription { id: 0, keysize: 16 },
+            ],
+        );
+        let pool_manager = manager.clone();
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
@@ -442,19 +579,8 @@ mod tests {
                 key_exchange_timeout: Duration::from_millis(1000),
                 max_connections: 1,
             };
-            let backend_config = BackendConfig {
-                upstream_tls: upstream_tls_config(),
-                key_exchange_servers: vec![KeyExchangeServer {
-                    domain: "a.test".to_string(),
-                    server_name: ServerName::try_from("a.test").unwrap(),
-                    connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
-                }]
-                .into(),
-            };
 
-            let pool = Arc::new(
-                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
-            );
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -478,22 +604,34 @@ mod tests {
 
         pool_handle.abort();
 
-        let (c2s, s2c) = upstream_handle.await.unwrap();
+        let request = FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
+            .await
+            .unwrap();
 
-        assert_eq!(c2s.len(), 16);
-        assert_eq!(s2c.len(), 16);
+        assert_eq!(request.algorithm, 0);
+        assert_eq!(request.protocol, 0);
+        assert_eq!(request.c2s.len(), 16);
+        assert_eq!(request.s2c.len(), 16);
     }
 
     #[tokio::test]
     async fn test_keyexchange_respects_client_prioritization_2() {
-        let upstream_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_addr = upstream_listener.local_addr().unwrap();
-
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
-        let upstream_handle =
-            tokio::spawn(async move { basic_upstream_server("a.test", upstream_listener).await });
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 1, 0x80, 4, 0, 2, 0, 1, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[1, 0],
+            &[
+                AlgorithmDescription { id: 1, keysize: 32 },
+                AlgorithmDescription { id: 0, keysize: 16 },
+            ],
+        );
+        let pool_manager = manager.clone();
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
@@ -502,19 +640,8 @@ mod tests {
                 key_exchange_timeout: Duration::from_millis(1000),
                 max_connections: 1,
             };
-            let backend_config = BackendConfig {
-                upstream_tls: upstream_tls_config(),
-                key_exchange_servers: vec![KeyExchangeServer {
-                    domain: "a.test".to_string(),
-                    server_name: ServerName::try_from("a.test").unwrap(),
-                    connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
-                }]
-                .into(),
-            };
 
-            let pool = Arc::new(
-                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
-            );
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -538,230 +665,13 @@ mod tests {
 
         pool_handle.abort();
 
-        let (c2s, s2c) = upstream_handle.await.unwrap();
-
-        assert_eq!(c2s.len(), 32);
-        assert_eq!(s2c.len(), 32);
-    }
-
-    #[tokio::test]
-    async fn test_keyexchange_distributes_load() {
-        let upstream_a_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_a_addr = upstream_a_listener.local_addr().unwrap();
-
-        let upstream_a_handle =
-            tokio::spawn(async move { basic_upstream_server("a.test", upstream_a_listener).await });
-
-        let upstream_b_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_b_addr = upstream_b_listener.local_addr().unwrap();
-
-        let upstream_b_handle =
-            tokio::spawn(async move { basic_upstream_server("b.test", upstream_b_listener).await });
-
-        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let pool_addr = pool_listener.local_addr().unwrap();
-
-        let pool_handle = tokio::spawn(async move {
-            let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
-                listen: pool_addr,
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
-            };
-            let backend_config = BackendConfig {
-                upstream_tls: upstream_tls_config(),
-                key_exchange_servers: vec![
-                    KeyExchangeServer {
-                        domain: "a.test".to_string(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("127.0.0.1".to_string(), upstream_a_addr.port()),
-                    },
-                    KeyExchangeServer {
-                        domain: "b.test".to_string(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("127.0.0.1".to_string(), upstream_b_addr.port()),
-                    },
-                ]
-                .into(),
-            };
-
-            let pool = Arc::new(
-                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
-            );
-            pool.serve_inner(pool_listener).await
-        });
-
-        let pool_connector = upstream_tls_config();
-
-        let conn = TcpStream::connect(pool_addr).await.unwrap();
-        let mut conn = pool_connector
-            .connect(ServerName::try_from("pool.test").unwrap(), conn)
-            .await
-            .unwrap();
-        conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
-            .await
-            .unwrap();
-        let response_1 = KeyExchangeResponse::parse(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
-        assert!(response_1.server.is_some());
-
-        let conn = TcpStream::connect(pool_addr).await.unwrap();
-        let mut conn = pool_connector
-            .connect(ServerName::try_from("pool.test").unwrap(), conn)
-            .await
-            .unwrap();
-        conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
-            .await
-            .unwrap();
-        let response_2 = KeyExchangeResponse::parse(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
-        assert!(response_2.server.is_some());
-
-        assert_ne!(response_1.server, response_2.server);
-
-        pool_handle.abort();
-
-        let (c2s, s2c) = upstream_a_handle.await.unwrap();
-
-        assert_eq!(c2s.len(), 16);
-        assert_eq!(s2c.len(), 16);
-
-        let (c2s, s2c) = upstream_b_handle.await.unwrap();
-
-        assert_eq!(c2s.len(), 16);
-        assert_eq!(s2c.len(), 16);
-    }
-
-    #[tokio::test]
-    async fn test_keyexchange_respects_deny_if_possible() {
-        let upstream_a_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_a_addr = upstream_a_listener.local_addr().unwrap();
-
-        let upstream_a_handle =
-            tokio::spawn(async move { basic_upstream_server("a.test", upstream_a_listener).await });
-
-        let upstream_b_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_b_addr = upstream_b_listener.local_addr().unwrap();
-
-        let upstream_b_handle =
-            tokio::spawn(async move { basic_upstream_server("b.test", upstream_b_listener).await });
-
-        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let pool_addr = pool_listener.local_addr().unwrap();
-
-        let pool_handle = tokio::spawn(async move {
-            let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
-                listen: pool_addr,
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
-            };
-            let backend_config = BackendConfig {
-                upstream_tls: upstream_tls_config(),
-                key_exchange_servers: vec![
-                    KeyExchangeServer {
-                        domain: "a.test".to_string(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("127.0.0.1".to_string(), upstream_a_addr.port()),
-                    },
-                    KeyExchangeServer {
-                        domain: "b.test".to_string(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("127.0.0.1".to_string(), upstream_b_addr.port()),
-                    },
-                ]
-                .into(),
-            };
-
-            let pool = Arc::new(
-                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
-            );
-            pool.serve_inner(pool_listener).await
-        });
-
-        let pool_connector = upstream_tls_config();
-
-        let conn = TcpStream::connect(pool_addr).await.unwrap();
-        let mut conn = pool_connector
-            .connect(ServerName::try_from("pool.test").unwrap(), conn)
-            .await
-            .unwrap();
-        conn.write_all(&[
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x40, 3, 0, 6, b'a', b'.', b't', b'e', b's',
-            b't', 0x80, 0, 0, 0,
-        ])
-        .await
-        .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
-        assert_eq!(response.server.as_deref(), Some("b.test"));
-
-        pool_handle.abort();
-        upstream_a_handle.abort();
-
-        let (c2s, s2c) = upstream_b_handle.await.unwrap();
-
-        assert_eq!(c2s.len(), 16);
-        assert_eq!(s2c.len(), 16);
-    }
-
-    #[tokio::test]
-    async fn test_keyexchange_ignores_deny_if_no_other_server() {
-        let upstream_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let upstream_addr = upstream_listener.local_addr().unwrap();
-
-        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let pool_addr = pool_listener.local_addr().unwrap();
-
-        let upstream_handle =
-            tokio::spawn(async move { basic_upstream_server("a.test", upstream_listener).await });
-
-        let pool_handle = tokio::spawn(async move {
-            let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
-                listen: pool_addr,
-                key_exchange_timeout: Duration::from_millis(1000),
-                max_connections: 1,
-            };
-
-            let backend_config = BackendConfig {
-                upstream_tls: upstream_tls_config(),
-                key_exchange_servers: vec![KeyExchangeServer {
-                    domain: "a.test".to_string(),
-                    server_name: ServerName::try_from("a.test").unwrap(),
-                    connection_address: ("127.0.0.1".to_string(), upstream_addr.port()),
-                }]
-                .into(),
-            };
-
-            let pool = Arc::new(
-                NtsPoolKe::new(pool_config, RoundRobinServerManager::new(backend_config)).unwrap(),
-            );
-            pool.serve_inner(pool_listener).await
-        });
-
-        let pool_connector = upstream_tls_config();
-        let conn = TcpStream::connect(pool_addr).await.unwrap();
-        let mut conn = pool_connector
-            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+        let request = FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
             .await
             .unwrap();
 
-        conn.write_all(&[
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x40, 3, 0, 6, b'a', b'.', b't', b'e', b's',
-            b't', 0x80, 0, 0, 0,
-        ])
-        .await
-        .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
-        assert_eq!(response.server.as_deref(), Some("a.test"));
-
-        pool_handle.abort();
-
-        let (c2s, s2c) = upstream_handle.await.unwrap();
-
-        assert_eq!(c2s.len(), 16);
-        assert_eq!(s2c.len(), 16);
+        assert_eq!(request.algorithm, 1);
+        assert_eq!(request.protocol, 1);
+        assert_eq!(request.c2s.len(), 32);
+        assert_eq!(request.s2c.len(), 32);
     }
 }
