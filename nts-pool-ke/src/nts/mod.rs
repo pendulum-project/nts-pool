@@ -112,7 +112,6 @@ pub struct ClientRequest {
 }
 
 impl ClientRequest {
-    #[allow(unused)]
     pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<ClientRequest, NtsError> {
         let mut algorithms = None;
         let mut protocols = None;
@@ -171,7 +170,6 @@ impl ClientRequest {
 pub struct ServerInformationRequest;
 
 impl ServerInformationRequest {
-    #[allow(unused)]
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::SupportedAlgorithmList {
             supported_algorithms: vec![],
@@ -196,7 +194,6 @@ pub struct ServerInformationResponse {
 }
 
 impl ServerInformationResponse {
-    #[allow(unused)]
     pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
         let mut supported_algorithms = None;
         let mut supported_protocols = None;
@@ -267,7 +264,6 @@ pub struct FixedKeyRequest {
 }
 
 impl FixedKeyRequest {
-    #[allow(unused)]
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::FixedKeyRequest {
             c2s: self.c2s,
@@ -374,7 +370,6 @@ pub struct KeyExchangeResponse {
 }
 
 impl KeyExchangeResponse {
-    #[allow(unused)]
     pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
         let mut protocol = None;
         let mut algorithm = None;
@@ -455,7 +450,6 @@ impl KeyExchangeResponse {
         }
     }
 
-    #[allow(unused)]
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::NextProtocol {
             protocol_ids: vec![self.protocol],
@@ -487,7 +481,6 @@ impl KeyExchangeResponse {
 pub struct NoAgreementResponse;
 
 impl NoAgreementResponse {
-    #[allow(unused)]
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::NextProtocol {
             protocol_ids: vec![],
@@ -505,7 +498,6 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    #[allow(unused)]
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::Error {
             errorcode: self.errorcode,
