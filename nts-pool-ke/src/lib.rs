@@ -1,6 +1,11 @@
+#![cfg_attr(feature = "fuzz", allow(private_interfaces))]
+
 mod cli;
 mod config;
 mod error;
+#[cfg(feature = "fuzz")]
+pub mod nts;
+#[cfg(not(feature = "fuzz"))]
 mod nts;
 mod pool_ke;
 mod servers;

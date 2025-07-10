@@ -1,0 +1,46 @@
+[package]
+name = "nts-pool-ke-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.nts-pool-ke]
+path = "../nts-pool-ke"
+features = ["fuzz"]
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "record"
+path = "fuzz_targets/record.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "client_request"
+path = "fuzz_targets/client_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "server_information_response"
+path = "fuzz_targets/server_information_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "key_exchange_response"
+path = "fuzz_targets/key_exchange_response.rs"
+test = false
+doc = false
+bench = false
