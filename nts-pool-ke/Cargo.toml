@@ -22,6 +22,10 @@ normal = [
     "tracing-subscriber",
 ]
 
+[features]
+default = []
+fuzz = []
+
 [dependencies]
 tokio = { workspace = true, default-features = false, features = [
     "rt-multi-thread",
