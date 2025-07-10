@@ -1,9 +1,13 @@
 use std::{fmt::Display, io::Error};
 
-use record::NtsRecord;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 mod record;
+
+#[cfg(feature = "fuzz")]
+pub use record::NtsRecord;
+#[cfg(not(feature = "fuzz"))]
+use record::NtsRecord;
 
 pub type ProtocolId = u16;
 pub type AlgorithmId = u16;
