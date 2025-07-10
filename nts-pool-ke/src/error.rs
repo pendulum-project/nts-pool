@@ -5,6 +5,7 @@ pub enum PoolError {
     NtsError(NtsError),
     IO(std::io::Error),
     Rustls(rustls::Error),
+    Timeout,
 }
 
 impl From<NtsError> for PoolError {
@@ -31,6 +32,7 @@ impl std::fmt::Display for PoolError {
             Self::NtsError(e) => e.fmt(f),
             Self::IO(e) => e.fmt(f),
             Self::Rustls(e) => e.fmt(f),
+            Self::Timeout => f.write_str("Timeout occured"),
         }
     }
 }

@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::atomic::AtomicUsize,
+    time::Duration,
 };
 
 use tokio::{
@@ -70,6 +71,7 @@ pub struct RoundRobinServerManager {
     servers: Box<[KeyExchangeServer]>,
     upstream_tls: TlsConnector,
     next_start: AtomicUsize,
+    timeout: Duration,
 }
 
 impl RoundRobinServerManager {
@@ -78,6 +80,7 @@ impl RoundRobinServerManager {
             servers: config.key_exchange_servers,
             upstream_tls: config.upstream_tls,
             next_start: AtomicUsize::new(0),
+            timeout: config.timesource_timeout,
         }
     }
 }
@@ -141,19 +144,26 @@ impl Server for RoundRobinServer<'_> {
         ),
         PoolError,
     > {
-        let mut connection = self.connect().await?;
+        match tokio::time::timeout(self.owner.timeout, async {
+            let mut connection = self.connect().await?;
 
-        ServerInformationRequest.serialize(&mut connection).await?;
-        let support_info = ServerInformationResponse::parse(&mut connection).await?;
-        connection.shutdown().await?;
-        let supported_protocols: HashSet<ProtocolId> =
-            support_info.supported_protocols.into_iter().collect();
-        let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
-            .supported_algorithms
-            .into_iter()
-            .map(|v| (v.id, v))
-            .collect();
-        Ok((supported_protocols, supported_algorithms))
+            ServerInformationRequest.serialize(&mut connection).await?;
+            let support_info = ServerInformationResponse::parse(&mut connection).await?;
+            connection.shutdown().await?;
+            let supported_protocols: HashSet<ProtocolId> =
+                support_info.supported_protocols.into_iter().collect();
+            let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
+                .supported_algorithms
+                .into_iter()
+                .map(|v| (v.id, v))
+                .collect();
+            Ok((supported_protocols, supported_algorithms))
+        })
+        .await
+        {
+            Ok(v) => v,
+            Err(_) => Err(PoolError::Timeout),
+        }
     }
 
     async fn connect(&self) -> Result<Self::Connection<'_>, PoolError> {
@@ -252,6 +262,7 @@ mod tests {
                 },
             ]
             .into(),
+            timesource_timeout: std::time::Duration::from_secs(1),
         });
 
         let first_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
@@ -276,6 +287,7 @@ mod tests {
                 },
             ]
             .into(),
+            timesource_timeout: std::time::Duration::from_secs(1),
         });
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
@@ -302,6 +314,7 @@ mod tests {
                 },
             ]
             .into(),
+            timesource_timeout: std::time::Duration::from_secs(1),
         });
 
         let first = manager.assign_server(
@@ -352,6 +365,7 @@ mod tests {
                 connection_address: ("127.0.0.1".into(), upstream_addr.port()),
             }]
             .into(),
+            timesource_timeout: std::time::Duration::from_secs(1),
         });
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);

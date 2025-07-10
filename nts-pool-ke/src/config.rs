@@ -107,12 +107,16 @@ struct BareBackendConfig {
     private_key: PathBuf,
     /// Which upstream servers to use.
     key_exchange_servers: Box<[KeyExchangeServer]>,
+    /// Timeout for requests for information to upstream timesource
+    #[serde(default = "default_timesource_timeout")]
+    timesource_timeout: u64,
 }
 
 #[derive(Clone)]
 pub struct BackendConfig {
     pub upstream_tls: TlsConnector,
     pub key_exchange_servers: Box<[KeyExchangeServer]>,
+    pub timesource_timeout: Duration,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -169,6 +173,7 @@ impl<'de> Deserialize<'de> for BackendConfig {
         Ok(Self {
             upstream_tls,
             key_exchange_servers: bare.key_exchange_servers,
+            timesource_timeout: std::time::Duration::from_millis(bare.timesource_timeout),
         })
     }
 }
@@ -183,6 +188,9 @@ struct BareNtsPoolKeConfig {
     #[serde(default = "default_nts_ke_timeout")]
     /// Timeout
     key_exchange_timeout: u64,
+    /// Timeout for connections to timesources
+    #[serde(default = "default_timesource_timeout")]
+    timesource_timeout: u64,
     /// Address for the server to listen on.
     listen: SocketAddr,
     /// Maximum amount of parallel connections (incoming)
@@ -194,6 +202,10 @@ fn default_nts_ke_timeout() -> u64 {
     1000
 }
 
+fn default_timesource_timeout() -> u64 {
+    500
+}
+
 fn default_max_connections() -> usize {
     100
 }
@@ -203,6 +215,7 @@ pub struct NtsPoolKeConfig {
     pub server_tls: TlsAcceptor,
     pub listen: SocketAddr,
     pub key_exchange_timeout: Duration,
+    pub timesource_timeout: Duration,
     pub max_connections: usize,
 }
 
@@ -240,6 +253,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
             server_tls,
             listen: bare.listen,
             key_exchange_timeout: std::time::Duration::from_millis(bare.key_exchange_timeout),
+            timesource_timeout: std::time::Duration::from_millis(bare.timesource_timeout),
             max_connections: bare.max_connections,
         })
     }
