@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
+    time::Duration,
 };
 
 use tokio::{
@@ -78,6 +79,7 @@ impl ServerConnection for TlsStream<TcpStream> {
 async fn fetch_support_data(
     mut connection: impl ServerConnection,
     allowed_protocols: &HashSet<ProtocolId>,
+    timeout: Duration,
 ) -> Result<
     (
         HashSet<ProtocolId>,
@@ -85,20 +87,27 @@ async fn fetch_support_data(
     ),
     PoolError,
 > {
-    ServerInformationRequest.serialize(&mut connection).await?;
-    let support_info = ServerInformationResponse::parse(&mut connection).await?;
-    connection.shutdown().await?;
-    let supported_protocols: HashSet<ProtocolId> = support_info
-        .supported_protocols
-        .into_iter()
-        .filter(|v| allowed_protocols.contains(v))
-        .collect();
-    let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
-        .supported_algorithms
-        .into_iter()
-        .map(|v| (v.id, v))
-        .collect();
-    Ok((supported_protocols, supported_algorithms))
+    match tokio::time::timeout(timeout, async {
+        ServerInformationRequest.serialize(&mut connection).await?;
+        let support_info = ServerInformationResponse::parse(&mut connection).await?;
+        connection.shutdown().await?;
+        let supported_protocols: HashSet<ProtocolId> = support_info
+            .supported_protocols
+            .into_iter()
+            .filter(|v| allowed_protocols.contains(v))
+            .collect();
+        let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
+            .supported_algorithms
+            .into_iter()
+            .map(|v| (v.id, v))
+            .collect();
+        Ok((supported_protocols, supported_algorithms))
+    })
+    .await
+    {
+        Ok(v) => v,
+        Err(_) => Err(PoolError::Timeout),
+    }
 }
 
 #[cfg(test)]
@@ -172,9 +181,10 @@ mod tests {
             ],
         };
 
-        let (protocols, algorithms) = fetch_support_data(connection, &HashSet::from([0, 1]))
-            .await
-            .unwrap();
+        let (protocols, algorithms) =
+            fetch_support_data(connection, &HashSet::from([0, 1]), Duration::from_secs(1))
+                .await
+                .unwrap();
         assert!(protocols.contains(&0));
         assert!(protocols.contains(&1));
         assert_eq!(protocols.len(), 2);

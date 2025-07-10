@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use maxminddb::geoip2;
@@ -34,6 +35,7 @@ pub struct GeographicServerManager {
     inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
     upstream_tls: TlsConnector,
     allowed_protocols: Arc<HashSet<ProtocolId>>,
+    timeout: Duration,
 }
 
 struct GeographicServerManagerInner {
@@ -56,6 +58,7 @@ impl GeographicServerManager {
             ))),
             upstream_tls: config.upstream_tls,
             allowed_protocols: Arc::new(config.allowed_protocols),
+            timeout: config.timesource_timeout,
         })
     }
 
@@ -137,6 +140,7 @@ impl ServerManager for GeographicServerManager {
                 upstream_tls: self.upstream_tls.clone(),
                 index,
                 allowed_protocols: self.allowed_protocols.clone(),
+                timeout: self.timeout,
             };
         }
 
@@ -147,6 +151,7 @@ impl ServerManager for GeographicServerManager {
             index: region[start_index],
             inner,
             allowed_protocols: self.allowed_protocols.clone(),
+            timeout: self.timeout,
         }
     }
 }
@@ -155,6 +160,7 @@ pub struct GeographicServer {
     inner: Arc<GeographicServerManagerInner>,
     upstream_tls: TlsConnector,
     allowed_protocols: Arc<HashSet<ProtocolId>>,
+    timeout: Duration,
     index: usize,
 }
 
@@ -177,7 +183,7 @@ impl Server for GeographicServer {
         ),
         crate::error::PoolError,
     > {
-        fetch_support_data(self.connect().await?, &self.allowed_protocols).await
+        fetch_support_data(self.connect().await?, &self.allowed_protocols, self.timeout).await
     }
 
     async fn connect<'a>(&'a self) -> Result<Self::Connection<'a>, crate::error::PoolError> {
@@ -245,6 +251,7 @@ mod tests {
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
+            timeout: Duration::from_secs(1),
         };
 
         let first = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
@@ -288,6 +295,7 @@ mod tests {
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
+            timeout: Duration::from_secs(1),
         };
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
@@ -324,6 +332,7 @@ mod tests {
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
+            timeout: Duration::from_secs(1),
         };
 
         let first = manager.assign_server(
@@ -370,6 +379,7 @@ mod tests {
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
+            timeout: Duration::from_secs(1),
         };
 
         // GB
@@ -390,6 +400,7 @@ mod tests {
             key_exchange_servers: "testdata/testservers.json".into(),
             geolocation_db: Some("testdata/GeoLite2-Country-Test.mmdb".into()),
             allowed_protocols: HashSet::new(),
+            timesource_timeout: Duration::from_secs(1),
         })
         .await
         .unwrap();

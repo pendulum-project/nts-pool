@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::atomic::AtomicUsize,
+    time::Duration,
 };
 
 use tokio::net::TcpStream;
@@ -20,6 +21,7 @@ pub struct RoundRobinServerManager {
     allowed_protocols: HashSet<ProtocolId>,
     upstream_tls: TlsConnector,
     next_start: AtomicUsize,
+    timeout: Duration,
 }
 
 impl RoundRobinServerManager {
@@ -32,6 +34,7 @@ impl RoundRobinServerManager {
             allowed_protocols: config.allowed_protocols,
             upstream_tls: config.upstream_tls,
             next_start: AtomicUsize::new(0),
+            timeout: config.timesource_timeout,
         })
     }
 }
@@ -95,7 +98,12 @@ impl Server for RoundRobinServer<'_> {
         ),
         PoolError,
     > {
-        fetch_support_data(self.connect().await?, &self.owner.allowed_protocols).await
+        fetch_support_data(
+            self.connect().await?,
+            &self.owner.allowed_protocols,
+            self.owner.timeout,
+        )
+        .await
     }
 
     async fn connect(&self) -> Result<Self::Connection<'_>, PoolError> {
@@ -110,7 +118,7 @@ impl Server for RoundRobinServer<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, sync::Arc};
+    use std::{collections::HashSet, sync::Arc, time::Duration};
 
     use rustls::{
         RootCertStore,
@@ -162,6 +170,7 @@ mod tests {
             upstream_tls: upstream_tls_config(),
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
+            timeout: Duration::from_secs(1),
         };
 
         let first_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
@@ -190,6 +199,7 @@ mod tests {
             upstream_tls: upstream_tls_config(),
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
+            timeout: Duration::from_secs(1),
         };
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
@@ -220,6 +230,7 @@ mod tests {
             upstream_tls: upstream_tls_config(),
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
+            timeout: Duration::from_secs(1),
         };
 
         let first = manager.assign_server(
