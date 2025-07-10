@@ -12,6 +12,8 @@ use record::NtsRecord;
 pub type ProtocolId = u16;
 pub type AlgorithmId = u16;
 
+const MAX_MESSAGE_SIZE: u64 = 4096;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AlgorithmDescription {
     pub id: AlgorithmId,
@@ -116,7 +118,9 @@ pub struct ClientRequest {
 }
 
 impl ClientRequest {
-    pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<ClientRequest, NtsError> {
+    pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<ClientRequest, NtsError> {
+        let mut reader = reader.take(MAX_MESSAGE_SIZE);
+
         let mut algorithms = None;
         let mut protocols = None;
         let mut denied_servers = vec![];
@@ -198,7 +202,9 @@ pub struct ServerInformationResponse {
 }
 
 impl ServerInformationResponse {
-    pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+    pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+        let mut reader = reader.take(MAX_MESSAGE_SIZE);
+
         let mut supported_algorithms = None;
         let mut supported_protocols = None;
 
@@ -291,7 +297,9 @@ impl FixedKeyRequest {
     }
 
     #[cfg(test)]
-    pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+    pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+        let mut reader = reader.take(MAX_MESSAGE_SIZE);
+
         let mut c2s = None;
         let mut s2c = None;
         let mut algorithm = None;
@@ -374,7 +382,9 @@ pub struct KeyExchangeResponse {
 }
 
 impl KeyExchangeResponse {
-    pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+    pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
+        let mut reader = reader.take(MAX_MESSAGE_SIZE);
+
         let mut protocol = None;
         let mut algorithm = None;
         let mut cookies = vec![];
