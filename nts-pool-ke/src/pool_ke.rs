@@ -262,8 +262,15 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         }
 
         // TODO: Implement connection reuse
-        let server_stream = server.connect().await?;
-        workaround_lifetime_bug(request, server_stream).await
+        match tokio::time::timeout(self.config.timesource_timeout, async {
+            let server_stream = server.connect().await?;
+            workaround_lifetime_bug(request, server_stream).await
+        })
+        .await
+        {
+            Ok(v) => v,
+            Err(_) => Err(PoolError::Timeout),
+        }
     }
 }
 
@@ -517,6 +524,7 @@ mod tests {
                 server_tls: listen_tls_config("pool.test"),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
             };
 
@@ -578,6 +586,7 @@ mod tests {
                 server_tls: listen_tls_config("pool.test"),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
             };
 
@@ -640,6 +649,7 @@ mod tests {
                 server_tls: listen_tls_config("pool.test"),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
             };
 
