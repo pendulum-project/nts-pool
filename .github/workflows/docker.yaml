@@ -5,6 +5,7 @@ permissions:
   packages: write
 
 on:
+  push: {}
   workflow_call: {}
   workflow_dispatch: {}
 
