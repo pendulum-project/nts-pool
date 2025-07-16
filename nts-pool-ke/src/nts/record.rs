@@ -397,7 +397,7 @@ mod tests {
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0x80, 1, 0, 0]) else {
             panic!("Expected successfull parse");
         };
-        assert_eq!(protocol_ids, []);
+        assert_eq!(protocol_ids, [] as [u16; 0]);
 
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0x80, 1, 0, 4, 0, 0, 0, 4])
         else {
@@ -567,12 +567,12 @@ mod tests {
         let Ok(NtsRecord::NewCookie { cookie_data }) = parse(&[0, 5, 0, 0]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(cookie_data, []);
+        assert_eq!(cookie_data, [] as [u8; 0]);
 
         let Ok(NtsRecord::NewCookie { cookie_data }) = parse(&[0, 5, 0, 0, 16, 17]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(cookie_data, []);
+        assert_eq!(cookie_data, [] as [u8; 0]);
 
         assert!(parse(&[0x80, 5, 0, 3, 1, 2]).is_err());
 
@@ -652,7 +652,7 @@ mod tests {
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(supported_protocols, []);
+        assert_eq!(supported_protocols, [] as [u16; 0]);
 
         let Ok(NtsRecord::SupportedNextProtocolList {
             supported_protocols,
@@ -754,8 +754,8 @@ mod tests {
         let Ok(NtsRecord::FixedKeyRequest { c2s, s2c }) = parse(&[0xC0, 2, 0, 0]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(c2s, []);
-        assert_eq!(s2c, []);
+        assert_eq!(c2s, [] as [u8; 0]);
+        assert_eq!(s2c, [] as [u8; 0]);
 
         let Ok(NtsRecord::FixedKeyRequest { c2s, s2c }) = parse(&[0x40, 2, 0, 4, 1, 2, 3, 4])
         else {
