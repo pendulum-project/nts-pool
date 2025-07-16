@@ -106,9 +106,11 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
     // tracing setup to ensure logging is fully configured.
     config.check();
 
+    let backend = RoundRobinServerManager::new(config.backend)?;
+
     let result = run_nts_pool_ke(
         config.server.clone(),
-        RoundRobinServerManager::new(config.backend),
+        backend,
     )
     .await;
 
