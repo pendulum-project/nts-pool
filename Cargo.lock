@@ -934,6 +934,7 @@ dependencies = [
  "rustls",
  "rustls-platform-verifier",
  "serde",
+ "serde_json",
  "tokio",
  "tokio-rustls",
  "toml",

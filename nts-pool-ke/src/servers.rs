@@ -73,12 +73,15 @@ pub struct RoundRobinServerManager {
 }
 
 impl RoundRobinServerManager {
-    pub fn new(config: BackendConfig) -> Self {
-        Self {
-            servers: config.key_exchange_servers,
+    pub fn new(config: BackendConfig) -> std::io::Result<Self> {
+        let server_file = std::fs::File::open(config.key_exchange_servers)?;
+        let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
+
+        Ok(Self {
+            servers,
             upstream_tls: config.upstream_tls,
             next_start: AtomicUsize::new(0),
-        }
+        })
     }
 }
 
@@ -186,7 +189,7 @@ mod tests {
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     use crate::{
-        config::{BackendConfig, KeyExchangeServer},
+        config::KeyExchangeServer,
         nts::{AlgorithmDescription, ServerInformationResponse},
         servers::{RoundRobinServerManager, Server, ServerManager},
     };
@@ -237,9 +240,8 @@ mod tests {
 
     #[test]
     fn test_load_is_distributed() {
-        let manager = RoundRobinServerManager::new(BackendConfig {
-            upstream_tls: upstream_tls_config(),
-            key_exchange_servers: [
+        let manager = RoundRobinServerManager {
+            servers: [
                 KeyExchangeServer {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
@@ -252,7 +254,9 @@ mod tests {
                 },
             ]
             .into(),
-        });
+            upstream_tls: upstream_tls_config(),
+            next_start: 0.into(),
+        };
 
         let first_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
         let second_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
@@ -261,9 +265,8 @@ mod tests {
 
     #[test]
     fn test_respect_denied_if_possible() {
-        let manager = RoundRobinServerManager::new(BackendConfig {
-            upstream_tls: upstream_tls_config(),
-            key_exchange_servers: [
+        let manager = RoundRobinServerManager {
+            servers: [
                 KeyExchangeServer {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
@@ -276,7 +279,9 @@ mod tests {
                 },
             ]
             .into(),
-        });
+            upstream_tls: upstream_tls_config(),
+            next_start: 0.into(),
+        };
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
         assert_ne!(server.name(), "a.test");
@@ -287,9 +292,8 @@ mod tests {
 
     #[test]
     fn test_ignore_denied_if_impossible() {
-        let manager = RoundRobinServerManager::new(BackendConfig {
-            upstream_tls: upstream_tls_config(),
-            key_exchange_servers: [
+        let manager = RoundRobinServerManager {
+            servers: [
                 KeyExchangeServer {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
@@ -302,7 +306,9 @@ mod tests {
                 },
             ]
             .into(),
-        });
+            upstream_tls: upstream_tls_config(),
+            next_start: 0.into(),
+        };
 
         let first = manager.assign_server(
             "127.0.0.1:4460".parse().unwrap(),
@@ -344,15 +350,16 @@ mod tests {
             ],
         ));
 
-        let manager = RoundRobinServerManager::new(BackendConfig {
-            upstream_tls: upstream_tls_config(),
-            key_exchange_servers: [KeyExchangeServer {
+        let manager = RoundRobinServerManager {
+            servers: [KeyExchangeServer {
                 domain: "a.test".into(),
                 server_name: "a.test".try_into().unwrap(),
                 connection_address: ("127.0.0.1".into(), upstream_addr.port()),
             }]
             .into(),
-        });
+            upstream_tls: upstream_tls_config(),
+            next_start: 0.into(),
+        };
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
 
