@@ -1,10 +1,22 @@
-use std::{collections::{HashMap, HashSet}, net::SocketAddr, sync::atomic::AtomicUsize};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::atomic::AtomicUsize,
+};
 
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tokio_rustls::{TlsConnector, client::TlsStream};
 use tracing::debug;
 
-use crate::{config::{BackendConfig, KeyExchangeServer}, error::PoolError, nts::{AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest, ServerInformationResponse}, servers::{Server, ServerManager}};
+use crate::{
+    config::{BackendConfig, KeyExchangeServer},
+    error::PoolError,
+    nts::{
+        AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest,
+        ServerInformationResponse,
+    },
+    servers::{Server, ServerManager},
+};
 
 pub struct RoundRobinServerManager {
     servers: Box<[KeyExchangeServer]>,
@@ -109,7 +121,6 @@ impl Server for RoundRobinServer<'_> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -180,11 +191,13 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    regions: vec![],
                 },
                 KeyExchangeServer {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    regions: vec![],
                 },
             ]
             .into(),
@@ -205,11 +218,13 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    regions: vec![],
                 },
                 KeyExchangeServer {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    regions: vec![],
                 },
             ]
             .into(),
@@ -232,11 +247,13 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    regions: vec![],
                 },
                 KeyExchangeServer {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    regions: vec![],
                 },
             ]
             .into(),
@@ -289,6 +306,7 @@ mod tests {
                 domain: "a.test".into(),
                 server_name: "a.test".try_into().unwrap(),
                 connection_address: ("127.0.0.1".into(), upstream_addr.port()),
+                regions: vec![],
             }]
             .into(),
             upstream_tls: upstream_tls_config(),

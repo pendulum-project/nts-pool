@@ -249,6 +249,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
 pub struct KeyExchangeServer {
     pub domain: String,
     pub server_name: ServerName<'static>,
+    pub regions: Vec<String>,
     pub connection_address: (String, u16),
 }
 
@@ -262,6 +263,8 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         struct BareKeyExchangeServer {
             domain: String,
             port: u16,
+            #[serde(default)]
+            regions: Vec<String>,
         }
 
         let bare = BareKeyExchangeServer::deserialize(deserializer)?;
@@ -276,6 +279,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         Ok(KeyExchangeServer {
             domain: bare.domain.to_string(),
             server_name,
+            regions: bare.regions,
             connection_address: (bare.domain.to_string(), bare.port),
         })
     }
@@ -376,11 +380,13 @@ mod tests {
                     domain: String::from("foo.bar"),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     connection_address: (String::from("foo.bar"), 1234),
+                    regions: vec![],
                 },
                 KeyExchangeServer {
                     domain: String::from("bar.foo"),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     connection_address: (String::from("bar.foo"), 4321),
+                    regions: vec![],
                 },
             ]
             .as_slice()
