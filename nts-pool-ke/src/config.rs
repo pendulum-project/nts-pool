@@ -112,6 +112,9 @@ struct BareBackendConfig {
     key_exchange_servers: PathBuf,
     /// Allowed protocols for time sources
     allowed_protocols: Vec<ProtocolId>,
+    /// Geolocation database,
+    #[serde(default)]
+    geolocation_db: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -119,6 +122,7 @@ pub struct BackendConfig {
     pub upstream_tls: TlsConnector,
     pub key_exchange_servers: PathBuf,
     pub allowed_protocols: HashSet<ProtocolId>,
+    pub geolocation_db: Option<PathBuf>,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -176,6 +180,7 @@ impl<'de> Deserialize<'de> for BackendConfig {
             upstream_tls,
             key_exchange_servers: bare.key_exchange_servers,
             allowed_protocols: bare.allowed_protocols.into_iter().collect(),
+            geolocation_db: bare.geolocation_db,
         })
     }
 }

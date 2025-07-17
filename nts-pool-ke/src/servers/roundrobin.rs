@@ -4,18 +4,15 @@ use std::{
     sync::atomic::AtomicUsize,
 };
 
-use tokio::{io::AsyncWriteExt, net::TcpStream};
+use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
 use tracing::debug;
 
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
     error::PoolError,
-    nts::{
-        AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest,
-        ServerInformationResponse,
-    },
-    servers::{Server, ServerManager},
+    nts::{AlgorithmDescription, AlgorithmId, ProtocolId},
+    servers::{Server, ServerManager, fetch_support_data},
 };
 
 pub struct RoundRobinServerManager {
@@ -98,22 +95,7 @@ impl Server for RoundRobinServer<'_> {
         ),
         PoolError,
     > {
-        let mut connection = self.connect().await?;
-
-        ServerInformationRequest.serialize(&mut connection).await?;
-        let support_info = ServerInformationResponse::parse(&mut connection).await?;
-        connection.shutdown().await?;
-        let supported_protocols: HashSet<ProtocolId> = support_info
-            .supported_protocols
-            .into_iter()
-            .filter(|v| self.owner.allowed_protocols.contains(v))
-            .collect();
-        let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
-            .supported_algorithms
-            .into_iter()
-            .map(|v| (v.id, v))
-            .collect();
-        Ok((supported_protocols, supported_algorithms))
+        fetch_support_data(self.connect().await?, &self.owner.allowed_protocols).await
     }
 
     async fn connect(&self) -> Result<Self::Connection<'_>, PoolError> {
