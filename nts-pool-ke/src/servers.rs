@@ -11,9 +11,14 @@ use tokio_rustls::client::TlsStream;
 
 use crate::{
     error::PoolError,
-    nts::{AlgorithmDescription, AlgorithmId, ProtocolId},
+    nts::{
+        AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest,
+        ServerInformationResponse,
+    },
 };
 
+mod geo;
+pub use geo::GeographicServerManager;
 mod roundrobin;
 pub use roundrobin::RoundRobinServerManager;
 
@@ -68,4 +73,30 @@ impl ServerConnection for TlsStream<TcpStream> {
         // no reuse, just shutdown the connection
         let _ = self.shutdown().await;
     }
+}
+
+async fn fetch_support_data(
+    mut connection: impl ServerConnection,
+    allowed_protocols: &HashSet<ProtocolId>,
+) -> Result<
+    (
+        HashSet<ProtocolId>,
+        HashMap<AlgorithmId, AlgorithmDescription>,
+    ),
+    PoolError,
+> {
+    ServerInformationRequest.serialize(&mut connection).await?;
+    let support_info = ServerInformationResponse::parse(&mut connection).await?;
+    connection.shutdown().await?;
+    let supported_protocols: HashSet<ProtocolId> = support_info
+        .supported_protocols
+        .into_iter()
+        .filter(|v| allowed_protocols.contains(v))
+        .collect();
+    let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
+        .supported_algorithms
+        .into_iter()
+        .map(|v| (v.id, v))
+        .collect();
+    Ok((supported_protocols, supported_algorithms))
 }
