@@ -107,12 +107,16 @@ struct BareBackendConfig {
     private_key: PathBuf,
     /// Which upstream servers to use.
     key_exchange_servers: PathBuf,
+    /// Geolocation database,
+    #[serde(default)]
+    geolocation_db: Option<PathBuf>,
 }
 
 #[derive(Clone)]
 pub struct BackendConfig {
     pub upstream_tls: TlsConnector,
     pub key_exchange_servers: PathBuf,
+    pub geolocation_db: Option<PathBuf>,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -169,6 +173,7 @@ impl<'de> Deserialize<'de> for BackendConfig {
         Ok(Self {
             upstream_tls,
             key_exchange_servers: bare.key_exchange_servers,
+            geolocation_db: bare.geolocation_db,
         })
     }
 }
