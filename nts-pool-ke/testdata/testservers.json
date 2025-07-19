@@ -1,0 +1,5 @@
+[
+    {"domain": "a.test", "port": 4460, "regions": ["EUROPE", "NL"]},
+    {"domain": "b.test", "port": 4460},
+    {"domain": "c.test", "port": 4460, "regions": ["ASIA", "NL", "BE"]}
+]

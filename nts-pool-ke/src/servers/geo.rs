@@ -189,3 +189,217 @@ impl Server for GeographicServer {
             .await?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use maxminddb::Reader;
+    use rustls::{
+        RootCertStore,
+        pki_types::{ServerName, pem::PemObject},
+        version::TLS13,
+    };
+
+    use super::*;
+
+    fn upstream_tls_config() -> TlsConnector {
+        let upstream_cas = rustls::pki_types::CertificateDer::pem_file_iter(format!(
+            "{}/testdata/testca.pem",
+            env!("CARGO_MANIFEST_DIR"),
+        ))
+        .unwrap()
+        .collect::<Result<Vec<rustls::pki_types::CertificateDer>, _>>()
+        .unwrap();
+
+        let mut roots = RootCertStore::empty();
+        roots.add_parsable_certificates(upstream_cas);
+        let upstream_config = rustls::ClientConfig::builder_with_protocol_versions(&[&TLS13])
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        TlsConnector::from(Arc::new(upstream_config))
+    }
+
+    #[test]
+    fn test_load_is_distributed() {
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        domain: "a.test".into(),
+                        server_name: ServerName::try_from("a.test").unwrap(),
+                        connection_address: ("a.test".into(), 4460),
+                        regions: vec![],
+                    },
+                    KeyExchangeServer {
+                        domain: "b.test".into(),
+                        server_name: ServerName::try_from("b.test").unwrap(),
+                        connection_address: ("b.test".into(), 4460),
+                        regions: vec![],
+                    },
+                ]
+                .into(),
+                regions: HashMap::from([("@".into(), vec![0, 1])]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+            }))),
+            upstream_tls: upstream_tls_config(),
+            allowed_protocols: Arc::new(HashSet::new()),
+        };
+
+        let first = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+
+        let mut ok = false;
+        // Assignment is probabilistic, but getting the same server 128 times in a row is exceedingly unlikely.
+        for _ in 0..128 {
+            let second = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+            if second.name() != first.name() {
+                ok = true;
+                break;
+            }
+        }
+        assert!(ok);
+    }
+
+    #[test]
+    fn test_respect_denied_if_possible() {
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        domain: "a.test".into(),
+                        server_name: ServerName::try_from("a.test").unwrap(),
+                        connection_address: ("a.test".into(), 4460),
+                        regions: vec![],
+                    },
+                    KeyExchangeServer {
+                        domain: "b.test".into(),
+                        server_name: ServerName::try_from("b.test").unwrap(),
+                        connection_address: ("b.test".into(), 4460),
+                        regions: vec![],
+                    },
+                ]
+                .into(),
+                regions: HashMap::from([("@".into(), vec![0, 1])]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+            }))),
+            upstream_tls: upstream_tls_config(),
+            allowed_protocols: Arc::new(HashSet::new()),
+        };
+
+        let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
+        assert_ne!(server.name(), "a.test");
+
+        let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
+        assert_ne!(server.name(), "a.test");
+    }
+
+    #[test]
+    fn test_ignore_denied_if_impossible() {
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        domain: "a.test".into(),
+                        server_name: ServerName::try_from("a.test").unwrap(),
+                        connection_address: ("a.test".into(), 4460),
+                        regions: vec![],
+                    },
+                    KeyExchangeServer {
+                        domain: "b.test".into(),
+                        server_name: ServerName::try_from("b.test").unwrap(),
+                        connection_address: ("b.test".into(), 4460),
+                        regions: vec![],
+                    },
+                ]
+                .into(),
+                regions: HashMap::from([("@".into(), vec![0, 1])]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+            }))),
+            upstream_tls: upstream_tls_config(),
+            allowed_protocols: Arc::new(HashSet::new()),
+        };
+
+        let first = manager.assign_server(
+            "127.0.0.1:4460".parse().unwrap(),
+            &["a.test".into(), "b.test".into()],
+        );
+        assert!(first.name() == "a.test" || first.name() == "b.test");
+    }
+
+    #[test]
+    fn test_region_handling() {
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        domain: "global.test".into(),
+                        server_name: ServerName::try_from("global.test").unwrap(),
+                        connection_address: ("global.test".into(), 4460),
+                        regions: vec![],
+                    },
+                    KeyExchangeServer {
+                        domain: "eu.test".into(),
+                        server_name: ServerName::try_from("eu.test").unwrap(),
+                        connection_address: ("eu.test".into(), 4460),
+                        regions: vec![],
+                    },
+                    KeyExchangeServer {
+                        domain: "gb.test".into(),
+                        server_name: ServerName::try_from("gb.test").unwrap(),
+                        connection_address: ("gb.test".into(), 4460),
+                        regions: vec![],
+                    },
+                ]
+                .into(),
+                regions: HashMap::from([
+                    ("@".into(), vec![0]),
+                    ("EUROPE".into(), vec![1]),
+                    ("GB".into(), vec![2]),
+                ]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+            }))),
+            upstream_tls: upstream_tls_config(),
+            allowed_protocols: Arc::new(HashSet::new()),
+        };
+
+        // GB
+        let server = manager.assign_server("81.2.69.193:4460".parse().unwrap(), &[]);
+        assert_eq!(server.name(), "gb.test");
+        // SE
+        let server = manager.assign_server("89.160.20.113:4460".parse().unwrap(), &[]);
+        assert_eq!(server.name(), "eu.test");
+        // US
+        let server = manager.assign_server("50.114.0.1:4460".parse().unwrap(), &[]);
+        assert_eq!(server.name(), "global.test");
+    }
+
+    #[tokio::test]
+    async fn test_server_list_parsing() {
+        let manager = GeographicServerManager::new(BackendConfig {
+            upstream_tls: upstream_tls_config(),
+            key_exchange_servers: "testdata/testservers.json".into(),
+            geolocation_db: Some("testdata/GeoLite2-Country-Test.mmdb".into()),
+            allowed_protocols: HashSet::new(),
+        })
+        .await
+        .unwrap();
+
+        let inner = manager.inner.read().unwrap();
+        for (i, server) in inner.servers.iter().enumerate() {
+            assert!(inner.regions.get(GLOBAL).unwrap().contains(&i));
+            for region in server.regions.iter() {
+                assert!(inner.regions.get(region).unwrap().contains(&i));
+            }
+        }
+    }
+}
