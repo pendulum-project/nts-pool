@@ -68,6 +68,7 @@ pub trait ServerConnection: AsyncRead + AsyncWrite + Unpin + Send {
 
 pub struct RoundRobinServerManager {
     servers: Box<[KeyExchangeServer]>,
+    allowed_protocols: HashSet<ProtocolId>,
     upstream_tls: TlsConnector,
     next_start: AtomicUsize,
 }
@@ -76,6 +77,7 @@ impl RoundRobinServerManager {
     pub fn new(config: BackendConfig) -> Self {
         Self {
             servers: config.key_exchange_servers,
+            allowed_protocols: config.allowed_protocols,
             upstream_tls: config.upstream_tls,
             next_start: AtomicUsize::new(0),
         }
@@ -146,8 +148,11 @@ impl Server for RoundRobinServer<'_> {
         ServerInformationRequest.serialize(&mut connection).await?;
         let support_info = ServerInformationResponse::parse(&mut connection).await?;
         connection.shutdown().await?;
-        let supported_protocols: HashSet<ProtocolId> =
-            support_info.supported_protocols.into_iter().collect();
+        let supported_protocols: HashSet<ProtocolId> = support_info
+            .supported_protocols
+            .into_iter()
+            .filter(|v| self.owner.allowed_protocols.contains(v))
+            .collect();
         let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
             .supported_algorithms
             .into_iter()
@@ -175,7 +180,7 @@ impl ServerConnection for TlsStream<TcpStream> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashSet, sync::Arc};
 
     use rustls::{
         RootCertStore,
@@ -239,6 +244,7 @@ mod tests {
     fn test_load_is_distributed() {
         let manager = RoundRobinServerManager::new(BackendConfig {
             upstream_tls: upstream_tls_config(),
+            allowed_protocols: HashSet::new(),
             key_exchange_servers: [
                 KeyExchangeServer {
                     domain: "a.test".into(),
@@ -263,6 +269,7 @@ mod tests {
     fn test_respect_denied_if_possible() {
         let manager = RoundRobinServerManager::new(BackendConfig {
             upstream_tls: upstream_tls_config(),
+            allowed_protocols: HashSet::new(),
             key_exchange_servers: [
                 KeyExchangeServer {
                     domain: "a.test".into(),
@@ -289,6 +296,7 @@ mod tests {
     fn test_ignore_denied_if_impossible() {
         let manager = RoundRobinServerManager::new(BackendConfig {
             upstream_tls: upstream_tls_config(),
+            allowed_protocols: HashSet::new(),
             key_exchange_servers: [
                 KeyExchangeServer {
                     domain: "a.test".into(),
@@ -340,12 +348,18 @@ mod tests {
             "a.test",
             upstream_listener,
             &[
-                0xC0, 4, 0, 4, 0, 0, 0, 1, 0xC0, 1, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32, 0x80, 0, 0, 0,
+                0xC0, 4, 0, 6, 0, 0, 0, 1, 0, 2, 0xC0, 1, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32, 0x80, 0,
+                0, 0,
             ],
         ));
 
+        let mut allowed_protocols = HashSet::new();
+        allowed_protocols.insert(0);
+        allowed_protocols.insert(1);
+
         let manager = RoundRobinServerManager::new(BackendConfig {
             upstream_tls: upstream_tls_config(),
+            allowed_protocols,
             key_exchange_servers: [KeyExchangeServer {
                 domain: "a.test".into(),
                 server_name: "a.test".try_into().unwrap(),

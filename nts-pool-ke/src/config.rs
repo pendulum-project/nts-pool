@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt::Display,
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
@@ -15,6 +16,8 @@ use rustls_platform_verifier::Verifier;
 use serde::Deserialize;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tracing::{info, warn};
+
+use crate::nts::ProtocolId;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -107,12 +110,15 @@ struct BareBackendConfig {
     private_key: PathBuf,
     /// Which upstream servers to use.
     key_exchange_servers: Box<[KeyExchangeServer]>,
+    /// Allowed protocols for time sources
+    allowed_protocols: Vec<ProtocolId>,
 }
 
 #[derive(Clone)]
 pub struct BackendConfig {
     pub upstream_tls: TlsConnector,
     pub key_exchange_servers: Box<[KeyExchangeServer]>,
+    pub allowed_protocols: HashSet<ProtocolId>,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -169,6 +175,7 @@ impl<'de> Deserialize<'de> for BackendConfig {
         Ok(Self {
             upstream_tls,
             key_exchange_servers: bare.key_exchange_servers,
+            allowed_protocols: bare.allowed_protocols.into_iter().collect(),
         })
     }
 }
@@ -315,6 +322,7 @@ mod tests {
             upstream-cas = "/foo/bar/ca.pem"
             certificate-chain = "/foo/bar/baz.pem"
             private-key = "spam.der"
+            allowed-protocols = [ 0, 1 ]
             key-exchange-servers = [
                 { domain = "foo.bar", port = 1234 },
                 { domain = "bar.foo", port = 4321 },
@@ -362,6 +370,7 @@ mod tests {
             [backend]
             upstream-cas = "testdata/testca.pem"
             certificate-chain = "testdata/end.fullchain.pem"
+            allowed-protocols = [ 0, 1 ]
             private-key = "testdata/end.key"
             key-exchange-servers = [
                 { domain = "foo.bar", port = 1234 },
