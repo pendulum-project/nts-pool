@@ -106,13 +106,17 @@ struct BareBackendConfig {
     /// Private key used to identify to time sources
     private_key: PathBuf,
     /// Which upstream servers to use.
-    key_exchange_servers: Box<[KeyExchangeServer]>,
+    key_exchange_servers: PathBuf,
+    /// Geolocation database,
+    #[serde(default)]
+    geolocation_db: Option<PathBuf>,
 }
 
 #[derive(Clone)]
 pub struct BackendConfig {
     pub upstream_tls: TlsConnector,
-    pub key_exchange_servers: Box<[KeyExchangeServer]>,
+    pub key_exchange_servers: PathBuf,
+    pub geolocation_db: Option<PathBuf>,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -169,6 +173,7 @@ impl<'de> Deserialize<'de> for BackendConfig {
         Ok(Self {
             upstream_tls,
             key_exchange_servers: bare.key_exchange_servers,
+            geolocation_db: bare.geolocation_db,
         })
     }
 }
@@ -249,6 +254,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
 pub struct KeyExchangeServer {
     pub domain: String,
     pub server_name: ServerName<'static>,
+    pub regions: Vec<String>,
     pub connection_address: (String, u16),
 }
 
@@ -262,6 +268,8 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         struct BareKeyExchangeServer {
             domain: String,
             port: u16,
+            #[serde(default)]
+            regions: Vec<String>,
         }
 
         let bare = BareKeyExchangeServer::deserialize(deserializer)?;
@@ -276,6 +284,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         Ok(KeyExchangeServer {
             domain: bare.domain.to_string(),
             server_name,
+            regions: bare.regions,
             connection_address: (bare.domain.to_string(), bare.port),
         })
     }
@@ -283,8 +292,6 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
-
     use super::*;
 
     #[test]
@@ -315,10 +322,7 @@ mod tests {
             upstream-cas = "/foo/bar/ca.pem"
             certificate-chain = "/foo/bar/baz.pem"
             private-key = "spam.der"
-            key-exchange-servers = [
-                { domain = "foo.bar", port = 1234 },
-                { domain = "bar.foo", port = 4321 },
-            ]
+            key-exchange-servers = "servers.json"
             "#,
         )
         .unwrap();
@@ -332,22 +336,7 @@ mod tests {
         let private_key = PathBuf::from("spam.der");
         assert_eq!(test.private_key, private_key);
 
-        assert_eq!(
-            test.key_exchange_servers.deref(),
-            [
-                KeyExchangeServer {
-                    domain: String::from("foo.bar"),
-                    server_name: ServerName::try_from("foo.bar").unwrap(),
-                    connection_address: (String::from("foo.bar"), 1234),
-                },
-                KeyExchangeServer {
-                    domain: String::from("bar.foo"),
-                    server_name: ServerName::try_from("bar.foo").unwrap(),
-                    connection_address: (String::from("bar.foo"), 4321),
-                },
-            ]
-            .as_slice()
-        );
+        assert_eq!(test.key_exchange_servers, PathBuf::from("servers.json"));
     }
 
     #[test]
@@ -363,10 +352,7 @@ mod tests {
             upstream-cas = "testdata/testca.pem"
             certificate-chain = "testdata/end.fullchain.pem"
             private-key = "testdata/end.key"
-            key-exchange-servers = [
-                { domain = "foo.bar", port = 1234 },
-                { domain = "bar.foo", port = 4321 },
-            ]
+            key-exchange-servers = "servers.json"
             "#,
         )
         .unwrap();
@@ -375,17 +361,37 @@ mod tests {
         assert_eq!(test.server.listen, "0.0.0.0:4460".parse().unwrap(),);
 
         assert_eq!(
-            test.backend.key_exchange_servers.deref(),
+            test.backend.key_exchange_servers,
+            PathBuf::from("servers.json")
+        );
+    }
+
+    #[test]
+    fn test_deserialize_key_exchange_server() {
+        let servers: Vec<KeyExchangeServer> = serde_json::from_str(
+            r#"
+        [
+                { "domain": "foo.bar", "port": 1234 },
+                { "domain": "bar.foo", "port": 4321 }
+        ]
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            servers,
             [
                 KeyExchangeServer {
                     domain: String::from("foo.bar"),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     connection_address: (String::from("foo.bar"), 1234),
+                    regions: vec![],
                 },
                 KeyExchangeServer {
                     domain: String::from("bar.foo"),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     connection_address: (String::from("bar.foo"), 4321),
+                    regions: vec![],
                 },
             ]
             .as_slice()
