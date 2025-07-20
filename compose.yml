@@ -1,0 +1,79 @@
+services:
+  time-a:
+    image: ghcr.io/pendulum-project/ntpd-rs:sha-0539aab
+    expose: [4460, 123]
+    stop_grace_period: 500ms
+    environment:
+      TZ: "Europe/Amsterdam"
+      RUST_LOG: DEBUG
+    volumes:
+      - "./nts-pool-ke/testdata/a.ntpd-rs.toml:/etc/ntpd-rs/ntp.toml:ro"
+      - "./nts-pool-ke/testdata/a.test.key:/var/lib/ntpd-rs/tls/a.test.key:ro"
+      - "./nts-pool-ke/testdata/a.test.fullchain.pem:/var/lib/ntpd-rs/tls/a.test.fullchain.pem:ro"
+      - "./nts-pool-ke/testdata/testca.pem:/var/lib/ntpd-rs/tls/testca.pem:ro"
+
+  time-b:
+    image: ghcr.io/pendulum-project/ntpd-rs:sha-0539aab
+    expose: [4460, 123]
+    stop_grace_period: 500ms
+    environment:
+      TZ: "Europe/Amsterdam"
+      RUST_LOG: DEBUG
+    volumes:
+      - "./nts-pool-ke/testdata/a.ntpd-rs.toml:/etc/ntpd-rs/ntp.toml:ro"
+      - "./nts-pool-ke/testdata/a.test.key:/var/lib/ntpd-rs/tls/a.test.key:ro"
+      - "./nts-pool-ke/testdata/a.test.fullchain.pem:/var/lib/ntpd-rs/tls/a.test.fullchain.pem:ro"
+      - "./nts-pool-ke/testdata/testca.pem:/var/lib/ntpd-rs/tls/testca.pem:ro"
+
+  ke:
+    image: ghcr.io/tweedegolf/rust-dev:stable
+    depends_on: [time-a, time-b]
+    stop_grace_period: 500ms
+    ports:
+      - "4460:4460"
+    user: "${USER_ID:?USER_ID not set}:${GROUP_ID:?GROUP_ID not set}"
+    environment:
+      RUST_LOG: debug
+      TZ: "Europe/Amsterdam"
+      CARGO_HOME: "/app/.cargo"
+      CARGO_TARGET_DIR: "/app/target-docker"
+    volumes:
+      - ".:/app"
+    working_dir: /app
+    command: ["watchexec", "-i", "target/**", "-i", "target-docker/**", "-i", ".cargo", "--", "cargo", "run", "-p", "nts-pool-ke", "--", "--config", "/app/nts-pool-ke/unsafe.pool.toml"]
+
+  management-api:
+    image: ghcr.io/tweedegolf/rust-dev:stable
+    depends_on: [ke]
+    stop_grace_period: 500ms
+    ports:
+      - "3033:3033"
+    user: "${USER_ID:?USER_ID not set}:${GROUP_ID:?GROUP_ID not set}"
+    environment:
+      RUST_LOG: debug
+      TZ: "Europe/Amsterdam"
+      CARGO_HOME: "/app/.cargo"
+      CARGO_TARGET_DIR: "/app/target-docker"
+    volumes:
+      - ".:/app"
+    working_dir: /app
+    command: ["watchexec", "-i", "target/**", "-i", "target-docker/**", "-i", ".cargo", "--", "cargo", "run", "-p", "nts-pool-management-api-server", "--"]
+
+  management-ui:
+    image: ghcr.io/tweedegolf/rust-dev:stable
+    depends_on: [management-api]
+    stop_grace_period: 500ms
+    ports:
+      - "3000:3000"
+    user: "${USER_ID:?USER_ID not set}:${GROUP_ID:?GROUP_ID not set}"
+    environment:
+      RUST_LOG: debug
+      TZ: "Europe/Amsterdam"
+      CARGO_HOME: "/app/.cargo"
+      CARGO_TARGET_DIR: "/app/target-docker"
+      POOL_UI_ASSETS_DIR: "/app/nts-pool-management/ui-server/assets"
+      POOL_UI_API_URL: "http://management-api:3033"
+    volumes:
+      - ".:/app"
+    working_dir: /app/nts-pool-management/ui-server
+    command: ["watchexec", "-i", "target/**", "-i", "target-docker/**", "-i", ".cargo", "--", "cargo", "run", "-p", "nts-pool-management-ui-server", "--"]

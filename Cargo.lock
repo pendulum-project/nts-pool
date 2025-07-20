@@ -969,6 +969,7 @@ dependencies = [
  "axum",
  "nts-pool-management-shared",
  "reqwest",
+ "rustls",
  "tokio",
  "tower-http",
  "tracing",

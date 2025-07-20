@@ -47,12 +47,14 @@ async fn root() -> impl IntoResponse {
 }
 
 async fn servers_page() -> impl IntoResponse {
-    let response: Servers = reqwest::get("http://localhost:3033")
-        .await
-        .unwrap()
-        .json::<Servers>()
-        .await
-        .unwrap();
+    let response: Servers = reqwest::get(
+        std::env::var("POOL_UI_API_URL").unwrap_or("http://localhost:3033".to_string()),
+    )
+    .await
+    .unwrap()
+    .json::<Servers>()
+    .await
+    .unwrap();
     HtmlTemplate(ServersPageTemplate {
         servers: response.servers,
     })
@@ -69,8 +71,16 @@ async fn not_found_page() -> impl IntoResponse {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install default crypto provider");
     let router = Router::new()
-        .nest_service("/assets", tower_http::services::ServeDir::new("./assets"))
+        .nest_service(
+            "/assets",
+            tower_http::services::ServeDir::new(
+                std::env::var("POOL_UI_ASSETS_DIR").unwrap_or("./assets".into()),
+            ),
+        )
         .route("/", get(root))
         .route("/servers", get(servers_page))
         .route("/dns-zones", get(dns_zones_page))
