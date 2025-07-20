@@ -24,4 +24,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true, features = [
     "env-filter",
 ] }
+rustls = { workspace = true }
 nts-pool-management-shared = { workspace = true }

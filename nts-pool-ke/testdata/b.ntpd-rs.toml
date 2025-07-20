@@ -1,0 +1,17 @@
+[[server]]
+listen = "0.0.0.0:123"
+
+[synchronization]
+local-stratum = 1
+reference-id = "REFB"
+
+[[nts-ke-server]]
+listen = "0.0.0.0:4460"
+certificate-chain-path = "/var/lib/ntpd-rs/tls/b.test.fullchain.pem"
+private-key-path = "/var/lib/ntpd-rs/tls/b.test.key"
+key-exchange-timeout-ms = 1000
+accepted-pool-domains = ["pool.test"]
+additional-pool-ca-certificates = ["/var/lib/ntpd-rs/tls/testca.pem"]
+
+[keyset]
+key-storage-path = "/tmp/ntpd-rs-keyset"
