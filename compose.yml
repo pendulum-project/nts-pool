@@ -42,9 +42,18 @@ services:
     working_dir: /app
     command: ["watchexec", "-i", "target/**", "-i", "target-docker/**", "-i", ".cargo", "--", "cargo", "run", "-p", "nts-pool-ke", "--", "--config", "/app/nts-pool-ke/unsafe.pool.toml"]
 
-  management-api:
+  psql:
+    image: ghcr.io/tweedegolf/postgres:17
+    environment:
+      POSTGRES_USER: nts-pool
+      POSTGRES_DB: nts-pool
+      TZ: "Europe/Amsterdam"
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports: ["127.0.0.1:5432:5432"]
+
+  api:
     image: ghcr.io/tweedegolf/rust-dev:stable
-    depends_on: [ke]
+    depends_on: [ke, psql]
     stop_grace_period: 500ms
     ports:
       - "3033:3033"
@@ -59,9 +68,9 @@ services:
     working_dir: /app
     command: ["watchexec", "-i", "target/**", "-i", "target-docker/**", "-i", ".cargo", "--", "cargo", "run", "-p", "nts-pool-management-api-server", "--"]
 
-  management-ui:
+  ui:
     image: ghcr.io/tweedegolf/rust-dev:stable
-    depends_on: [management-api]
+    depends_on: [api]
     stop_grace_period: 500ms
     ports:
       - "3000:3000"
@@ -72,7 +81,7 @@ services:
       CARGO_HOME: "/app/.cargo"
       CARGO_TARGET_DIR: "/app/target-docker"
       POOL_UI_ASSETS_DIR: "/app/nts-pool-management/ui-server/assets"
-      POOL_UI_API_URL: "http://management-api:3033"
+      POOL_UI_API_URL: "http://api:3033"
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management/ui-server
