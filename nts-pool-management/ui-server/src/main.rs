@@ -48,7 +48,7 @@ async fn root() -> impl IntoResponse {
 
 async fn servers_page() -> impl IntoResponse {
     let response: Servers = reqwest::get(
-        std::env::var("POOL_UI_API_URL").unwrap_or("http://localhost:3033".to_string()),
+        std::env::var("NTSPOOL_UI_API_URL").unwrap_or("http://localhost:3033".to_string()),
     )
     .await
     .unwrap()
@@ -78,7 +78,7 @@ async fn main() {
         .nest_service(
             "/assets",
             tower_http::services::ServeDir::new(
-                std::env::var("POOL_UI_ASSETS_DIR").unwrap_or("./assets".into()),
+                std::env::var("NTSPOOL_UI_ASSETS_DIR").unwrap_or("./assets".into()),
             ),
         )
         .route("/", get(root))

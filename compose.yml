@@ -63,6 +63,7 @@ services:
       TZ: "Europe/Amsterdam"
       CARGO_HOME: "/app/.cargo"
       CARGO_TARGET_DIR: "/app/target-docker"
+      NTSPOOL_API_DATABASE_URL: "postgres://nts-pool@psql:5432/nts-pool"
     volumes:
       - ".:/app"
     working_dir: /app
@@ -80,8 +81,8 @@ services:
       TZ: "Europe/Amsterdam"
       CARGO_HOME: "/app/.cargo"
       CARGO_TARGET_DIR: "/app/target-docker"
-      POOL_UI_ASSETS_DIR: "/app/nts-pool-management/ui-server/assets"
-      POOL_UI_API_URL: "http://api:3033"
+      NTSPOOL_UI_ASSETS_DIR: "/app/nts-pool-management/ui-server/assets"
+      NTSPOOL_UI_API_URL: "http://api:3033"
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management/ui-server
