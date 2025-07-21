@@ -10,9 +10,18 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-axum = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sqlx = { workspace = true, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+    "migrate",
+] }
 tokio = { workspace = true, default-features = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true, features = [
