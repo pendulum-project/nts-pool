@@ -2,15 +2,15 @@
 # (the private key of the certificate is public!)
 [server]
 listen = "0.0.0.0:4460"
-certificate-chain = "./nts-pool-ke/testdata/end.fullchain.pem"
-private-key = "./nts-pool-ke/testdata/end.key"
+certificate-chain = "./testdata/end.fullchain.pem"
+private-key = "./testdata/end.key"
 max-connections = 100
 
 [backend]
-upstream-cas = "./nts-pool-ke/testdata/testca.pem"
+upstream-cas = "./testdata/testca.pem"
 allowed-protocols = [0]
-certificate-chain = "./nts-pool-ke/testdata/end.fullchain.pem"
-private-key = "./nts-pool-ke/testdata/end.key"
+certificate-chain = "./testdata/end.fullchain.pem"
+private-key = "./testdata/end.key"
 key-exchange-servers = [
     { domain = "time-a", port = 4460 },
     { domain = "time-b", port = 4460 },
