@@ -20,6 +20,8 @@ jobs:
   build:
     name: Build and test
     runs-on: "${{ matrix.os }}"
+    env:
+      SQLX_OFFLINE: "true"
     strategy:
       matrix:
         include:
@@ -87,6 +89,8 @@ jobs:
 
   unused:
     name: Check unused dependencies
+    env:
+      SQLX_OFFLINE: "true"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -106,6 +110,8 @@ jobs:
 
   format:
     name: Format
+    env:
+      SQLX_OFFLINE: "true"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -122,6 +128,8 @@ jobs:
 
   clippy:
     name: Clippy
+    env:
+      SQLX_OFFLINE: "true"
     strategy:
       matrix:
         include:
@@ -169,6 +177,8 @@ jobs:
 
   audit-dependencies:
     name: Audit dependencies
+    env:
+      SQLX_OFFLINE: "true"
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -178,6 +188,8 @@ jobs:
 
   fuzz-code-coverage:
     name: Fuzz with code coverage
+    env:
+      SQLX_OFFLINE: "true"
     runs-on: ubuntu-latest
     strategy:
       matrix:
