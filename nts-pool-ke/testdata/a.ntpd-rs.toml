@@ -1,5 +1,5 @@
 [[server]]
-listen = "0.0.0.0:123"
+listen = "0.0.0.0:1231"
 
 [synchronization]
 local-stratum = 1
@@ -12,6 +12,8 @@ private-key-path = "/var/lib/ntpd-rs/tls/a.test.key"
 key-exchange-timeout-ms = 1000
 accepted-pool-domains = ["pool.test"]
 additional-pool-ca-certificates = ["/var/lib/ntpd-rs/tls/testca.pem"]
+ntp-server = "localhost"
+ntp-port = 1231
 
 [keyset]
 key-storage-path = "/tmp/ntpd-rs-keyset"

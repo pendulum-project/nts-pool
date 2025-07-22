@@ -1,17 +1,9 @@
-use axum::{Json, Router, extract::FromRef, routing::get};
-use nts_pool_management_shared::Servers;
+use axum::extract::FromRef;
 use sqlx::PgPool;
 use tracing::info;
 
-async fn root() -> Json<Servers> {
-    Json(Servers {
-        servers: vec![
-            "Server 1".to_string(),
-            "Server 2".to_string(),
-            "Server 3".to_string(),
-        ],
-    })
-}
+mod models;
+mod routes;
 
 #[derive(Clone, FromRef)]
 struct AppState {
@@ -56,9 +48,15 @@ async fn pool_conn(
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    // Workaround because ring is also in our dependencies: install aws-lc-rs default crypto provider
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install default crypto provider");
+
     // Setup database connection
-    let db_conn_str = std::env::var("NTSPOOL_API_DATABASE_URL")
-        .expect("Missing NTSPOOL_API_DATABASE_URL environment variable");
+    let db_conn_str = std::env::var("NTSPOOL_DATABASE_URL")
+        .or_else(|_| std::env::var("DATABASE_URL"))
+        .expect("Missing NTSPOOL_DATABASE_URL/DATABASE_URL environment variable");
     let db_retry_interval = std::time::Duration::from_millis(1000);
     let db = pool_conn(&db_conn_str, 5, db_retry_interval, true)
         .await
@@ -68,9 +66,14 @@ async fn main() {
     let state = AppState { db };
 
     // setup routes
-    let router = Router::new().route("/", get(root)).with_state(state);
+    let router = routes::create_router().with_state(state).nest_service(
+        "/assets",
+        tower_http::services::ServeDir::new(
+            std::env::var("NTSPOOL_ASSETS_DIR").unwrap_or("./assets".into()),
+        ),
+    );
 
     // start listening for incoming connections
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3033").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, router).await.unwrap();
 }
