@@ -42,7 +42,7 @@ services:
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-ke
-    command: ["watchexec", "--", "cargo", "run", "-p", "nts-pool-ke", "--", "--config", "/app/nts-pool-ke/unsafe.pool.toml"]
+    command: ["watchexec", "--shell=none", "-o", "restart", "--", "cargo", "run", "-p", "nts-pool-ke", "--", "--config", "/app/nts-pool-ke/unsafe.pool.toml"]
 
   psql:
     image: ghcr.io/tweedegolf/postgres:17
@@ -71,4 +71,4 @@ services:
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management
-    command: ["watchexec", "--", "cargo", "run", "-p", "nts-pool-management", "--"]
+    command: ["watchexec", "--shell=none", "-o", "restart", "--", "cargo", "run", "-p", "nts-pool-management", "--"]

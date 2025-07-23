@@ -1,18 +1,27 @@
 use chrono::{DateTime, Utc};
 use sqlx::{Acquire, Postgres};
-use uuid::Uuid;
 
+use crate::models::util::uuid;
+
+uuid!(UserId);
+
+#[derive(Debug, Clone)]
 pub struct User {
-    pub id: Uuid,
+    pub id: UserId,
     pub email: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct NewUser {
+    email: String,
+}
+
 /// Create a new user with the given email
 pub async fn create(
     conn: impl Acquire<'_, Database = Postgres>,
-    email: &str,
+    new_user: NewUser,
 ) -> Result<User, sqlx::Error> {
     let mut conn = conn.acquire().await?;
 
@@ -23,7 +32,7 @@ pub async fn create(
             VALUES ($1)
             RETURNING id, email, created_at, updated_at
         "#,
-        email,
+        new_user.email,
     )
     .fetch_one(&mut *conn)
     .await
