@@ -74,7 +74,7 @@ pub async fn not_found_page() -> impl IntoResponse {
 }
 
 #[derive(Template)]
-#[template(path = "login.html")]
+#[template(path = "login.html.j2")]
 struct LoginPageTemplate;
 
 pub async fn login_page() -> impl IntoResponse {
