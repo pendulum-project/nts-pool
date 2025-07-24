@@ -24,7 +24,8 @@ a.btn:hover,
   cursor: pointer;
 }
 
-input[type="text"] {
+input[type="text"],
+input[type="password"] {
   padding: var(--space-sm);
   border: 2px solid var(--grey);
   border-radius: var(--border-radius);
@@ -36,4 +37,21 @@ input[type="text"]:hover {
 
 h2 {
   margin-bottom: var(--space-sm);
+}
+
+.login {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+
+  input {
+    min-width: 24rem;
+    margin-bottom: var(--space-sm);
+  }
+}
+
+.centered {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-md);
 }

@@ -11,8 +11,9 @@ use crate::AppState;
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(root))
+        .route("/login", get(login_page))
         .route("/servers", get(servers_page))
-        .route("/dns_zones", get(dns_zones_page))
+        .route("/dns-zones", get(dns_zones_page))
         .fallback(not_found_page)
 }
 
@@ -70,4 +71,12 @@ struct NotFoundPageTemplate;
 
 pub async fn not_found_page() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, HtmlTemplate(NotFoundPageTemplate))
+}
+
+#[derive(Template)]
+#[template(path = "login.html")]
+struct LoginPageTemplate;
+
+pub async fn login_page() -> impl IntoResponse {
+    HtmlTemplate(LoginPageTemplate)
 }
