@@ -5,7 +5,7 @@ use crate::models::util::uuid;
 
 uuid!(UserId);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {
     pub id: UserId,
     pub email: String,

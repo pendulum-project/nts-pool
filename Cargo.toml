@@ -23,6 +23,7 @@ panic = "abort"
 debug = 2
 
 [workspace.dependencies]
+argon2 = "0.5.3"
 askama = "0.14.0"
 axum = "0.8.4"
 chrono = "0.4.41"
