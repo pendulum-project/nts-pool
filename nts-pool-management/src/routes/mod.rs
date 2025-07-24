@@ -34,7 +34,7 @@ where
 }
 
 #[derive(Template)]
-#[template(path = "index.html")]
+#[template(path = "index.html.j2")]
 struct RootTemplate;
 
 pub async fn root() -> impl IntoResponse {
@@ -42,22 +42,22 @@ pub async fn root() -> impl IntoResponse {
 }
 
 #[derive(Template)]
-#[template(path = "servers_page.html")]
+#[template(path = "servers_page.html.j2")]
 struct ServersPageTemplate {
     servers: Vec<String>,
 }
 
 pub async fn servers_page() -> impl IntoResponse {
     let servers = vec![
-        "Server 1".to_string(),
-        "Server 2".to_string(),
-        "Server 3".to_string(),
+        "time.cikzh.nl".to_string(),
+        "sth2.ntp.netnod.se".to_string(),
+        "time.tweedegolf.nl".to_string(),
     ];
     HtmlTemplate(ServersPageTemplate { servers })
 }
 
 #[derive(Template)]
-#[template(path = "dns_zones_page.html")]
+#[template(path = "dns_zones_page.html.j2")]
 struct DnsZonesPageTemplate;
 
 pub async fn dns_zones_page() -> impl IntoResponse {
@@ -65,7 +65,7 @@ pub async fn dns_zones_page() -> impl IntoResponse {
 }
 
 #[derive(Template)]
-#[template(path = "not_found_page.html")]
+#[template(path = "not_found_page.html.j2")]
 struct NotFoundPageTemplate;
 
 pub async fn not_found_page() -> impl IntoResponse {

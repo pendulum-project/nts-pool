@@ -11,7 +11,9 @@ a.btn {
   text-decoration: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  transition: color 150ms ease-in-out, transform 150ms ease;
+  transition:
+    color 150ms ease-in-out,
+    transform 150ms ease;
 }
 
 button:hover,
@@ -36,4 +38,19 @@ input[type="text"]:hover {
 
 h2 {
   margin-bottom: var(--space-sm);
+}
+
+dl.server-list {
+  background-color: var(--white);
+  border-radius: var(--border-radius);
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-md);
+}
+
+dd {
+  margin-top: var(--space-sm);
+}
+
+dt {
+  padding-left: var(--space-sm);
 }
