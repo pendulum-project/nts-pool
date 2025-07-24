@@ -21,11 +21,11 @@ COPY . /build
 RUN --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target/ \
-    cargo build --locked --release \
+    export SQLX_OFFLINE="true" \
+    && cargo build --locked --release \
     && mkdir -p /build/artifacts \
     && cp target/release/nts-pool-ke /build/artifacts \
-    && cp target/release/nts-pool-management-api-server /build/artifacts \
-    && cp target/release/nts-pool-management-ui-server /build/artifacts
+    && cp target/release/nts-pool-management /build/artifacts
 
 # Setup the final actual runner image stage
 FROM debian:bookworm-slim AS runner
@@ -38,8 +38,7 @@ RUN apt update \
 
 # Copy compiled binaries from the builder stage
 COPY --from=builder /build/artifacts/nts-pool-ke /usr/local/bin/nts-pool-ke
-COPY --from=builder /build/artifacts/nts-pool-management-api-server /usr/local/bin/nts-pool-management-api-server
-COPY --from=builder /build/artifacts/nts-pool-management-ui-server /usr/local/bin/nts-pool-management-ui-server
+COPY --from=builder /build/artifacts/nts-pool-management /usr/local/bin/nts-pool-management
 
 # Setup a user and group for the runner
 ARG USER=nts-pool

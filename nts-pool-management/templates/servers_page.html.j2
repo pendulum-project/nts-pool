@@ -1,4 +1,4 @@
-{% extends "main.html" %}
+{% extends "main.html.j2" %}
 {% block nav_servers %}aria-current="page"{% endblock %}
 
 {% block header %}<h1>Servers</h1>{% endblock %}
@@ -6,17 +6,21 @@
 {% block content %}
 <section>
   <h2>Add a server</h2>
-  <form>
+  <form action="/server">
     <input type="text" placeholder="Hostname or IP address" />
+    <input type="text" placeholder="Port (optional)" />
     <button type="submit">Add</button>
   </form>
 </section>
 <section>
   <h2>Servers</h2>
-  <ul>
-    {%- for server in servers %}
-     <li>{{ server -}}</li>
-    {% endfor %}
-  </ul>
+  {%- for server in servers %}
+    <dl class="server-list">
+      <dd>Hostname</dd>
+      <dt>{{ server }}:123</dt>
+      <dd>Countries</dd>
+      <dt>The Netherlands, Sweden</dt>
+    </dl>
+  {% endfor %}
 </section>
 {% endblock %}
