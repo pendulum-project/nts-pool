@@ -1,0 +1,15 @@
+{% extends "main.html" %}
+
+{% block header %}<h1>Login</h1>{% endblock %}
+
+{% block content %}
+<section class="centered">
+  <form class="login">
+    <label for="username">Username</label>
+    <input id="username" type="text" placeholder="Username" autocomplete="current-password" required />
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
+    <button type="submit">Login</button>
+  </form>
+</section>
+{% endblock %}
