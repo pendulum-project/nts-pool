@@ -13,7 +13,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/", get(root))
         .route("/login", get(login_page))
         .route("/servers", get(servers_page))
-        .route("/dns_zones", get(dns_zones_page))
+        .route("/dns-zones", get(dns_zones_page))
         .fallback(not_found_page)
 }
 
