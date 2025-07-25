@@ -68,6 +68,7 @@ services:
       NTSPOOL_DATABASE_URL: "postgres://nts-pool@psql:5432/nts-pool"
       DATABASE_URL: "postgres://nts-pool@psql:5432/nts-pool"
       NTSPOOL_ASSETS_DIR: "/app/nts-pool-management/assets"
+      NTSPOOL_JWT_SECRET: "test"
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management

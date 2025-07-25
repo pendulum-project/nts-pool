@@ -10,9 +10,11 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
 argon2 = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
+axum-extra = { workspace = true, features = ["cookie"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sqlx = { workspace = true, features = [
@@ -31,5 +33,6 @@ tracing-subscriber = { workspace = true, default-features = true, features = [
     "env-filter",
 ] }
 chrono = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
 rustls = { workspace = true }
+jsonwebtoken = { workspace = true }

@@ -1,14 +1,25 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::{Acquire, Postgres};
 
 use crate::models::util::uuid;
 
 uuid!(UserId);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[serde(rename_all = "kebab-case")]
+#[sqlx(type_name = "user_role")]
+#[sqlx(rename_all = "kebab-case")]
+pub enum UserRole {
+    Administrator,
+    ServerManager,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct User {
     pub id: UserId,
     pub email: String,
+    pub role: UserRole,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -16,6 +27,7 @@ pub struct User {
 #[derive(Debug, Clone)]
 pub struct NewUser {
     email: String,
+    role: UserRole,
 }
 
 /// Create a new user with the given email
@@ -28,11 +40,12 @@ pub async fn create(
     sqlx::query_as!(
         User,
         r#"
-            INSERT INTO users (email)
-            VALUES ($1)
-            RETURNING id, email, created_at, updated_at
+            INSERT INTO users (email, role)
+            VALUES ($1, $2)
+            RETURNING id, email, role AS "role: _", created_at, updated_at
         "#,
         new_user.email,
+        new_user.role as _,
     )
     .fetch_one(&mut *conn)
     .await
@@ -45,7 +58,7 @@ pub async fn list(conn: impl Acquire<'_, Database = Postgres>) -> Result<Vec<Use
     sqlx::query_as!(
         User,
         r#"
-            SELECT id, email, created_at, updated_at
+            SELECT id, email, role AS "role: _", created_at, updated_at
             FROM users
         "#
     )
@@ -63,7 +76,7 @@ pub async fn get_by_email(
     sqlx::query_as!(
         User,
         r#"
-            SELECT id, email, created_at, updated_at
+            SELECT id, email, role AS "role: _", created_at, updated_at
             FROM users
             WHERE email = $1
         "#,

@@ -20,34 +20,37 @@ pub struct AuthenticationMethod {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum AuthenticationVariant {
     Password(PasswordAuthentication),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordAuthentication {
-    phc: String,
+    /// See https://github.com/P-H-C/phc-string-format for format details
+    phc_string: String,
 }
 
 impl PasswordAuthentication {
     pub fn new(password: &str) -> Result<Self, argon2::password_hash::Error> {
         let password_hash = hash_password(password)?;
-        Ok(Self { phc: password_hash })
+        Ok(Self {
+            phc_string: password_hash,
+        })
     }
 
     pub fn update_password(
         &mut self,
         new_password: &str,
     ) -> Result<(), argon2::password_hash::Error> {
-        self.phc = hash_password(new_password)?;
+        self.phc_string = hash_password(new_password)?;
         Ok(())
     }
 
     pub fn verify(&self, password: &str) -> Result<bool, argon2::password_hash::Error> {
         use argon2::PasswordVerifier;
 
-        let parsed_hash = PasswordHash::new(&self.phc)?;
+        let parsed_hash = PasswordHash::new(&self.phc_string)?;
         Ok(Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)
             .is_ok())

@@ -2,7 +2,18 @@ pub mod port;
 
 macro_rules! uuid {
     ($name:ident) => {
-        #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd, sqlx::Type)]
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            Eq,
+            Ord,
+            PartialEq,
+            PartialOrd,
+            sqlx::Type,
+            serde::Serialize,
+            serde::Deserialize,
+        )]
         #[repr(transparent)]
         #[sqlx(transparent)]
         pub struct $name(uuid::Uuid);
