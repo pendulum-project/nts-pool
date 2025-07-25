@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, email, created_at, updated_at\n            FROM users\n        ",
+  "query": "\n            SELECT id, email, role AS \"role: _\", created_at, updated_at\n            FROM users\n        ",
   "describe": {
     "columns": [
       {
@@ -15,11 +15,26 @@
       },
       {
         "ordinal": 2,
+        "name": "role: _",
+        "type_info": {
+          "Custom": {
+            "name": "user_role",
+            "kind": {
+              "Enum": [
+                "administrator",
+                "server-manager"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -31,8 +46,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "e51f001dc2cd68e7950eb1f941f684a354430c9812bb4c36a61572854f19d629"
+  "hash": "ae3d074ce4cc11a90f0641082f9782d83288ab3f5ab01ed987b1fd426035722b"
 }
