@@ -8,7 +8,7 @@ pub mod models;
 pub mod routes;
 
 #[derive(Clone, FromRef)]
-struct AppState {
+pub struct AppState {
     db: PgPool,
     jwt_encoding_key: jsonwebtoken::EncodingKey,
     jwt_decoding_key: jsonwebtoken::DecodingKey,

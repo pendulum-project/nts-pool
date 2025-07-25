@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use anyhow::{Context, anyhow};
 use axum::{
     RequestPartsExt,
@@ -79,6 +81,34 @@ pub struct Administrator(UserId);
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
 pub struct ServerManager(UserId);
+
+impl Deref for Administrator {
+    type Target = UserId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Deref for ServerManager {
+    type Target = UserId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Administrator {
+    pub fn into_inner(self) -> UserId {
+        self.0
+    }
+}
+
+impl ServerManager {
+    pub fn into_inner(self) -> UserId {
+        self.0
+    }
+}
 
 /// Can be extracted from a request, but only if there is a logged in user.
 pub struct UserSession {
