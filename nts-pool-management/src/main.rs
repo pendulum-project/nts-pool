@@ -25,7 +25,7 @@ async fn pool_conn(
     loop {
         let db = sqlx::postgres::PgPoolOptions::new()
             .max_connections(5)
-            .connect(&db_conn_str)
+            .connect(db_conn_str)
             .await;
         match db {
             Ok(db) => {
