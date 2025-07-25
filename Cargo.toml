@@ -23,9 +23,11 @@ panic = "abort"
 debug = 2
 
 [workspace.dependencies]
+anyhow = "1.0.98"
 argon2 = "0.5.3"
 askama = "0.14.0"
 axum = "0.8.4"
+axum-extra = "0.10.1"
 chrono = "0.4.41"
 serde = "1.0.194"
 serde_json = "1.0.140"
@@ -39,6 +41,7 @@ uuid = "1.17.0"
 rustls = { version = "0.23.16" }
 rustls-platform-verifier = "0.5.0"
 tokio-rustls = { version = "0.26.0" }
+jsonwebtoken = "9.3.1"
 
 # our own crates used as dependencies, same version as the workspace version
 # NOTE: keep this part at the bottom of the file, do not change this line

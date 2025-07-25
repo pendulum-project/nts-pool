@@ -2,12 +2,16 @@ use axum::extract::FromRef;
 use sqlx::PgPool;
 use tracing::info;
 
-mod models;
-mod routes;
+pub mod auth;
+pub mod error;
+pub mod models;
+pub mod routes;
 
 #[derive(Clone, FromRef)]
 struct AppState {
     db: PgPool,
+    jwt_encoding_key: jsonwebtoken::EncodingKey,
+    jwt_decoding_key: jsonwebtoken::DecodingKey,
 }
 
 /// Connect to the database, retrying if necessary. Once connected, run
@@ -62,8 +66,17 @@ async fn main() {
         .await
         .expect("Error initializing database connection");
 
+    let jwt_secret = std::env::var("NTSPOOL_JWT_SECRET")
+        .expect("Missing NTSPOOL_JWT_SECRET environment variable");
+    let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes());
+    let jwt_decoding_key = jsonwebtoken::DecodingKey::from_secret(jwt_secret.as_bytes());
+
     // construct the application state
-    let state = AppState { db };
+    let state = AppState {
+        db,
+        jwt_encoding_key,
+        jwt_decoding_key,
+    };
 
     // setup routes
     let router = routes::create_router().with_state(state).nest_service(
