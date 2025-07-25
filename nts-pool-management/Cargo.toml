@@ -1,5 +1,5 @@
 [package]
-name = "nts-pool-management-ui-server"
+name = "nts-pool-management"
 description.workspace = true
 version.workspace = true
 edition.workspace = true
@@ -10,13 +10,21 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
+argon2 = { workspace = true, features = ["std"] }
 askama = { workspace = true }
-axum = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = [
-    "charset",
-    "http2",
+axum = { workspace = true, features = ["macros"] }
+axum-extra = { workspace = true, features = ["cookie"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = [
+    "runtime-tokio",
+    "tls-rustls-aws-lc-rs",
+    "postgres",
+    "uuid",
+    "chrono",
     "json",
-    "rustls-tls-native-roots-no-provider",
+    "migrate",
 ] }
 tokio = { workspace = true, default-features = true, features = ["full"] }
 tower-http = { workspace = true, features = ["fs"] }
@@ -24,5 +32,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true, features = [
     "env-filter",
 ] }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
 rustls = { workspace = true }
-nts-pool-management-shared = { workspace = true }
+jsonwebtoken = { workspace = true }
