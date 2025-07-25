@@ -11,6 +11,7 @@ use crate::models::{user::UserId, util::uuid};
 uuid!(AuthenticationMethodId);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct AuthenticationMethod {
     id: AuthenticationMethodId,
     user_id: UserId,

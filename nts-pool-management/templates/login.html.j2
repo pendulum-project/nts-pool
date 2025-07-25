@@ -4,11 +4,11 @@
 
 {% block content %}
 <section class="centered">
-  <form class="login">
+  <form class="login" method="post">
     <label for="username">Username</label>
-    <input id="username" type="text" placeholder="Username" autocomplete="current-password" required />
+    <input id="username" name="username" type="text" placeholder="Username" autocomplete="current-password" required />
     <label for="password">Password</label>
-    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
+    <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
     <button type="submit">Login</button>
   </form>
 </section>

@@ -66,7 +66,7 @@ fn create_session_cookie(
     Ok(cookie)
 }
 
-fn login_into(
+pub fn login_into(
     user: &User,
     valid_for: std::time::Duration,
     encoding_key: &EncodingKey,
@@ -123,31 +123,28 @@ where
 {
     type Rejection = AppError;
 
-    fn from_request_parts(
+    async fn from_request_parts(
         parts: &mut Parts,
         state: &S,
-    ) -> impl Future<Output = Result<Option<Self>, Self::Rejection>> + Send {
-        async {
-            let cookie_jar = parts
-                .extract::<CookieJar>()
-                .await
-                .expect("Extracting CookieJar should never fail");
-            if let Some(cookie) = cookie_jar.get("auth") {
-                match validate_jwt(cookie.value(), &DecodingKey::from_ref(state)) {
-                    Ok((user_id, role)) => Ok(Some(UserSession { user_id, role })),
-                    Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
-                        Some(e)
-                            if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature =>
-                        {
-                            Ok(None)
-                        }
-                        _ => Err(e.into_inner())
-                            .context("Session state has unexpected invalid data")?,
-                    },
-                }
-            } else {
-                Ok(None)
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let cookie_jar = parts
+            .extract::<CookieJar>()
+            .await
+            .expect("Extracting CookieJar should never fail");
+        if let Some(cookie) = cookie_jar.get("auth") {
+            match validate_jwt(cookie.value(), &DecodingKey::from_ref(state)) {
+                Ok((user_id, role)) => Ok(Some(UserSession { user_id, role })),
+                Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
+                    Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                        Ok(None)
+                    }
+                    _ => {
+                        Err(e.into_inner()).context("Session state has unexpected invalid data")?
+                    }
+                },
             }
+        } else {
+            Ok(None)
         }
     }
 }
@@ -159,19 +156,14 @@ where
 {
     type Rejection = AppError;
 
-    fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async {
-            match parts
-                .extract_with_state::<Option<UserSession>, S>(state)
-                .await
-            {
-                Ok(Some(session)) => Ok(session),
-                Ok(None) => Err(anyhow!("User not logged in"))?,
-                Err(e) => Err(e),
-            }
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match parts
+            .extract_with_state::<Option<UserSession>, S>(state)
+            .await
+        {
+            Ok(Some(session)) => Ok(session),
+            Ok(None) => Err(anyhow!("User not logged in"))?,
+            Err(e) => Err(e),
         }
     }
 }
@@ -183,17 +175,12 @@ where
 {
     type Rejection = AppError;
 
-    fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async {
-            match parts.extract_with_state::<UserSession, S>(state).await {
-                Ok(session) if session.role == UserRole::Administrator => {
-                    Ok(Administrator(session.user_id))
-                }
-                _ => Err(anyhow!("No administrator user available"))?,
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match parts.extract_with_state::<UserSession, S>(state).await {
+            Ok(session) if session.role == UserRole::Administrator => {
+                Ok(Administrator(session.user_id))
             }
+            _ => Err(anyhow!("No administrator user available"))?,
         }
     }
 }
@@ -205,17 +192,12 @@ where
 {
     type Rejection = AppError;
 
-    fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async {
-            match parts.extract_with_state::<UserSession, S>(state).await {
-                Ok(session) if session.role == UserRole::ServerManager => {
-                    Ok(ServerManager(session.user_id))
-                }
-                _ => Err(anyhow!("No server manager user available"))?,
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match parts.extract_with_state::<UserSession, S>(state).await {
+            Ok(session) if session.role == UserRole::ServerManager => {
+                Ok(ServerManager(session.user_id))
             }
+            _ => Err(anyhow!("No server manager user available"))?,
         }
     }
 }

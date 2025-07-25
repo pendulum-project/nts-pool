@@ -8,6 +8,7 @@ use crate::models::{
 uuid!(ServerId);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
+#[allow(dead_code)]
 pub struct Server {
     id: ServerId,
     owner: UserId,
