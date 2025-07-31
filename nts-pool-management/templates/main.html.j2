@@ -13,17 +13,23 @@
     <div class="appcontainer">
       <nav>
         <menu>
+        {% if session.is_some() %}
           <li>
             <a {% block nav_dns_zones %}{% endblock %} href="/dns-zones">DNS zones</a>
           </li>
           <li>
             <a {% block nav_servers %}{% endblock %} href="/servers">Servers</a>
           </li>
+        {% endif %}
         </menu>
         <div>
-          <span class="username">Username</span> <a href="#">Logout</a>
-        </div>
-      </nav>
+          {% if let Some(s) = session %}
+              <span class="username">{{ s.email }}</span> <a href="/logout">Logout</a>
+            {% else %}
+              <a href="/login">Login</a>
+            {% endif %}
+          </div>
+        </nav>
       <header>
         {% block header %}{% endblock %}
       </header>

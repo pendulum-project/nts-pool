@@ -2,8 +2,10 @@ use std::ops::Deref;
 
 use axum::{
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
+
+use crate::auth::NotLoggedInError;
 
 pub struct AppError(anyhow::Error);
 
@@ -15,6 +17,8 @@ impl IntoResponse for AppError {
                 format!("Resource not found: {}", self.0),
             )
                 .into_response()
+        } else if self.0.downcast_ref::<NotLoggedInError>().is_some() {
+            Redirect::to("/").into_response()
         } else {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
