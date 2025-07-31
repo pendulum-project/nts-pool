@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Acquire, Postgres};
 
-use crate::models::util::uuid;
+use crate::{DbConnLike, models::util::uuid};
 
 uuid!(UserId);
 
@@ -31,12 +30,7 @@ pub struct NewUser {
 }
 
 /// Create a new user with the given email
-pub async fn create(
-    conn: impl Acquire<'_, Database = Postgres>,
-    new_user: NewUser,
-) -> Result<User, sqlx::Error> {
-    let mut conn = conn.acquire().await?;
-
+pub async fn create(conn: impl DbConnLike<'_>, new_user: NewUser) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
         User,
         r#"
@@ -47,14 +41,12 @@ pub async fn create(
         new_user.email,
         new_user.role as _,
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(conn)
     .await
 }
 
 /// List all the users in the database
-pub async fn list(conn: impl Acquire<'_, Database = Postgres>) -> Result<Vec<User>, sqlx::Error> {
-    let mut conn = conn.acquire().await?;
-
+pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<User>, sqlx::Error> {
     sqlx::query_as!(
         User,
         r#"
@@ -62,17 +54,15 @@ pub async fn list(conn: impl Acquire<'_, Database = Postgres>) -> Result<Vec<Use
             FROM users
         "#
     )
-    .fetch_all(&mut *conn)
+    .fetch_all(conn)
     .await
 }
 
 /// Retrieve a user by their email address
 pub async fn get_by_email(
-    conn: impl Acquire<'_, Database = Postgres>,
+    conn: impl DbConnLike<'_>,
     email: &str,
 ) -> Result<Option<User>, sqlx::Error> {
-    let mut conn = conn.acquire().await?;
-
     sqlx::query_as!(
         User,
         r#"
@@ -82,6 +72,6 @@ pub async fn get_by_email(
         "#,
         email,
     )
-    .fetch_optional(&mut *conn)
+    .fetch_optional(conn)
     .await
 }

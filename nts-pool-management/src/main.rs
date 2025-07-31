@@ -14,6 +14,16 @@ pub struct AppState {
     jwt_decoding_key: jsonwebtoken::DecodingKey,
 }
 
+pub trait DbConnLike<'a>:
+    sqlx::Acquire<'a, Database = sqlx::Postgres> + sqlx::Executor<'a, Database = sqlx::Postgres>
+{
+}
+
+impl<'a, T> DbConnLike<'a> for T where
+    T: sqlx::Acquire<'a, Database = sqlx::Postgres> + sqlx::Executor<'a, Database = sqlx::Postgres>
+{
+}
+
 /// Connect to the database, retrying if necessary. Once connected, run
 /// migrations to update the database schema to the latest version.
 async fn pool_conn(
