@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use axum::{
     RequestPartsExt,
     extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
