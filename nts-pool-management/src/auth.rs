@@ -1,6 +1,6 @@
-use std::ops::Deref;
+use std::fmt::Display;
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use axum::{
     RequestPartsExt,
     extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
@@ -18,6 +18,8 @@ use crate::{
     models::user::{User, UserId, UserRole},
 };
 
+pub const AUTH_COOKIE_NAME: &str = "auth";
+
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
     exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
@@ -25,6 +27,18 @@ struct JwtClaims {
     nbf: usize, // Not Before (as UTC timestamp)
     sub: UserId, // Subject (whom token refers to)
     role: UserRole, // role in the application of the subject
+    email: String, // email of the subject
+}
+
+#[derive(Debug)]
+pub struct NotLoggedInError;
+
+impl std::error::Error for NotLoggedInError {}
+
+impl Display for NotLoggedInError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "User is not logged in")
+    }
 }
 
 fn create_jwt(
@@ -38,18 +52,26 @@ fn create_jwt(
         nbf: chrono::Utc::now().timestamp() as usize,
         sub: user.id,
         role: user.role,
+        email: user.email.clone(),
     };
     Ok(encode(&Header::default(), &claims, encoding_key).context("Failed to encode JWT")?)
 }
 
-fn validate_jwt(token: &str, decoding_key: &DecodingKey) -> Result<(UserId, UserRole), AppError> {
+fn validate_jwt(
+    token: &str,
+    decoding_key: &DecodingKey,
+) -> Result<(UserId, UserRole, String), AppError> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = true;
     validation.validate_nbf = true;
 
     let token_data = decode::<JwtClaims>(token, decoding_key, &validation)
         .context("Failed to decode or validate JWT")?;
-    Ok((token_data.claims.sub, token_data.claims.role))
+    Ok((
+        token_data.claims.sub,
+        token_data.claims.role,
+        token_data.claims.email,
+    ))
 }
 
 fn create_session_cookie(
@@ -58,7 +80,7 @@ fn create_session_cookie(
     encoding_key: &EncodingKey,
 ) -> Result<Cookie<'static>, AppError> {
     let token = create_jwt(encoding_key, user, valid_for)?;
-    let mut cookie = Cookie::new("auth", token);
+    let mut cookie = Cookie::new(AUTH_COOKIE_NAME, token);
     cookie.set_secure(true);
     cookie.set_http_only(true);
     cookie.set_same_site(SameSite::Strict);
@@ -77,43 +99,22 @@ pub fn login_into(
 }
 
 /// Can be extracted from a request, but only if there is a logged in user with the administrator role.
-pub struct Administrator(UserId);
+pub struct Administrator {
+    pub id: UserId,
+    pub email: String,
+}
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
-pub struct ServerManager(UserId);
-
-impl Deref for Administrator {
-    type Target = UserId;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Deref for ServerManager {
-    type Target = UserId;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Administrator {
-    pub fn into_inner(self) -> UserId {
-        self.0
-    }
-}
-
-impl ServerManager {
-    pub fn into_inner(self) -> UserId {
-        self.0
-    }
+pub struct ServerManager {
+    pub id: UserId,
+    pub email: String,
 }
 
 /// Can be extracted from a request, but only if there is a logged in user.
 pub struct UserSession {
-    user_id: UserId,
-    role: UserRole,
+    pub user_id: UserId,
+    pub role: UserRole,
+    pub email: String,
 }
 
 impl<S> OptionalFromRequestParts<S> for UserSession
@@ -133,7 +134,11 @@ where
             .expect("Extracting CookieJar should never fail");
         if let Some(cookie) = cookie_jar.get("auth") {
             match validate_jwt(cookie.value(), &DecodingKey::from_ref(state)) {
-                Ok((user_id, role)) => Ok(Some(UserSession { user_id, role })),
+                Ok((user_id, role, email)) => Ok(Some(UserSession {
+                    user_id,
+                    role,
+                    email,
+                })),
                 Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
                     Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
                         Ok(None)
@@ -162,7 +167,7 @@ where
             .await
         {
             Ok(Some(session)) => Ok(session),
-            Ok(None) => Err(anyhow!("User not logged in"))?,
+            Ok(None) => Err(NotLoggedInError)?,
             Err(e) => Err(e),
         }
     }
@@ -177,9 +182,10 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::Administrator => {
-                Ok(Administrator(session.user_id))
-            }
+            Ok(session) if session.role == UserRole::Administrator => Ok(Administrator {
+                id: session.user_id,
+                email: session.email,
+            }),
             _ => Err(anyhow!("No administrator user available"))?,
         }
     }
@@ -194,9 +200,10 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::ServerManager => {
-                Ok(ServerManager(session.user_id))
-            }
+            Ok(session) if session.role == UserRole::ServerManager => Ok(ServerManager {
+                id: session.user_id,
+                email: session.email,
+            }),
             _ => Err(anyhow!("No server manager user available"))?,
         }
     }
