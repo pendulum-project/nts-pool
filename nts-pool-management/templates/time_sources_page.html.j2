@@ -1,23 +1,23 @@
 {% extends "main.html.j2" %}
-{% block nav_servers %}aria-current="page"{% endblock %}
+{% block nav_time_sources %}aria-current="page"{% endblock %}
 
-{% block header %}<h1>Servers</h1>{% endblock %}
+{% block header %}<h1>Time Sources</h1>{% endblock %}
 
 {% block content %}
 <section>
-  <h2>Add a server</h2>
-  <form action="/server">
+  <h2>Add a time source server</h2>
+  <form action="/time-source">
     <input type="text" placeholder="Hostname or IP address" />
     <input type="text" placeholder="Port (optional)" />
     <button type="submit">Add</button>
   </form>
 </section>
 <section>
-  <h2>Servers</h2>
-  {%- for server in servers %}
+  <h2>Time source servers</h2>
+  {%- for ts in time_sources %}
     <dl class="server-list">
       <dd>Hostname</dd>
-      <dt>{{ server }}:123</dt>
+      <dt>{{ ts }}:123</dt>
       <dd>Countries</dd>
       <dt>The Netherlands, Sweden</dt>
     </dl>
