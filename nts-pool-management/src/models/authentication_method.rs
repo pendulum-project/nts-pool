@@ -11,13 +11,12 @@ use crate::models::{user::UserId, util::uuid};
 uuid!(AuthenticationMethodId);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
-#[allow(dead_code)]
 pub struct AuthenticationMethod {
-    id: AuthenticationMethodId,
-    user_id: UserId,
-    variant: Json<AuthenticationVariant>,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
+    pub id: AuthenticationMethodId,
+    pub user_id: UserId,
+    pub variant: Json<AuthenticationVariant>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,4 +94,25 @@ pub async fn get_password_authentication_method(
     }
 
     Ok(None)
+}
+
+pub async fn create(
+    conn: impl Acquire<'_, Database = Postgres>,
+    user_id: UserId,
+    variant: AuthenticationVariant,
+) -> Result<AuthenticationMethod, sqlx::Error> {
+    let mut conn = conn.acquire().await?;
+
+    sqlx::query_as!(
+        AuthenticationMethod,
+        r#"
+            INSERT INTO authentication_methods (user_id, variant)
+            VALUES ($1, $2)
+            RETURNING id, user_id, variant AS "variant: _", created_at, updated_at
+        "#,
+        user_id as _,
+        Json(variant) as _,
+    )
+    .fetch_one(&mut *conn)
+    .await
 }

@@ -26,8 +26,8 @@ pub struct User {
 
 #[derive(Debug, Clone)]
 pub struct NewUser {
-    email: String,
-    role: UserRole,
+    pub email: String,
+    pub role: UserRole,
 }
 
 /// Create a new user with the given email
