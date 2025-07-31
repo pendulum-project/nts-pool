@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO servers (owner, hostname, port, countries)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, owner, hostname, port AS \"port: _\", countries\n        ",
+  "query": "\n            INSERT INTO time_sources (owner, hostname, port, countries)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, owner, hostname, port AS \"port: _\", countries\n        ",
   "describe": {
     "columns": [
       {
@@ -45,5 +45,5 @@
       false
     ]
   },
-  "hash": "28bd63375523d07ac7030c593e7942443acfa36ad079868a3ba0b5b351c64f61"
+  "hash": "2f27369bfd0084c5a4b29b8753a9e59c9be69c414f03f3b73eaf6b32a5540ce1"
 }

@@ -6,11 +6,11 @@ use crate::{
     },
 };
 
-uuid!(ServerId);
+uuid!(TimeSourceId);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
-pub struct Server {
-    pub id: ServerId,
+pub struct TimeSource {
+    pub id: TimeSourceId,
     pub owner: UserId,
     pub hostname: String,
     pub port: Option<Port>,
@@ -18,7 +18,7 @@ pub struct Server {
 }
 
 #[derive(Debug, Clone)]
-pub struct NewServer {
+pub struct NewTimeSource {
     pub hostname: String,
     pub port: Option<Port>,
     pub countries: Vec<String>,
@@ -27,19 +27,19 @@ pub struct NewServer {
 pub async fn create(
     conn: impl DbConnLike<'_>,
     owner: UserId,
-    new_server: NewServer,
-) -> Result<Server, sqlx::Error> {
+    new_time_source: NewTimeSource,
+) -> Result<TimeSource, sqlx::Error> {
     sqlx::query_as!(
-        Server,
+        TimeSource,
         r#"
-            INSERT INTO servers (owner, hostname, port, countries)
+            INSERT INTO time_sources (owner, hostname, port, countries)
             VALUES ($1, $2, $3, $4)
             RETURNING id, owner, hostname, port AS "port: _", countries
         "#,
         owner as _,
-        new_server.hostname,
-        new_server.port as _,
-        new_server.countries as _,
+        new_time_source.hostname,
+        new_time_source.port as _,
+        new_time_source.countries as _,
     )
     .fetch_one(conn)
     .await

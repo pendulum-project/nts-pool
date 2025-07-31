@@ -23,7 +23,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/", get(root))
         .route("/login", get(login_page).post(login_submit_page))
         .route("/logout", get(logout))
-        .route("/servers", get(servers_page))
+        .route("/time-sources", get(time_sources_page))
         .route("/dns-zones", get(dns_zones_page))
         .fallback(not_found_page)
 }
@@ -56,21 +56,21 @@ pub async fn root(session: Option<UserSession>) -> impl IntoResponse {
 }
 
 #[derive(Template)]
-#[template(path = "servers_page.html.j2")]
-struct ServersPageTemplate {
+#[template(path = "time_sources_page.html.j2")]
+struct TimeSourcesPageTemplate {
     session: Option<UserSession>,
-    servers: Vec<String>,
+    time_sources: Vec<String>,
 }
 
-pub async fn servers_page(session: UserSession) -> impl IntoResponse {
-    let servers = vec![
+pub async fn time_sources_page(session: UserSession) -> impl IntoResponse {
+    let time_sources = vec![
         "time.cikzh.nl".to_string(),
         "sth2.ntp.netnod.se".to_string(),
         "time.tweedegolf.nl".to_string(),
     ];
-    HtmlTemplate(ServersPageTemplate {
+    HtmlTemplate(TimeSourcesPageTemplate {
         session: Some(session),
-        servers,
+        time_sources,
     })
 }
 
