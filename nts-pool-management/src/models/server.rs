@@ -1,8 +1,9 @@
-use sqlx::{Acquire, Postgres};
-
-use crate::models::{
-    user::UserId,
-    util::{port::Port, uuid},
+use crate::{
+    DbConnLike,
+    models::{
+        user::UserId,
+        util::{port::Port, uuid},
+    },
 };
 
 uuid!(ServerId);
@@ -24,12 +25,10 @@ pub struct NewServer {
 }
 
 pub async fn create(
-    conn: impl Acquire<'_, Database = Postgres>,
+    conn: impl DbConnLike<'_>,
     owner: UserId,
     new_server: NewServer,
 ) -> Result<Server, sqlx::Error> {
-    let mut conn = conn.acquire().await?;
-
     sqlx::query_as!(
         Server,
         r#"
@@ -42,6 +41,6 @@ pub async fn create(
         new_server.port as _,
         new_server.countries as _,
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(conn)
     .await
 }

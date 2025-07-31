@@ -4,9 +4,12 @@ use argon2::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Acquire, Postgres, types::Json};
+use sqlx::types::Json;
 
-use crate::models::{user::UserId, util::uuid};
+use crate::{
+    DbConnLike,
+    models::{user::UserId, util::uuid},
+};
 
 uuid!(AuthenticationMethodId);
 
@@ -68,11 +71,9 @@ fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error>
 }
 
 pub async fn get_password_authentication_method(
-    conn: impl Acquire<'_, Database = Postgres>,
+    conn: impl DbConnLike<'_>,
     user_id: UserId,
 ) -> Result<Option<PasswordAuthentication>, sqlx::Error> {
-    let mut conn = conn.acquire().await?;
-
     let auth_method = sqlx::query_as!(
         AuthenticationMethod,
         r#"
@@ -82,7 +83,7 @@ pub async fn get_password_authentication_method(
         "#,
         user_id as _
     )
-    .fetch_optional(&mut *conn)
+    .fetch_optional(conn)
     .await?;
 
     if let Some(auth_method) = auth_method {
@@ -97,12 +98,10 @@ pub async fn get_password_authentication_method(
 }
 
 pub async fn create(
-    conn: impl Acquire<'_, Database = Postgres>,
+    conn: impl DbConnLike<'_>,
     user_id: UserId,
     variant: AuthenticationVariant,
 ) -> Result<AuthenticationMethod, sqlx::Error> {
-    let mut conn = conn.acquire().await?;
-
     sqlx::query_as!(
         AuthenticationMethod,
         r#"
@@ -113,6 +112,6 @@ pub async fn create(
         user_id as _,
         Json(variant) as _,
     )
-    .fetch_one(&mut *conn)
+    .fetch_one(conn)
     .await
 }
