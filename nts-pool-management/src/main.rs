@@ -71,6 +71,26 @@ async fn main() {
     let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes());
     let jwt_decoding_key = jsonwebtoken::DecodingKey::from_secret(jwt_secret.as_bytes());
 
+    // // Insert an administrator account and set an 'admin' password
+    // let user = crate::models::user::create(
+    //     &db,
+    //     crate::models::user::NewUser {
+    //         email: "admin@example.com".into(),
+    //         role: user::UserRole::Administrator,
+    //     },
+    // )
+    // .await
+    // .expect("Created admin user");
+    // crate::models::authentication_method::create(
+    //     &db,
+    //     user.id,
+    //     crate::models::authentication_method::AuthenticationVariant::Password(
+    //         crate::models::authentication_method::PasswordAuthentication::new("admin").expect("Failed to create password hash"),
+    //     ),
+    // )
+    // .await
+    // .expect("Failed to create authentication method");
+
     // construct the application state
     let state = AppState {
         db,

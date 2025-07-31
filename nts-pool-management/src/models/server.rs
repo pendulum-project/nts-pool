@@ -8,20 +8,19 @@ use crate::models::{
 uuid!(ServerId);
 
 #[derive(Debug, Clone, sqlx::FromRow)]
-#[allow(dead_code)]
 pub struct Server {
-    id: ServerId,
-    owner: UserId,
-    hostname: String,
-    port: Option<Port>,
-    countries: Vec<String>,
+    pub id: ServerId,
+    pub owner: UserId,
+    pub hostname: String,
+    pub port: Option<Port>,
+    pub countries: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct NewServer {
-    hostname: String,
-    port: Option<Port>,
-    countries: Vec<String>,
+    pub hostname: String,
+    pub port: Option<Port>,
+    pub countries: Vec<String>,
 }
 
 pub async fn create(
