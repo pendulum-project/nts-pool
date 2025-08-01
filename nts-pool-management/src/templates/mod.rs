@@ -6,6 +6,8 @@ use axum::{
 
 use crate::auth::UserSession;
 
+pub mod filters;
+
 pub struct HtmlTemplate<T>(pub T);
 impl<T> IntoResponse for HtmlTemplate<T>
 where

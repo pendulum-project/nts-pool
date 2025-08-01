@@ -16,7 +16,12 @@
           <li>
             <a {% block nav_home %}{% endblock %} href="/">Home</a>
           </li>
-        {% if session.is_some() %}
+        {% if session|is_logged_in %}
+          {% if session|is_administrator %}
+            <li>
+                <a {% block nav_overview %}{% endblock %} href="/admin">Overview</a>
+            </li>
+          {% endif %}
           <li>
             <a {% block nav_dashboard %}{% endblock %} href="/management">Dashboard</a>
           </li>

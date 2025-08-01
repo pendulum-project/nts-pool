@@ -13,7 +13,7 @@ use sqlx::PgPool;
 use crate::{
     auth::{AUTH_COOKIE_NAME, UserSession, login_into},
     error::AppError,
-    templates::HtmlTemplate,
+    templates::{HtmlTemplate, filters},
 };
 
 #[derive(Template)]
