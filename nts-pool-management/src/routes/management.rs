@@ -3,36 +3,36 @@ use axum::response::IntoResponse;
 
 use crate::{
     auth::UserSession,
-    templates::{HtmlTemplate, filters},
+    templates::{AppVars, HtmlTemplate, filters},
 };
 
 #[derive(Template)]
 #[template(path = "management/dashboard.html.j2")]
 struct DashboardTemplate {
-    session: Option<UserSession>,
+    app: AppVars,
 }
 
-pub async fn dashboard(session: UserSession) -> impl IntoResponse {
+pub async fn dashboard(_session: UserSession) -> impl IntoResponse {
     HtmlTemplate(DashboardTemplate {
-        session: Some(session),
+        app: AppVars::from_current_task(),
     })
 }
 
 #[derive(Template)]
 #[template(path = "management/time_sources_page.html.j2")]
 struct TimeSourcesPageTemplate {
-    session: Option<UserSession>,
+    app: AppVars,
     time_sources: Vec<String>,
 }
 
-pub async fn time_sources(session: UserSession) -> impl IntoResponse {
+pub async fn time_sources(_session: UserSession) -> impl IntoResponse {
     let time_sources = vec![
         "time.cikzh.nl".to_string(),
         "sth2.ntp.netnod.se".to_string(),
         "time.tweedegolf.nl".to_string(),
     ];
     HtmlTemplate(TimeSourcesPageTemplate {
-        session: Some(session),
+        app: AppVars::from_current_task(),
         time_sources,
     })
 }
@@ -40,11 +40,11 @@ pub async fn time_sources(session: UserSession) -> impl IntoResponse {
 #[derive(Template)]
 #[template(path = "management/dns_zones_page.html.j2")]
 struct DnsZonesPageTemplate {
-    session: Option<UserSession>,
+    app: AppVars,
 }
 
-pub async fn dns_zones(session: UserSession) -> impl IntoResponse {
+pub async fn dns_zones(_session: UserSession) -> impl IntoResponse {
     HtmlTemplate(DnsZonesPageTemplate {
-        session: Some(session),
+        app: AppVars::from_current_task(),
     })
 }
