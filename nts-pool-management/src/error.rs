@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::{
-    auth::{NotLoggedInError, USER_SESSION},
+    auth::NotLoggedInError,
     templates::{not_found_page, unauthorized_page},
 };
 
@@ -15,9 +15,9 @@ pub struct AppError(anyhow::Error);
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         if let Some(sqlx::Error::RowNotFound) = self.0.downcast_ref::<sqlx::Error>() {
-            not_found_page(USER_SESSION.get()).into_response()
+            not_found_page().into_response()
         } else if self.0.downcast_ref::<NotLoggedInError>().is_some() {
-            unauthorized_page(USER_SESSION.get()).into_response()
+            unauthorized_page().into_response()
         } else {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

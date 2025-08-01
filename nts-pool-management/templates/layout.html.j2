@@ -16,8 +16,8 @@
           <li>
             <a {% block nav_home %}{% endblock %} href="/">Home</a>
           </li>
-        {% if session|is_logged_in %}
-          {% if session|is_administrator %}
+        {% if app.session|is_logged_in %}
+          {% if app.session|is_administrator %}
             <li>
                 <a {% block nav_overview %}{% endblock %} href="/admin">Overview</a>
             </li>
@@ -34,7 +34,7 @@
         {% endif %}
         </menu>
         <div>
-          {% if let Some(s) = session %}
+          {% if let Some(s) = app.session %}
               <span class="username">{{ s.email }}</span> <a href="/logout">Logout</a>
             {% else %}
               <a href="/login">Login</a>
