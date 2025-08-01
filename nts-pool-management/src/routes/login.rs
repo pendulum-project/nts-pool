@@ -11,19 +11,21 @@ use serde::Deserialize;
 use sqlx::PgPool;
 
 use crate::{
-    auth::{AUTH_COOKIE_NAME, UserSession, login_into},
+    auth::{AUTH_COOKIE_NAME, login_into},
     error::AppError,
-    templates::{HtmlTemplate, filters},
+    templates::{AppVars, HtmlTemplate, filters},
 };
 
 #[derive(Template)]
 #[template(path = "login/login.html.j2")]
 struct LoginPageTemplate {
-    session: Option<UserSession>,
+    app: AppVars,
 }
 
 pub async fn login() -> impl IntoResponse {
-    HtmlTemplate(LoginPageTemplate { session: None })
+    HtmlTemplate(LoginPageTemplate {
+        app: AppVars::from_current_task(),
+    })
 }
 
 #[derive(Debug, Deserialize)]

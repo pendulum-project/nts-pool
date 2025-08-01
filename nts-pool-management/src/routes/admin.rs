@@ -2,19 +2,19 @@ use askama::Template;
 use axum::response::IntoResponse;
 
 use crate::{
-    auth::{Administrator, UserSession},
+    auth::Administrator,
     error::AppError,
-    templates::{HtmlTemplate, filters},
+    templates::{AppVars, HtmlTemplate, filters},
 };
 
 #[derive(Template)]
 #[template(path = "admin/overview.html.j2")]
 struct OverviewTemplate {
-    session: Option<UserSession>,
+    app: AppVars,
 }
 
-pub async fn overview(admin: Administrator) -> Result<impl IntoResponse, AppError> {
+pub async fn overview(_admin: Administrator) -> Result<impl IntoResponse, AppError> {
     Ok(HtmlTemplate(OverviewTemplate {
-        session: Some(admin.into()),
+        app: AppVars::from_current_task(),
     }))
 }
