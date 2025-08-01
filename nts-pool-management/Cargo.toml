@@ -36,3 +36,15 @@ chrono = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 rustls = { workspace = true }
 jsonwebtoken = { workspace = true }
+lettre = { workspace = true, default-features = false, features = [
+    "builder",
+    "smtp-transport",
+    "pool",
+    "hostname",
+    "rustls",
+    "aws-lc-rs",
+    "rustls-platform-verifier",
+    "tokio1",
+    "tokio1-rustls",
+    "tracing",
+] }
