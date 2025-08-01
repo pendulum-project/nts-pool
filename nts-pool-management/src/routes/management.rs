@@ -1,7 +1,10 @@
 use askama::Template;
 use axum::response::IntoResponse;
 
-use crate::{auth::UserSession, templates::HtmlTemplate};
+use crate::{
+    auth::UserSession,
+    templates::{HtmlTemplate, filters},
+};
 
 #[derive(Template)]
 #[template(path = "management/dashboard.html.j2")]

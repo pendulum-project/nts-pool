@@ -121,6 +121,12 @@ impl Administrator {
     }
 }
 
+impl From<Administrator> for UserSession {
+    fn from(administrator: Administrator) -> Self {
+        administrator.into_inner()
+    }
+}
+
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
 #[derive(Debug, Clone)]
 pub struct ServerManager(UserSession);
@@ -136,6 +142,12 @@ impl Deref for ServerManager {
 impl ServerManager {
     pub fn into_inner(self) -> UserSession {
         self.0
+    }
+}
+
+impl From<ServerManager> for UserSession {
+    fn from(server_manager: ServerManager) -> Self {
+        server_manager.into_inner()
     }
 }
 
