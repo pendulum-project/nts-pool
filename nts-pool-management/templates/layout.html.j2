@@ -2,23 +2,29 @@
 <html lang="en">
   <head>
     <title>NTS Pool</title>
-    <link rel="stylesheet" href="assets/variables.css" />
-    <link rel="stylesheet" href="assets/main.css" />
-    <link rel="stylesheet" href="assets/components.css" />
-    <link rel="stylesheet" href="assets/typography.css" />
-    <link rel="stylesheet" href="assets/reset.css" />
+    <link rel="stylesheet" href="/assets/variables.css" />
+    <link rel="stylesheet" href="/assets/main.css" />
+    <link rel="stylesheet" href="/assets/components.css" />
+    <link rel="stylesheet" href="/assets/typography.css" />
+    <link rel="stylesheet" href="/assets/reset.css" />
     {% block head %}{% endblock %}
   </head>
   <body>
     <div class="appcontainer">
       <nav>
         <menu>
+          <li>
+            <a {% block nav_home %}{% endblock %} href="/">Home</a>
+          </li>
         {% if session.is_some() %}
           <li>
-            <a {% block nav_dns_zones %}{% endblock %} href="/dns-zones">DNS zones</a>
+            <a {% block nav_dashboard %}{% endblock %} href="/management">Dashboard</a>
           </li>
           <li>
-            <a {% block nav_time_sources %}{% endblock %} href="/time-sources">Time sources</a>
+            <a {% block nav_dns_zones %}{% endblock %} href="/management/dns-zones">DNS zones</a>
+          </li>
+          <li>
+            <a {% block nav_time_sources %}{% endblock %} href="/management/time-sources">Time sources</a>
           </li>
         {% endif %}
         </menu>
@@ -39,7 +45,7 @@
       <footer>
         {% block footer %}
         <section>NTS Pool</section>
-        <section><a href="https://github.com/pendulum-project/">GitHub</a></section>
+        <section><a href="https://github.com/pendulum-project/nts-pool">GitHub</a></section>
         <section>Active time source servers: 5392</section>
         {% endblock %}
       </footer>

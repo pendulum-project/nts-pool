@@ -1,10 +1,12 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use anyhow::{Context, anyhow};
 use axum::{
-    RequestPartsExt,
-    extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
+    RequestExt, RequestPartsExt,
+    extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Request, State},
     http::request::Parts,
+    middleware::Next,
+    response::{IntoResponse, Response},
 };
 use axum_extra::extract::{
     CookieJar,
@@ -12,8 +14,11 @@ use axum_extra::extract::{
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
+use tokio::task_local;
+use tracing::debug;
 
 use crate::{
+    AppState,
     error::AppError,
     models::user::{User, UserId, UserRole},
 };
@@ -99,22 +104,101 @@ pub fn login_into(
 }
 
 /// Can be extracted from a request, but only if there is a logged in user with the administrator role.
-pub struct Administrator {
-    pub id: UserId,
-    pub email: String,
+#[derive(Debug, Clone)]
+pub struct Administrator(UserSession);
+
+impl Deref for Administrator {
+    type Target = UserSession;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Administrator {
+    pub fn into_inner(self) -> UserSession {
+        self.0
+    }
 }
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
-pub struct ServerManager {
-    pub id: UserId,
-    pub email: String,
+#[derive(Debug, Clone)]
+pub struct ServerManager(UserSession);
+
+impl Deref for ServerManager {
+    type Target = UserSession;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ServerManager {
+    pub fn into_inner(self) -> UserSession {
+        self.0
+    }
 }
 
 /// Can be extracted from a request, but only if there is a logged in user.
+#[derive(Debug, Clone)]
 pub struct UserSession {
     pub user_id: UserId,
     pub role: UserRole,
     pub email: String,
+}
+
+task_local! {
+    /// This task local is used to store the currently logged in user.
+    ///
+    /// Handlers should always use the extractors instead of this task local.
+    pub static USER_SESSION: Option<UserSession>;
+}
+
+/// Middleware that retrieves the user session from the request.
+pub async fn auth_middleware(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let cookie_jar = request
+        .extract_parts::<CookieJar>()
+        .await
+        .expect("Extracting CookieJar should never fail");
+
+    let user_session = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
+        let decoding_key = DecodingKey::from_ref(&state);
+        match validate_jwt(cookie.value(), &decoding_key) {
+            Ok((user_id, role, email)) => Some(UserSession {
+                user_id,
+                role,
+                email,
+            }),
+            Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
+                Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                    // expected failure, ignore and no longer allow session for logged in user
+                    None
+                }
+                Some(e) => {
+                    // we ignore other kinds of jwt errors as well, but log them for debugging purposes
+                    debug!("JWT validation error: {e}");
+                    None
+                }
+                _ => {
+                    // other errors are weird, they result in a server error
+                    return AppError::from(
+                        e.into_inner()
+                            .context("Session state has unexpected invalid data"),
+                    )
+                    .into_response();
+                }
+            },
+        }
+    } else {
+        // There is no session cookie, so user is not logged in
+        None
+    };
+
+    USER_SESSION.scope(user_session, next.run(request)).await
 }
 
 impl<S> OptionalFromRequestParts<S> for UserSession
@@ -125,32 +209,10 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
+        _parts: &mut Parts,
+        _state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let cookie_jar = parts
-            .extract::<CookieJar>()
-            .await
-            .expect("Extracting CookieJar should never fail");
-        if let Some(cookie) = cookie_jar.get("auth") {
-            match validate_jwt(cookie.value(), &DecodingKey::from_ref(state)) {
-                Ok((user_id, role, email)) => Ok(Some(UserSession {
-                    user_id,
-                    role,
-                    email,
-                })),
-                Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
-                    Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                        Ok(None)
-                    }
-                    _ => {
-                        Err(e.into_inner()).context("Session state has unexpected invalid data")?
-                    }
-                },
-            }
-        } else {
-            Ok(None)
-        }
+        Ok(USER_SESSION.get())
     }
 }
 
@@ -182,10 +244,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::Administrator => Ok(Administrator {
-                id: session.user_id,
-                email: session.email,
-            }),
+            Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(anyhow!("No administrator user available"))?,
         }
     }
@@ -200,10 +259,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::ServerManager => Ok(ServerManager {
-                id: session.user_id,
-                email: session.email,
-            }),
+            Ok(session) if session.role == UserRole::ServerManager => Ok(ServerManager(session)),
             _ => Err(anyhow!("No server manager user available"))?,
         }
     }

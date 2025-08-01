@@ -2,23 +2,22 @@ use std::ops::Deref;
 
 use axum::{
     http::StatusCode,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
 };
 
-use crate::auth::NotLoggedInError;
+use crate::{
+    auth::{NotLoggedInError, USER_SESSION},
+    templates::{not_found_page, unauthorized_page},
+};
 
 pub struct AppError(anyhow::Error);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         if let Some(sqlx::Error::RowNotFound) = self.0.downcast_ref::<sqlx::Error>() {
-            (
-                StatusCode::NOT_FOUND,
-                format!("Resource not found: {}", self.0),
-            )
-                .into_response()
+            not_found_page(USER_SESSION.get()).into_response()
         } else if self.0.downcast_ref::<NotLoggedInError>().is_some() {
-            Redirect::to("/").into_response()
+            unauthorized_page(USER_SESSION.get()).into_response()
         } else {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
