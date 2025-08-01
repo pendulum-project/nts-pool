@@ -129,9 +129,9 @@ impl From<Administrator> for UserSession {
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
 #[derive(Debug, Clone)]
-pub struct ServerManager(UserSession);
+pub struct Manager(UserSession);
 
-impl Deref for ServerManager {
+impl Deref for Manager {
     type Target = UserSession;
 
     fn deref(&self) -> &Self::Target {
@@ -139,14 +139,14 @@ impl Deref for ServerManager {
     }
 }
 
-impl ServerManager {
+impl Manager {
     pub fn into_inner(self) -> UserSession {
         self.0
     }
 }
 
-impl From<ServerManager> for UserSession {
-    fn from(server_manager: ServerManager) -> Self {
+impl From<Manager> for UserSession {
+    fn from(server_manager: Manager) -> Self {
         server_manager.into_inner()
     }
 }
@@ -262,7 +262,7 @@ where
     }
 }
 
-impl<S> FromRequestParts<S> for ServerManager
+impl<S> FromRequestParts<S> for Manager
 where
     S: Send + Sync,
     DecodingKey: FromRef<S>,
@@ -271,7 +271,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::ServerManager => Ok(ServerManager(session)),
+            Ok(session) if session.role == UserRole::Manager => Ok(Manager(session)),
             _ => Err(anyhow!("No server manager user available"))?,
         }
     }
