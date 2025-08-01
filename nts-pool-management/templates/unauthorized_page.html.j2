@@ -1,0 +1,10 @@
+{% extends "layout.html.j2" %}
+
+{% block header %}<h1>Unauthorized</h1>{% endblock %}
+
+{% block content %}
+<article>
+  <p>You are not allowed to access this page. {% if session.is_none() %}Please <a href="/login">login</a> to continue.{% endif %}</p>
+  <a href="/">Back to the home page</a>
+</article>
+{% endblock %}

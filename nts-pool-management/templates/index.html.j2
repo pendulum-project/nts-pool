@@ -1,9 +1,10 @@
-{% extends "main.html.j2" %}
+{% extends "layout.html.j2" %}
+
+{% block nav_home %}aria-current="page"{% endblock %}
+
+{% block header %}<h1>NTS Pool</h1>{% endblock %}
+
 {% block content %}
-<h1>Root</h1>
-<button>Submit</button>
-<a class="btn" href="#">Submit</a>
-<input type="button" value="Submit">
-<input type="submit" value="Submit">
-<input type="text" value="Submit">
+
+<p>Welcome to the NTS Pool Management System.</p>
 {% endblock %}

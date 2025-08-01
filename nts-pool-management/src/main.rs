@@ -1,4 +1,4 @@
-use axum::extract::FromRef;
+use axum::{extract::FromRef, middleware};
 use sqlx::PgPool;
 use tracing::info;
 
@@ -6,6 +6,7 @@ pub mod auth;
 pub mod error;
 pub mod models;
 pub mod routes;
+pub mod templates;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
@@ -109,12 +110,18 @@ async fn main() {
     };
 
     // setup routes
-    let router = routes::create_router().with_state(state).nest_service(
-        "/assets",
-        tower_http::services::ServeDir::new(
-            std::env::var("NTSPOOL_ASSETS_DIR").unwrap_or("./assets".into()),
-        ),
-    );
+    let router = routes::create_router()
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::auth_middleware,
+        ))
+        .with_state(state)
+        .nest_service(
+            "/assets",
+            tower_http::services::ServeDir::new(
+                std::env::var("NTSPOOL_ASSETS_DIR").unwrap_or("./assets".into()),
+            ),
+        );
 
     // start listening for incoming connections
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
