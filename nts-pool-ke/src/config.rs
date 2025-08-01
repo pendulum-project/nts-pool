@@ -158,10 +158,11 @@ impl<'de> Deserialize<'de> for BackendConfig {
             rustls::ClientConfig::builder_with_protocol_versions(&[&TLS13]);
         let provider = upstream_config_builder.crypto_provider().clone();
         let verifier = match upstream_cas {
-            Some(upstream_cas) => Verifier::new_with_extra_roots(upstream_cas.iter().cloned())
-                .map_err(serde::de::Error::custom)?
-                .with_provider(provider),
-            None => Verifier::new(),
+            Some(upstream_cas) => {
+                Verifier::new_with_extra_roots(upstream_cas.iter().cloned(), provider)
+                    .map_err(serde::de::Error::custom)?
+            }
+            None => Verifier::new(provider).map_err(serde::de::Error::custom)?,
         };
 
         let mut upstream_config = upstream_config_builder

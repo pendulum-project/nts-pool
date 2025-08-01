@@ -16,6 +16,7 @@ allow = [
     "NCSA",
     "CDLA-Permissive-2.0",
     "Zlib",
+    "0BSD",
 ]
 
 [[licenses.clarify]]

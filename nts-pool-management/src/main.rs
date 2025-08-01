@@ -1,4 +1,5 @@
 use axum::{extract::FromRef, middleware};
+use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use sqlx::PgPool;
 use tracing::info;
 
@@ -8,11 +9,14 @@ pub mod models;
 pub mod routes;
 pub mod templates;
 
+pub type MailTransport = AsyncSmtpTransport<Tokio1Executor>;
+
 #[derive(Clone, FromRef)]
 pub struct AppState {
     db: PgPool,
     jwt_encoding_key: jsonwebtoken::EncodingKey,
     jwt_decoding_key: jsonwebtoken::DecodingKey,
+    mail_transport: MailTransport,
 }
 
 pub trait DbConnLike<'a>:
@@ -102,11 +106,18 @@ async fn main() {
     // .await
     // .expect("Failed to create authentication method");
 
+    // Setup mail transport for sending mails
+    let mail_transport_url = std::env::var("NTSPOOL_SMTP_URL").expect("NTSPOOL_SMTP_URL not set");
+    let mail_transport = AsyncSmtpTransport::<Tokio1Executor>::from_url(&mail_transport_url)
+        .expect("Failed to create mail transport")
+        .build();
+
     // construct the application state
     let state = AppState {
         db,
         jwt_encoding_key,
         jwt_decoding_key,
+        mail_transport,
     };
 
     // setup routes

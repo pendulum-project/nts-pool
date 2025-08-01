@@ -53,9 +53,15 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
     ports: ["127.0.0.1:5432:5432"]
 
+  mailcrab:
+    image: marlonb/mailcrab:latest
+    ports:
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:1025:1025"
+
   management:
     image: ghcr.io/tweedegolf/rust-dev:stable
-    depends_on: [ke, psql]
+    depends_on: [ke, psql, mailcrab]
     stop_grace_period: 500ms
     ports:
       - "127.0.0.1:3000:3000"
@@ -69,6 +75,7 @@ services:
       DATABASE_URL: "postgres://nts-pool@psql:5432/nts-pool"
       NTSPOOL_ASSETS_DIR: "/app/nts-pool-management/assets"
       NTSPOOL_JWT_SECRET: "a-string-secret-at-least-256-bits-long"
+      NTSPOOL_SMTP_URL: "smtp://mailcrab:1025"
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management
