@@ -20,6 +20,6 @@ pub fn is_server_manager(
 ) -> askama::Result<bool> {
     Ok(session
         .as_ref()
-        .map(|session| session.role == UserRole::ServerManager)
+        .map(|session| session.role == UserRole::Manager)
         .unwrap_or(false))
 }

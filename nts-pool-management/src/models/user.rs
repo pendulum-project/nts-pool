@@ -11,7 +11,7 @@ uuid!(UserId);
 #[sqlx(rename_all = "kebab-case")]
 pub enum UserRole {
     Administrator,
-    ServerManager,
+    Manager,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
