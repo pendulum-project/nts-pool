@@ -47,7 +47,3 @@ rustls-platform-verifier = "0.6.0"
 tokio-rustls = { version = "0.26.0" }
 jsonwebtoken = "9.3.1"
 lettre = { version = "0.11.18", default-features = false }
-
-# our own crates used as dependencies, same version as the workspace version
-# NOTE: keep this part at the bottom of the file, do not change this line
-nts-pool-management-shared = { version = "0.1.0", path = "nts-pool-management/shared" }
