@@ -1,9 +1,8 @@
 use askama::Template;
-use axum::response::IntoResponse;
+use axum::{Form, extract::State, response::IntoResponse};
 
 use crate::{
-    auth::UserSession,
-    templates::{AppVars, HtmlTemplate, filters},
+    auth::UserSession, error::AppError, models::time_source::{self, NewTimeSource}, templates::{filters, AppVars, HtmlTemplate}, AppState
 };
 
 #[derive(Template)]
@@ -35,6 +34,17 @@ pub async fn time_sources(_session: UserSession) -> impl IntoResponse {
         app: AppVars::from_current_task(),
         time_sources,
     })
+}
+
+pub async fn create_time_source(
+    session: UserSession,
+    State(state): State<AppState>,
+    Form(new_time_source): Form<NewTimeSource>,
+) -> Result<impl IntoResponse, AppError> {
+    time_source::create(&state.db, session.user_id, new_time_source)
+        .await
+        .unwrap();
+    Ok(())
 }
 
 #[derive(Template)]

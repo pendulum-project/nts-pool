@@ -6,9 +6,9 @@
 {% block content %}
 <section>
   <h2>Add a time source server</h2>
-  <form action="/time-source">
-    <input type="text" placeholder="Hostname or IP address" />
-    <input type="text" placeholder="Port (optional)" />
+  <form action="/management/time-sources" method="POST">
+    <input name="hostname" type="text" placeholder="Hostname or IP address" />
+    <input name="port" type="text" placeholder="Port (optional)" />
     <button type="submit">Add</button>
   </form>
 </section>
