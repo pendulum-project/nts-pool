@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, hostname, port AS \"port: _\", countries\n            FROM time_sources\n            WHERE owner = $1;\n        ",
+  "query": "\n            SELECT id, owner, hostname, port AS \"port: _\", countries\n            FROM time_sources\n            WHERE owner = $1 AND deleted = false;\n        ",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "e1bf88b3c8e0b55b8c38d3fdfc842a002f13953b42b53fd8b0b1fb92093d7cb6"
+  "hash": "555209660785c05a8cc865c585146786652dbe2a65312612bd99a72c335540fd"
 }
