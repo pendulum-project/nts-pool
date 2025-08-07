@@ -22,7 +22,7 @@
             "kind": {
               "Enum": [
                 "administrator",
-                "server-manager"
+                "manager"
               ]
             }
           }
@@ -48,7 +48,7 @@
             "kind": {
               "Enum": [
                 "administrator",
-                "server-manager"
+                "manager"
               ]
             }
           }
