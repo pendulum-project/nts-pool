@@ -17,7 +17,7 @@
   {%- for ts in time_sources %}
     <dl class="server-list">
       <dd>Hostname</dd>
-      <dt>{{ ts }}:123</dt>
+      <dt>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</dt>
       <dd>Countries</dd>
       <dt>The Netherlands, Sweden</dt>
     </dl>

@@ -16,7 +16,10 @@ pub fn create_router() -> Router<AppState> {
         .route("/login", get(login::login).post(login::login_submit))
         .route("/logout", get(login::logout))
         .route("/admin", get(admin::overview))
-        .route("/management/time-sources", get(management::time_sources).post(management::create_time_source))
+        .route(
+            "/management/time-sources",
+            get(management::time_sources).post(management::create_time_source),
+        )
         .route("/management/dns-zones", get(management::dns_zones))
         .route("/management", get(management::dashboard))
         .fallback(async || not_found_page())
