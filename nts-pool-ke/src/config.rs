@@ -209,6 +209,9 @@ struct BareNtsPoolKeConfig {
     /// Maximum amount of parallel connections (incoming)
     #[serde(default = "default_max_connections")]
     max_connections: usize,
+    /// Use proxy protocol for accepting connections
+    #[serde(default)]
+    pub use_proxy_protocol: bool,
 }
 
 fn default_nts_ke_timeout() -> u64 {
@@ -230,6 +233,7 @@ pub struct NtsPoolKeConfig {
     pub key_exchange_timeout: Duration,
     pub timesource_timeout: Duration,
     pub max_connections: usize,
+    pub use_proxy_protocol: bool,
 }
 
 impl<'de> Deserialize<'de> for NtsPoolKeConfig {
@@ -268,6 +272,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
             key_exchange_timeout: std::time::Duration::from_millis(bare.key_exchange_timeout),
             timesource_timeout: std::time::Duration::from_millis(bare.timesource_timeout),
             max_connections: bare.max_connections,
+            use_proxy_protocol: bare.use_proxy_protocol,
         })
     }
 }

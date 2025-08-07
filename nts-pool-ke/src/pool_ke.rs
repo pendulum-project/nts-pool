@@ -6,6 +6,7 @@ use tracing::{debug, info};
 use crate::{
     config::NtsPoolKeConfig,
     error::PoolError,
+    haproxy::parse_haproxy_header,
     nts::{
         AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
         KeyExchangeResponse, NoAgreementResponse, NtsError, ProtocolId,
@@ -72,9 +73,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn handle_client(
         &self,
-        client_stream: tokio::net::TcpStream,
-        source_address: SocketAddr,
+        mut client_stream: tokio::net::TcpStream,
+        mut source_address: SocketAddr,
     ) -> Result<(), PoolError> {
+        // Handle the proxy message if needed
+        if self.config.use_proxy_protocol {
+            if let Some(addr) = parse_haproxy_header(&mut client_stream).await? {
+                source_address = addr;
+            }
+        }
+
         // handle the initial client to pool
         let mut client_stream = self.config.server_tls.accept(client_stream).await?;
 
@@ -526,6 +534,7 @@ mod tests {
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
+                use_proxy_protocol: false,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -588,6 +597,7 @@ mod tests {
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
+                use_proxy_protocol: false,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -651,6 +661,7 @@ mod tests {
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
+                use_proxy_protocol: false,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -686,5 +697,70 @@ mod tests {
         assert_eq!(request.protocol, 1);
         assert_eq!(request.c2s.len(), 32);
         assert_eq!(request.s2c.len(), 32);
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_proxy() {
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                server_tls: listen_tls_config("pool.test"),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: true,
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let mut conn = TcpStream::connect(pool_addr).await.unwrap();
+        conn.write_all(b"\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A\x21\x11\x00\x0C\x01\x02\x03\x04\x05\x06\x07\x08\x00\x09\x00\x0A").await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
+            .await
+            .unwrap();
+        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
+        conn.shutdown().await.unwrap();
+
+        #[allow(clippy::await_holding_lock)]
+        let timesource_request =
+            FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
+                .await
+                .unwrap();
+
+        assert_eq!(timesource_request.algorithm, 0);
+        assert_eq!(timesource_request.protocol, 0);
+        assert_eq!(timesource_request.c2s.len(), 16);
+        assert_eq!(timesource_request.s2c.len(), 16);
+        assert_eq!(response.algorithm, 0);
+        assert_eq!(response.protocol, 0);
+        assert_eq!(response.server.as_deref(), Some("a.test"));
+        assert_eq!(
+            manager.inner.received_addr.lock().unwrap().unwrap(),
+            "1.2.3.4:9".parse().unwrap()
+        );
+
+        pool_handle.abort();
     }
 }

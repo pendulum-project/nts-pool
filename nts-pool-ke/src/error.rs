@@ -6,6 +6,7 @@ pub enum PoolError {
     IO(std::io::Error),
     Rustls(rustls::Error),
     Timeout,
+    NoProxy,
 }
 
 impl From<NtsError> for PoolError {
@@ -33,6 +34,7 @@ impl std::fmt::Display for PoolError {
             Self::IO(e) => e.fmt(f),
             Self::Rustls(e) => e.fmt(f),
             Self::Timeout => f.write_str("Timeout occured"),
+            Self::NoProxy => f.write_str("No proxy header found"),
         }
     }
 }
