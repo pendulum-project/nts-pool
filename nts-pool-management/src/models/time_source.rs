@@ -69,6 +69,26 @@ pub async fn create(
     .await
 }
 
+pub async fn delete(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+    time_source_id: TimeSourceId,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+             UPDATE time_sources
+             SET deleted = true
+             WHERE id = $1 AND owner = $2;
+        "#,
+        time_source_id as _,
+        owner as _,
+    )
+    .execute(conn)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn by_user(
     conn: impl DbConnLike<'_>,
     owner: UserId,
@@ -78,7 +98,7 @@ pub async fn by_user(
         r#"
             SELECT id, owner, hostname, port AS "port: _", countries
             FROM time_sources
-            WHERE owner = $1;
+            WHERE owner = $1 AND deleted = false;
         "#,
         owner as _,
     )

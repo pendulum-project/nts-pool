@@ -15,12 +15,15 @@
 <section>
   <h2>Time source servers</h2>
   {%- for ts in time_sources %}
-    <dl class="server-list">
-      <dd>Hostname</dd>
-      <dt>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</dt>
-      <dd>Countries</dd>
-      <dt>The Netherlands, Sweden</dt>
-    </dl>
+    <article class="server-list">
+      <dl>
+        <dd>Hostname</dd>
+        <dt>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</dt>
+      </dl>
+      <form action="/management/time-sources/{{ ts.id }}/delete" method="POST">
+        <button type="submit">Delete</button>
+      </form>
+    </article>
   {% endfor %}
 </section>
 {% endblock %}

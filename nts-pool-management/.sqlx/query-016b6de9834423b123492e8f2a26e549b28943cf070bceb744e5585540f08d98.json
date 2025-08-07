@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n             UPDATE time_sources\n             SET deleted = true\n             WHERE id = $1 AND owner = $2;\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "016b6de9834423b123492e8f2a26e549b28943cf070bceb744e5585540f08d98"
+}

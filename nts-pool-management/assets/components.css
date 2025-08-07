@@ -69,7 +69,7 @@ h2 {
     margin-top: var(--space-md);
 }
 
-dl.server-list {
+article.server-list {
     background-color: var(--white);
     border-radius: var(--border-radius);
     margin-top: var(--space-md);
