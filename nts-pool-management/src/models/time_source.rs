@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use crate::{
     DbConnLike,
+    error::AppError,
     models::{
         user::UserId,
         util::{port::Port, uuid},
@@ -25,6 +26,29 @@ pub struct NewTimeSource {
     pub port: Option<Port>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct NewTimeSourceForm {
+    pub hostname: String,
+    pub port: String,
+}
+
+impl TryFrom<NewTimeSourceForm> for NewTimeSource {
+    type Error = AppError;
+
+    fn try_from(form: NewTimeSourceForm) -> Result<Self, Self::Error> {
+        let port = if form.port.is_empty() {
+            None
+        } else {
+            Some(form.port.parse::<u16>()?.into())
+        };
+
+        Ok(Self {
+            hostname: form.hostname,
+            port,
+        })
+    }
+}
+
 pub async fn create(
     conn: impl DbConnLike<'_>,
     owner: UserId,
@@ -42,5 +66,22 @@ pub async fn create(
         new_time_source.port as _,
     )
     .fetch_one(conn)
+    .await
+}
+
+pub async fn by_user(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+) -> Result<Vec<TimeSource>, sqlx::Error> {
+    sqlx::query_as!(
+        TimeSource,
+        r#"
+            SELECT id, owner, hostname, port AS "port: _", countries
+            FROM time_sources
+            WHERE owner = $1;
+        "#,
+        owner as _,
+    )
+    .fetch_all(conn)
     .await
 }

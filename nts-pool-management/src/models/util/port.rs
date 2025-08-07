@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    fmt::{Display, Formatter},
+    ops::{Deref, DerefMut},
+};
 
 use serde::Deserialize;
 use sqlx::{
@@ -63,5 +66,11 @@ impl<'q> Encode<'q, Postgres> for Port {
         buf: &mut PgArgumentBuffer,
     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
         Encode::<Postgres>::encode_by_ref(&(self.0 as i32), buf)
+    }
+}
+
+impl Display for Port {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
