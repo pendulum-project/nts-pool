@@ -1,11 +1,15 @@
 use askama::Template;
-use axum::{Form, extract::State, response::IntoResponse};
+use axum::{
+    Form,
+    extract::{Path, State},
+    response::IntoResponse,
+};
 
 use crate::{
     AppState,
     auth::UserSession,
     error::AppError,
-    models::time_source::{self, NewTimeSourceForm, TimeSource},
+    models::time_source::{self, NewTimeSourceForm, TimeSource, TimeSourceId},
     templates::{AppVars, HtmlTemplate, filters},
 };
 
@@ -48,6 +52,19 @@ pub async fn create_time_source(
         .await
         .unwrap();
 
+    let time_sources = time_source::by_user(&state.db, session.user_id).await?;
+
+    Ok(HtmlTemplate(TimeSourcesPageTemplate {
+        app: AppVars::from_current_task(),
+        time_sources,
+    }))
+}
+
+pub async fn delete_time_source(
+    session: UserSession,
+    Path(id): Path<TimeSourceId>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
     let time_sources = time_source::by_user(&state.db, session.user_id).await?;
 
     Ok(HtmlTemplate(TimeSourcesPageTemplate {
