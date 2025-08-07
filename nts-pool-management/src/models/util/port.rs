@@ -1,11 +1,12 @@
 use std::ops::{Deref, DerefMut};
 
+use serde::Deserialize;
 use sqlx::{
     Decode, Encode, Postgres, Type,
     postgres::{PgArgumentBuffer, PgTypeInfo, PgValueRef},
 };
 
-#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Deserialize, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct Port(u16);
 

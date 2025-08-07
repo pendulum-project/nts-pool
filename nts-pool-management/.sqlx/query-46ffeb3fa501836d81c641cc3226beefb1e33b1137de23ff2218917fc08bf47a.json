@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO time_sources (owner, hostname, port, countries)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, owner, hostname, port AS \"port: _\", countries\n        ",
+  "query": "\n            INSERT INTO time_sources (owner, hostname, port)\n            VALUES ($1, $2, $3)\n            RETURNING id, owner, hostname, port AS \"port: _\", countries\n        ",
   "describe": {
     "columns": [
       {
@@ -33,8 +33,7 @@
       "Left": [
         "Uuid",
         "Varchar",
-        "Int4",
-        "TextArray"
+        "Int4"
       ]
     },
     "nullable": [
@@ -45,5 +44,5 @@
       false
     ]
   },
-  "hash": "2f27369bfd0084c5a4b29b8753a9e59c9be69c414f03f3b73eaf6b32a5540ce1"
+  "hash": "46ffeb3fa501836d81c641cc3226beefb1e33b1137de23ff2218917fc08bf47a"
 }
