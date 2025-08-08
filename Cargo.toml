@@ -12,7 +12,7 @@ homepage = "https://github.com/pendulum-project/nts-pool"
 readme = "./README.md"
 description = "Pool management system for NTS servers"
 publish = false
-rust-version = "1.85"                                       # MSRV
+rust-version = "1.88"                                       # MSRV
 
 [profile.dev]
 panic = "abort"

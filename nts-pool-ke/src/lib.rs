@@ -11,6 +11,7 @@ mod nts;
 mod pool_ke;
 mod servers;
 mod tracing;
+mod util;
 
 use std::path::PathBuf;
 
@@ -25,6 +26,9 @@ use crate::{
 use self::tracing as daemon_tracing;
 use daemon_tracing::LogLevel;
 use tracing_subscriber::util::SubscriberInitExt;
+
+#[cfg(feature = "fuzz")]
+pub use util::BufferBorrowingReader;
 
 pub(crate) mod exitcode {
     /// An internal software error has been detected.  This

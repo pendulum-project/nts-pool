@@ -6,19 +6,26 @@ use std::{
 };
 
 use libfuzzer_sys::fuzz_target;
-use nts_pool_ke::nts::NtsRecord;
+use nts_pool_ke::{nts::NtsRecord, BufferBorrowingReader};
 
 fuzz_target!(|data: &[u8]| {
-    match pin!(NtsRecord::parse(data)).poll(&mut Context::from_waker(Waker::noop())) {
+    let mut buf1 = [0u8; 4096];
+    match pin!(NtsRecord::parse(&mut BufferBorrowingReader::new(
+        data, &mut buf1
+    )))
+    .poll(&mut Context::from_waker(Waker::noop()))
+    {
         std::task::Poll::Ready(Ok(record)) => {
             let mut out1 = vec![];
             assert!(matches!(
                 pin!(record.serialize(&mut out1)).poll(&mut Context::from_waker(Waker::noop())),
                 std::task::Poll::Ready(Ok(_))
             ));
-            let std::task::Poll::Ready(Ok(record2)) = pin!(NtsRecord::parse(out1.as_slice()))
-                .poll(&mut Context::from_waker(Waker::noop()))
-            else {
+            let mut buf2 = [0u8; 4096];
+            let std::task::Poll::Ready(Ok(record2)) = pin!(NtsRecord::parse(
+                &mut BufferBorrowingReader::new(out1.as_slice(), &mut buf2)
+            ))
+            .poll(&mut Context::from_waker(Waker::noop())) else {
                 panic!("Unexpected stall during parsing");
             };
             let mut out2 = vec![];
