@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::Error};
+use std::{borrow::Cow, fmt::Display, io::Error, slice};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -115,21 +115,21 @@ impl Display for NtsError {
 impl core::error::Error for NtsError {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ClientRequest {
+pub enum ClientRequest<'a> {
     Ordinary {
-        algorithms: Vec<AlgorithmId>,
-        protocols: Vec<ProtocolId>,
-        denied_servers: Vec<String>,
+        algorithms: Cow<'a, [AlgorithmId]>,
+        protocols: Cow<'a, [ProtocolId]>,
+        denied_servers: Vec<Cow<'a, str>>,
     },
     Uuid {
-        algorithms: Vec<AlgorithmId>,
-        protocols: Vec<ProtocolId>,
-        key: String,
-        uuid: String,
+        algorithms: Cow<'a, [AlgorithmId]>,
+        protocols: Cow<'a, [ProtocolId]>,
+        key: Cow<'a, str>,
+        uuid: Cow<'a, str>,
     },
 }
 
-impl ClientRequest {
+impl ClientRequest<'_> {
     pub fn algorithms(&self) -> &[AlgorithmId] {
         match self {
             ClientRequest::Ordinary { algorithms, .. } | ClientRequest::Uuid { algorithms, .. } => {
@@ -146,7 +146,7 @@ impl ClientRequest {
         }
     }
 
-    pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<ClientRequest, NtsError> {
+    pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
         let mut reader = reader.take(MAX_MESSAGE_SIZE);
 
         let mut algorithms = None;
@@ -235,12 +235,12 @@ pub struct ServerInformationRequest;
 impl ServerInformationRequest {
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::SupportedAlgorithmList {
-            supported_algorithms: vec![],
+            supported_algorithms: [].as_slice().into(),
         }
         .serialize(&mut writer)
         .await?;
         NtsRecord::SupportedNextProtocolList {
-            supported_protocols: vec![],
+            supported_protocols: [].as_slice().into(),
         }
         .serialize(&mut writer)
         .await?;
@@ -251,12 +251,12 @@ impl ServerInformationRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ServerInformationResponse {
-    pub supported_algorithms: Vec<AlgorithmDescription>,
-    pub supported_protocols: Vec<ProtocolId>,
+pub struct ServerInformationResponse<'a> {
+    pub supported_algorithms: Cow<'a, [AlgorithmDescription]>,
+    pub supported_protocols: Cow<'a, [ProtocolId]>,
 }
 
-impl ServerInformationResponse {
+impl ServerInformationResponse<'_> {
     pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
         let mut reader = reader.take(MAX_MESSAGE_SIZE);
 
@@ -323,14 +323,14 @@ impl ServerInformationResponse {
     }
 }
 
-pub struct FixedKeyRequest {
-    pub c2s: Vec<u8>,
-    pub s2c: Vec<u8>,
+pub struct FixedKeyRequest<'a> {
+    pub c2s: Cow<'a, [u8]>,
+    pub s2c: Cow<'a, [u8]>,
     pub protocol: ProtocolId,
     pub algorithm: AlgorithmId,
 }
 
-impl FixedKeyRequest {
+impl FixedKeyRequest<'_> {
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::FixedKeyRequest {
             c2s: self.c2s,
@@ -339,12 +339,12 @@ impl FixedKeyRequest {
         .serialize(&mut writer)
         .await?;
         NtsRecord::NextProtocol {
-            protocol_ids: vec![self.protocol],
+            protocol_ids: slice::from_ref(&self.protocol).into(),
         }
         .serialize(&mut writer)
         .await?;
         NtsRecord::AeadAlgorithm {
-            algorithm_ids: vec![self.algorithm],
+            algorithm_ids: slice::from_ref(&self.algorithm).into(),
         }
         .serialize(&mut writer)
         .await?;
@@ -432,15 +432,15 @@ impl FixedKeyRequest {
     }
 }
 
-pub struct KeyExchangeResponse {
+pub struct KeyExchangeResponse<'a> {
     pub protocol: ProtocolId,
     pub algorithm: AlgorithmId,
-    pub cookies: Vec<Vec<u8>>,
-    pub server: Option<String>,
+    pub cookies: Vec<Cow<'a, [u8]>>,
+    pub server: Option<Cow<'a, str>>,
     pub port: Option<u16>,
 }
 
-impl KeyExchangeResponse {
+impl KeyExchangeResponse<'_> {
     pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<Self, NtsError> {
         let mut reader = reader.take(MAX_MESSAGE_SIZE);
 
@@ -528,12 +528,12 @@ impl KeyExchangeResponse {
 
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::NextProtocol {
-            protocol_ids: vec![self.protocol],
+            protocol_ids: slice::from_ref(&self.protocol).into(),
         }
         .serialize(&mut writer)
         .await?;
         NtsRecord::AeadAlgorithm {
-            algorithm_ids: vec![self.algorithm],
+            algorithm_ids: slice::from_ref(&self.algorithm).into(),
         }
         .serialize(&mut writer)
         .await?;
@@ -559,7 +559,7 @@ pub struct NoAgreementResponse;
 impl NoAgreementResponse {
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         NtsRecord::NextProtocol {
-            protocol_ids: vec![],
+            protocol_ids: [].as_slice().into(),
         }
         .serialize(&mut writer)
         .await?;
@@ -589,6 +589,7 @@ impl ErrorResponse {
 #[cfg(test)]
 mod tests {
     use std::{
+        borrow::Cow,
         future::Future,
         io::Error,
         pin::pin,
@@ -657,8 +658,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let Ok(ClientRequest::Ordinary {
@@ -675,8 +676,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [4]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [4].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, ["hello"]);
     }
 
@@ -721,8 +722,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let Ok(ClientRequest::Ordinary {
@@ -738,8 +739,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let Ok(ClientRequest::Ordinary {
@@ -755,8 +756,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let Ok(ClientRequest::Ordinary {
@@ -772,8 +773,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let Ok(ClientRequest::Ordinary {
@@ -789,8 +790,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(denied_servers, [] as [String; 0]);
     }
 
@@ -880,8 +881,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(key, "ab");
         assert_eq!(uuid, "cd");
     }
@@ -927,8 +928,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(key, "ab");
         assert_eq!(uuid, "cd");
 
@@ -947,8 +948,8 @@ mod tests {
         else {
             panic!("Expected parse");
         };
-        assert_eq!(algorithms, [0]);
-        assert_eq!(protocols, [0]);
+        assert_eq!(algorithms, [0].as_slice());
+        assert_eq!(protocols, [0].as_slice());
         assert_eq!(key, "ab");
         assert_eq!(uuid, "cd");
     }
@@ -1103,9 +1104,9 @@ mod tests {
         };
         assert_eq!(
             response.supported_algorithms,
-            [AlgorithmDescription { id: 0, keysize: 16 }]
+            [AlgorithmDescription { id: 0, keysize: 16 }].as_slice()
         );
-        assert_eq!(response.supported_protocols, [0]);
+        assert_eq!(response.supported_protocols, [0].as_slice());
     }
 
     #[test]
@@ -1243,9 +1244,9 @@ mod tests {
         };
         assert_eq!(
             response.supported_algorithms,
-            [AlgorithmDescription { id: 0, keysize: 16 }]
+            [AlgorithmDescription { id: 0, keysize: 16 }].as_slice()
         );
-        assert_eq!(response.supported_protocols, [0]);
+        assert_eq!(response.supported_protocols, [0].as_slice());
 
         let Ok(response) = pwrap(
             ServerInformationResponse::parse,
@@ -1258,9 +1259,9 @@ mod tests {
         };
         assert_eq!(
             response.supported_algorithms,
-            [AlgorithmDescription { id: 0, keysize: 16 }]
+            [AlgorithmDescription { id: 0, keysize: 16 }].as_slice()
         );
-        assert_eq!(response.supported_protocols, [0]);
+        assert_eq!(response.supported_protocols, [0].as_slice());
 
         let Ok(response) = pwrap(
             ServerInformationResponse::parse,
@@ -1272,9 +1273,9 @@ mod tests {
         };
         assert_eq!(
             response.supported_algorithms,
-            [AlgorithmDescription { id: 0, keysize: 16 }]
+            [AlgorithmDescription { id: 0, keysize: 16 }].as_slice()
         );
-        assert_eq!(response.supported_protocols, [0]);
+        assert_eq!(response.supported_protocols, [0].as_slice());
 
         let Ok(response) = pwrap(
             ServerInformationResponse::parse,
@@ -1286,9 +1287,9 @@ mod tests {
         };
         assert_eq!(
             response.supported_algorithms,
-            [AlgorithmDescription { id: 0, keysize: 16 }]
+            [AlgorithmDescription { id: 0, keysize: 16 }].as_slice()
         );
-        assert_eq!(response.supported_protocols, [0]);
+        assert_eq!(response.supported_protocols, [0].as_slice());
 
         let Ok(response) = pwrap(
             ServerInformationResponse::parse,
@@ -1300,9 +1301,9 @@ mod tests {
         };
         assert_eq!(
             response.supported_algorithms,
-            [AlgorithmDescription { id: 0, keysize: 16 }]
+            [AlgorithmDescription { id: 0, keysize: 16 }].as_slice()
         );
-        assert_eq!(response.supported_protocols, [0]);
+        assert_eq!(response.supported_protocols, [0].as_slice());
     }
 
     #[test]
@@ -1312,8 +1313,8 @@ mod tests {
             swrap(
                 FixedKeyRequest::serialize,
                 FixedKeyRequest {
-                    c2s: vec![1, 2],
-                    s2c: vec![3, 4],
+                    c2s: [1, 2].as_slice().into(),
+                    s2c: [3, 4].as_slice().into(),
                     protocol: 1,
                     algorithm: 2
                 },
@@ -1354,7 +1355,10 @@ mod tests {
         };
         assert_eq!(response.protocol, 0);
         assert_eq!(response.algorithm, 4);
-        assert_eq!(response.cookies, [[1, 2], [3, 4]]);
+        assert_eq!(
+            response.cookies.as_slice(),
+            [Cow::Borrowed([1, 2].as_slice()), [3, 4].as_slice().into()]
+        );
         assert_eq!(response.port, None);
         assert_eq!(response.server, None);
 
@@ -1370,7 +1374,7 @@ mod tests {
         assert_eq!(response.algorithm, 4);
         assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
         assert_eq!(response.port, None);
-        assert_eq!(response.server, Some("hi".to_string()));
+        assert_eq!(response.server, Some("hi".into()));
 
         let Ok(response) = pwrap(
             KeyExchangeResponse::parse,
@@ -1397,9 +1401,12 @@ mod tests {
         };
         assert_eq!(response.protocol, 0);
         assert_eq!(response.algorithm, 4);
-        assert_eq!(response.cookies, [[1, 2], [3, 4]]);
+        assert_eq!(
+            response.cookies,
+            [Cow::Borrowed([1, 2].as_slice()), [3, 4].as_slice().into()]
+        );
         assert_eq!(response.port, Some(5));
-        assert_eq!(response.server, Some("hi".to_string()));
+        assert_eq!(response.server, Some("hi".into()));
     }
 
     #[test]
@@ -1630,7 +1637,7 @@ mod tests {
                 KeyExchangeResponse {
                     protocol: 0,
                     algorithm: 4,
-                    cookies: vec![vec![1, 2, 3], vec![4, 5]],
+                    cookies: vec![[1, 2, 3].as_slice().into(), [4, 5].as_slice().into()],
                     server: None,
                     port: None
                 },
@@ -1654,7 +1661,7 @@ mod tests {
                     protocol: 0,
                     algorithm: 4,
                     cookies: vec![],
-                    server: Some("hi".to_string()),
+                    server: Some("hi".into()),
                     port: None
                 },
                 &mut buf
@@ -1697,8 +1704,8 @@ mod tests {
                 KeyExchangeResponse {
                     protocol: 0,
                     algorithm: 4,
-                    cookies: vec![vec![1, 2, 3], vec![4, 5]],
-                    server: Some("hi".to_string()),
+                    cookies: vec![[1, 2, 3].as_slice().into(), [4, 5].as_slice().into()],
+                    server: Some("hi".into()),
                     port: Some(15)
                 },
                 &mut buf

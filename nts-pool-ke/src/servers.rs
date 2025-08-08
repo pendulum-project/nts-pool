@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
     time::Duration,
@@ -32,7 +33,11 @@ pub trait ServerManager: Sync + Send {
     /// any denied servers.
     ///
     /// Denied servers need not be respected if no other options are available
-    fn assign_server(&self, address: SocketAddr, denied_servers: &[String]) -> Self::Server<'_>;
+    fn assign_server(
+        &self,
+        address: SocketAddr,
+        denied_servers: &[Cow<'_, str>],
+    ) -> Self::Server<'_>;
 
     /// Select a server with given UUID. This is used for making KE connections
     /// in the monitoring.
@@ -97,12 +102,14 @@ async fn fetch_support_data(
         connection.shutdown().await?;
         let supported_protocols: HashSet<ProtocolId> = support_info
             .supported_protocols
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|v| allowed_protocols.contains(v))
             .collect();
         let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
             .supported_algorithms
-            .into_iter()
+            .iter()
+            .copied()
             .map(|v| (v.id, v))
             .collect();
         Ok((supported_protocols, supported_algorithms))
