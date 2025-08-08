@@ -10,6 +10,7 @@ mod nts;
 mod pool_ke;
 mod servers;
 mod tracing;
+mod util;
 
 use std::path::PathBuf;
 
