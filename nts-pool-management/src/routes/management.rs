@@ -1,8 +1,11 @@
 use askama::Template;
-use axum::response::IntoResponse;
+use axum::{Form, extract::State, response::IntoResponse};
 
 use crate::{
+    AppState,
     auth::UserSession,
+    error::AppError,
+    models::time_source::{self, NewTimeSourceForm, TimeSource},
     templates::{AppVars, HtmlTemplate, filters},
 };
 
@@ -22,19 +25,35 @@ pub async fn dashboard(_session: UserSession) -> impl IntoResponse {
 #[template(path = "management/time_sources_page.html.j2")]
 struct TimeSourcesPageTemplate {
     app: AppVars,
-    time_sources: Vec<String>,
+    time_sources: Vec<TimeSource>,
 }
 
-pub async fn time_sources(_session: UserSession) -> impl IntoResponse {
-    let time_sources = vec![
-        "time.cikzh.nl".to_string(),
-        "sth2.ntp.netnod.se".to_string(),
-        "time.tweedegolf.nl".to_string(),
-    ];
-    HtmlTemplate(TimeSourcesPageTemplate {
+pub async fn time_sources(
+    session: UserSession,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let time_sources = time_source::by_user(&state.db, session.user_id).await?;
+    Ok(HtmlTemplate(TimeSourcesPageTemplate {
         app: AppVars::from_current_task(),
         time_sources,
-    })
+    }))
+}
+
+pub async fn create_time_source(
+    session: UserSession,
+    State(state): State<AppState>,
+    Form(new_time_source): Form<NewTimeSourceForm>,
+) -> Result<impl IntoResponse, AppError> {
+    time_source::create(&state.db, session.user_id, new_time_source.try_into()?)
+        .await
+        .unwrap();
+
+    let time_sources = time_source::by_user(&state.db, session.user_id).await?;
+
+    Ok(HtmlTemplate(TimeSourcesPageTemplate {
+        app: AppVars::from_current_task(),
+        time_sources,
+    }))
 }
 
 #[derive(Template)]

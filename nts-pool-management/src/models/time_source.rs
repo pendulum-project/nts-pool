@@ -1,5 +1,8 @@
+use serde::Deserialize;
+
 use crate::{
     DbConnLike,
+    error::AppError,
     models::{
         user::UserId,
         util::{port::Port, uuid},
@@ -17,11 +20,33 @@ pub struct TimeSource {
     pub countries: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct NewTimeSource {
     pub hostname: String,
     pub port: Option<Port>,
-    pub countries: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct NewTimeSourceForm {
+    pub hostname: String,
+    pub port: String,
+}
+
+impl TryFrom<NewTimeSourceForm> for NewTimeSource {
+    type Error = AppError;
+
+    fn try_from(form: NewTimeSourceForm) -> Result<Self, Self::Error> {
+        let port = if form.port.is_empty() {
+            None
+        } else {
+            Some(form.port.parse::<u16>()?.into())
+        };
+
+        Ok(Self {
+            hostname: form.hostname,
+            port,
+        })
+    }
 }
 
 pub async fn create(
@@ -32,15 +57,31 @@ pub async fn create(
     sqlx::query_as!(
         TimeSource,
         r#"
-            INSERT INTO time_sources (owner, hostname, port, countries)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO time_sources (owner, hostname, port)
+            VALUES ($1, $2, $3)
             RETURNING id, owner, hostname, port AS "port: _", countries
         "#,
         owner as _,
         new_time_source.hostname,
         new_time_source.port as _,
-        new_time_source.countries as _,
     )
     .fetch_one(conn)
+    .await
+}
+
+pub async fn by_user(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+) -> Result<Vec<TimeSource>, sqlx::Error> {
+    sqlx::query_as!(
+        TimeSource,
+        r#"
+            SELECT id, owner, hostname, port AS "port: _", countries
+            FROM time_sources
+            WHERE owner = $1;
+        "#,
+        owner as _,
+    )
+    .fetch_all(conn)
     .await
 }
