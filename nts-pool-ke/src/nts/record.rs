@@ -1,13 +1,16 @@
-use std::io::{Error, ErrorKind};
+use std::{
+    borrow::Cow,
+    io::{Error, ErrorKind},
+};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Take};
 
 use super::{AlgorithmDescription, AlgorithmId, ErrorCode, ProtocolId, WarningCode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum NtsRecord {
+pub enum NtsRecord<'a> {
     EndOfMessage,
     NextProtocol {
-        protocol_ids: Vec<ProtocolId>,
+        protocol_ids: Cow<'a, [ProtocolId]>,
     },
     Error {
         errorcode: ErrorCode,
@@ -16,13 +19,13 @@ pub enum NtsRecord {
         warningcode: WarningCode,
     },
     AeadAlgorithm {
-        algorithm_ids: Vec<AlgorithmId>,
+        algorithm_ids: Cow<'a, [AlgorithmId]>,
     },
     NewCookie {
-        cookie_data: Vec<u8>,
+        cookie_data: Cow<'a, [u8]>,
     },
     Server {
-        name: String,
+        name: Cow<'a, str>,
     },
     Port {
         port: u16,
@@ -30,25 +33,25 @@ pub enum NtsRecord {
     Unknown {
         record_type: u16,
         critical: bool,
-        data: Vec<u8>,
+        data: Cow<'a, [u8]>,
     },
     KeepAlive,
     SupportedNextProtocolList {
-        supported_protocols: Vec<ProtocolId>,
+        supported_protocols: Cow<'a, [ProtocolId]>,
     },
     SupportedAlgorithmList {
-        supported_algorithms: Vec<AlgorithmDescription>,
+        supported_algorithms: Cow<'a, [AlgorithmDescription]>,
     },
     FixedKeyRequest {
-        c2s: Vec<u8>,
-        s2c: Vec<u8>,
+        c2s: Cow<'a, [u8]>,
+        s2c: Cow<'a, [u8]>,
     },
     NtpServerDeny {
-        denied: String,
+        denied: Cow<'a, str>,
     },
 }
 
-impl NtsRecord {
+impl NtsRecord<'_> {
     pub async fn parse(mut reader: impl AsyncRead + Unpin) -> Result<Self, Error> {
         let record_type = reader.read_u16().await?;
         let size = reader.read_u16().await?;
@@ -77,7 +80,7 @@ impl NtsRecord {
                 Ok(Self::Unknown {
                     record_type,
                     critical,
-                    data,
+                    data: data.into(),
                 })
             }
         }
@@ -100,7 +103,9 @@ impl NtsRecord {
             protocol_ids.push(reader.read_u16().await?);
         }
 
-        Ok(Self::NextProtocol { protocol_ids })
+        Ok(Self::NextProtocol {
+            protocol_ids: protocol_ids.into(),
+        })
     }
 
     async fn parse_error(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
@@ -128,13 +133,17 @@ impl NtsRecord {
             algorithm_ids.push(reader.read_u16().await?);
         }
 
-        Ok(Self::AeadAlgorithm { algorithm_ids })
+        Ok(Self::AeadAlgorithm {
+            algorithm_ids: algorithm_ids.into(),
+        })
     }
 
     async fn parse_new_cookie(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
         let mut cookie_data = vec![0; reader.limit().try_into().unwrap_or(usize::MAX)];
         reader.read_exact(&mut cookie_data).await?;
-        Ok(Self::NewCookie { cookie_data })
+        Ok(Self::NewCookie {
+            cookie_data: cookie_data.into(),
+        })
     }
 
     async fn parse_server(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
@@ -144,7 +153,7 @@ impl NtsRecord {
             return Err(ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(Self::Server { name })
+        Ok(Self::Server { name: name.into() })
     }
 
     async fn parse_port(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
@@ -175,7 +184,7 @@ impl NtsRecord {
             supported_protocols.push(reader.read_u16().await?);
         }
         Ok(Self::SupportedNextProtocolList {
-            supported_protocols,
+            supported_protocols: supported_protocols.into(),
         })
     }
 
@@ -192,7 +201,7 @@ impl NtsRecord {
             });
         }
         Ok(Self::SupportedAlgorithmList {
-            supported_algorithms,
+            supported_algorithms: supported_algorithms.into(),
         })
     }
 
@@ -207,7 +216,10 @@ impl NtsRecord {
         if reader.limit() != 0 {
             Err(ErrorKind::InvalidData.into())
         } else {
-            Ok(Self::FixedKeyRequest { c2s, s2c })
+            Ok(Self::FixedKeyRequest {
+                c2s: c2s.into(),
+                s2c: s2c.into(),
+            })
         }
     }
 
@@ -219,7 +231,9 @@ impl NtsRecord {
         if reader.limit() != 0 {
             return Err(ErrorKind::UnexpectedEof.into());
         }
-        Ok(Self::NtpServerDeny { denied })
+        Ok(Self::NtpServerDeny {
+            denied: denied.into(),
+        })
     }
 
     pub async fn serialize(&self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
@@ -232,14 +246,14 @@ impl NtsRecord {
         match self {
             NtsRecord::EndOfMessage => {}
             NtsRecord::NextProtocol { protocol_ids } => {
-                for &id in protocol_ids {
+                for &id in protocol_ids.iter() {
                     writer.write_u16(id).await?;
                 }
             }
             NtsRecord::Error { errorcode } => errorcode.serialize(writer).await?,
             NtsRecord::Warning { warningcode } => warningcode.serialize(writer).await?,
             NtsRecord::AeadAlgorithm { algorithm_ids } => {
-                for &id in algorithm_ids {
+                for &id in algorithm_ids.iter() {
                     writer.write_u16(id).await?;
                 }
             }
@@ -251,14 +265,14 @@ impl NtsRecord {
             NtsRecord::SupportedNextProtocolList {
                 supported_protocols,
             } => {
-                for &id in supported_protocols {
+                for &id in supported_protocols.iter() {
                     writer.write_u16(id).await?;
                 }
             }
             NtsRecord::SupportedAlgorithmList {
                 supported_algorithms,
             } => {
-                for desc in supported_algorithms {
+                for desc in supported_algorithms.iter() {
                     writer.write_u16(desc.id).await?;
                     writer.write_u16(desc.keysize).await?;
                 }
@@ -382,28 +396,28 @@ mod tests {
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0, 1, 0, 2, 0, 0]) else {
             panic!("Expected successfull parse");
         };
-        assert_eq!(protocol_ids, [0]);
+        assert_eq!(protocol_ids, [0].as_slice());
 
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0, 1, 0, 2, 0, 0, 0, 0]) else {
             panic!("Expected successfull parse");
         };
-        assert_eq!(protocol_ids, [0]);
+        assert_eq!(protocol_ids, [0].as_slice());
 
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0x80, 1, 0, 2, 0, 0]) else {
             panic!("Expected successfull parse");
         };
-        assert_eq!(protocol_ids, [0]);
+        assert_eq!(protocol_ids, [0].as_slice());
 
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0x80, 1, 0, 0]) else {
             panic!("Expected successfull parse");
         };
-        assert_eq!(protocol_ids, [] as [u16; 0]);
+        assert_eq!(protocol_ids, [].as_slice() as &[u16]);
 
         let Ok(NtsRecord::NextProtocol { protocol_ids }) = parse(&[0x80, 1, 0, 4, 0, 0, 0, 4])
         else {
             panic!("Expected successfull parse");
         };
-        assert_eq!(protocol_ids, [0, 4]);
+        assert_eq!(protocol_ids, [0, 4].as_slice());
 
         assert!(parse([0x80, 1, 0, 1, 0].as_ref()).is_err());
         assert!(parse([0x80, 1, 0, 2, 0].as_ref()).is_err());
@@ -411,7 +425,7 @@ mod tests {
         let mut buf = vec![];
         serialize(
             NtsRecord::NextProtocol {
-                protocol_ids: vec![0, 1],
+                protocol_ids: [0, 1].as_slice().into(),
             },
             &mut buf,
         );
@@ -530,19 +544,19 @@ mod tests {
         let Ok(NtsRecord::AeadAlgorithm { algorithm_ids }) = parse(&[0x80, 4, 0, 2, 0, 0]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(algorithm_ids, [0]);
+        assert_eq!(algorithm_ids, [0].as_slice());
 
         let Ok(NtsRecord::AeadAlgorithm { algorithm_ids }) = parse(&[0, 4, 0, 4, 0, 2, 0, 3])
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(algorithm_ids, [2, 3]);
+        assert_eq!(algorithm_ids, [2, 3].as_slice());
 
         let Ok(NtsRecord::AeadAlgorithm { algorithm_ids }) = parse(&[0, 4, 0, 2, 0, 0, 1, 2])
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(algorithm_ids, [0]);
+        assert_eq!(algorithm_ids, [0].as_slice());
 
         assert!(parse(&[0, 4, 0, 2, 0]).is_err());
         assert!(parse(&[0, 4, 0, 3, 0, 2, 0]).is_err());
@@ -550,7 +564,7 @@ mod tests {
         let mut buf = vec![];
         serialize(
             NtsRecord::AeadAlgorithm {
-                algorithm_ids: vec![2, 3],
+                algorithm_ids: [2, 3].as_slice().into(),
             },
             &mut buf,
         );
@@ -562,24 +576,24 @@ mod tests {
         let Ok(NtsRecord::NewCookie { cookie_data }) = parse(&[0x80, 5, 0, 2, 16, 17]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(cookie_data, [16, 17]);
+        assert_eq!(cookie_data, [16, 17].as_slice());
 
         let Ok(NtsRecord::NewCookie { cookie_data }) = parse(&[0, 5, 0, 0]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(cookie_data, [] as [u8; 0]);
+        assert_eq!(cookie_data, [].as_slice() as &[u8]);
 
         let Ok(NtsRecord::NewCookie { cookie_data }) = parse(&[0, 5, 0, 0, 16, 17]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(cookie_data, [] as [u8; 0]);
+        assert_eq!(cookie_data, [].as_slice() as &[u8]);
 
         assert!(parse(&[0x80, 5, 0, 3, 1, 2]).is_err());
 
         let mut buf = vec![];
         serialize(
             NtsRecord::NewCookie {
-                cookie_data: vec![1, 2, 3],
+                cookie_data: [1, 2, 3].as_slice().into(),
             },
             &mut buf,
         );
@@ -652,7 +666,7 @@ mod tests {
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(supported_protocols, [] as [u16; 0]);
+        assert_eq!(supported_protocols, [].as_slice() as &[u16]);
 
         let Ok(NtsRecord::SupportedNextProtocolList {
             supported_protocols,
@@ -660,7 +674,7 @@ mod tests {
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(supported_protocols, [0, 1]);
+        assert_eq!(supported_protocols, [0, 1].as_slice());
 
         let Ok(NtsRecord::SupportedNextProtocolList {
             supported_protocols,
@@ -668,7 +682,7 @@ mod tests {
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(supported_protocols, [0, 1]);
+        assert_eq!(supported_protocols, [0, 1].as_slice());
 
         assert!(parse(&[0xC0, 4, 0, 4, 0, 0]).is_err());
         assert!(parse(&[0xC0, 4, 0, 3, 0, 0, 1]).is_err());
@@ -676,7 +690,7 @@ mod tests {
         let mut buf = vec![];
         serialize(
             NtsRecord::SupportedNextProtocolList {
-                supported_protocols: vec![1, 2],
+                supported_protocols: [1, 2].as_slice().into(),
             },
             &mut buf,
         );
@@ -685,7 +699,7 @@ mod tests {
         let mut buf = vec![];
         serialize(
             NtsRecord::SupportedNextProtocolList {
-                supported_protocols: vec![],
+                supported_protocols: [].as_slice().into(),
             },
             &mut buf,
         );
@@ -700,7 +714,7 @@ mod tests {
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(supported_algorithms, []);
+        assert_eq!(supported_algorithms, [].as_slice());
 
         let Ok(NtsRecord::SupportedAlgorithmList {
             supported_algorithms,
@@ -714,6 +728,7 @@ mod tests {
                 AlgorithmDescription { id: 0, keysize: 16 },
                 AlgorithmDescription { id: 1, keysize: 32 }
             ]
+            .as_slice()
         );
 
         let Ok(NtsRecord::SupportedAlgorithmList {
@@ -728,12 +743,13 @@ mod tests {
                 AlgorithmDescription { id: 0, keysize: 16 },
                 AlgorithmDescription { id: 1, keysize: 32 }
             ]
+            .as_slice()
         );
 
         let mut buf = vec![];
         serialize(
             NtsRecord::SupportedAlgorithmList {
-                supported_algorithms: vec![],
+                supported_algorithms: [].as_slice().into(),
             },
             &mut buf,
         );
@@ -742,7 +758,9 @@ mod tests {
         let mut buf = vec![];
         serialize(
             NtsRecord::SupportedAlgorithmList {
-                supported_algorithms: vec![AlgorithmDescription { id: 0, keysize: 32 }],
+                supported_algorithms: [AlgorithmDescription { id: 0, keysize: 32 }]
+                    .as_slice()
+                    .into(),
             },
             &mut buf,
         );
@@ -754,15 +772,15 @@ mod tests {
         let Ok(NtsRecord::FixedKeyRequest { c2s, s2c }) = parse(&[0xC0, 2, 0, 0]) else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(c2s, [] as [u8; 0]);
-        assert_eq!(s2c, [] as [u8; 0]);
+        assert_eq!(c2s, [].as_slice() as &[u8]);
+        assert_eq!(s2c, [].as_slice() as &[u8]);
 
         let Ok(NtsRecord::FixedKeyRequest { c2s, s2c }) = parse(&[0x40, 2, 0, 4, 1, 2, 3, 4])
         else {
             panic!("Expected succesful parse");
         };
-        assert_eq!(c2s, [1, 2]);
-        assert_eq!(s2c, [3, 4]);
+        assert_eq!(c2s, [1, 2].as_slice());
+        assert_eq!(s2c, [3, 4].as_slice());
 
         assert!(parse(&[0xC0, 2, 0, 3, 1, 2, 3]).is_err());
         assert!(parse(&[0xC0, 2, 0, 4, 1, 2, 3]).is_err());
@@ -770,8 +788,8 @@ mod tests {
         let mut buf = vec![];
         serialize(
             NtsRecord::FixedKeyRequest {
-                c2s: vec![5, 6],
-                s2c: vec![7, 8],
+                c2s: [5, 6].as_slice().into(),
+                s2c: [7, 8].as_slice().into(),
             },
             &mut buf,
         );
@@ -817,7 +835,7 @@ mod tests {
         };
         assert_eq!(record_type, 20);
         assert!(!critical);
-        assert_eq!(data, [1, 2, 3]);
+        assert_eq!(data, [1, 2, 3].as_slice());
 
         let Ok(NtsRecord::Unknown {
             record_type,
@@ -829,7 +847,7 @@ mod tests {
         };
         assert_eq!(record_type, 21);
         assert!(critical);
-        assert_eq!(data, [5, 6]);
+        assert_eq!(data, [5, 6].as_slice());
 
         assert!(parse(&[0x80, 23, 0, 5, 1, 2]).is_err());
 
@@ -838,7 +856,7 @@ mod tests {
             NtsRecord::Unknown {
                 record_type: 50,
                 critical: false,
-                data: vec![9, 10],
+                data: [9, 10].as_slice().into(),
             },
             &mut buf,
         );
@@ -849,7 +867,7 @@ mod tests {
             NtsRecord::Unknown {
                 record_type: 51,
                 critical: true,
-                data: vec![],
+                data: [].as_slice().into(),
             },
             &mut buf,
         );

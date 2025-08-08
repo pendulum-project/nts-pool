@@ -135,8 +135,8 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         let result = match self
             .perform_upstream_key_exchange(
                 FixedKeyRequest {
-                    c2s,
-                    s2c,
+                    c2s: c2s.into(),
+                    s2c: s2c.into(),
                     protocol,
                     algorithm: algorithm.id,
                 },
@@ -174,7 +174,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             }
             Ok(mut response) => {
                 if response.server.is_none() {
-                    response.server = Some(pick.name().to_owned());
+                    response.server = Some(pick.name().into());
                 }
                 response.serialize(&mut client_stream).await?;
                 Ok(())
@@ -220,7 +220,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn select_protocol_algorithm(
         &self,
-        client_request: &ClientRequest,
+        client_request: &ClientRequest<'_>,
         server: &S::Server<'_>,
     ) -> Result<Option<(ProtocolId, AlgorithmDescription)>, PoolError> {
         let (supported_protocols, supported_algorithms) = server.support().await?;
@@ -246,15 +246,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn perform_upstream_key_exchange(
         &self,
-        request: FixedKeyRequest,
+        request: FixedKeyRequest<'_>,
         server: &S::Server<'_>,
     ) -> Result<KeyExchangeResponse, PoolError> {
         // This function is needed to teach rust that the lifetimes actually do work.
         #[allow(clippy::manual_async_fn)]
         fn workaround_lifetime_bug<'b, C: ServerConnection + 'b>(
-            request: FixedKeyRequest,
+            request: FixedKeyRequest<'b>,
             mut server_stream: C,
-        ) -> impl Future<Output = Result<KeyExchangeResponse, PoolError>> + Send + 'b {
+        ) -> impl Future<Output = Result<KeyExchangeResponse<'static>, PoolError>> + Send + 'b
+        {
             async move {
                 request.serialize(&mut server_stream).await?;
                 Ok(KeyExchangeResponse::parse(&mut server_stream).await?)
@@ -277,6 +278,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 #[cfg(test)]
 mod tests {
     use std::{
+        borrow::Cow,
         net::SocketAddr,
         sync::{Arc, Mutex},
         time::Duration,
@@ -393,9 +395,12 @@ mod tests {
         fn assign_server(
             &self,
             address: std::net::SocketAddr,
-            denied_servers: &[String],
+            denied_servers: &[Cow<'_, str>],
         ) -> Self::Server<'_> {
-            *self.inner.received_denied_servers.lock().unwrap() = denied_servers.to_vec();
+            *self.inner.received_denied_servers.lock().unwrap() = denied_servers
+                .iter()
+                .map(|v| v.clone().into_owned())
+                .collect();
             *self.inner.received_addr.lock().unwrap() = Some(address);
             TestServer {
                 name: &self.inner.name,
