@@ -14,9 +14,10 @@ use crate::{
     haproxy::parse_haproxy_header,
     nts::{
         AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
-        KeyExchangeResponse, NoAgreementResponse, NtsError, ProtocolId,
+        KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError, ProtocolId,
     },
     servers::{Server, ServerConnection, ServerManager},
+    util::BufferBorrowingReader,
 };
 
 pub async fn run_nts_pool_ke(
@@ -101,7 +102,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         // handle the initial client to pool
         let mut client_stream = self.config.server_tls.accept(client_stream).await?;
 
-        let client_request = match ClientRequest::parse(&mut client_stream).await {
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let client_request = match ClientRequest::parse(&mut BufferBorrowingReader::new(
+            &mut client_stream,
+            &mut buf,
+        ))
+        .await
+        {
             Ok(client_request) => client_request,
             Err(e @ NtsError::Invalid) => {
                 ErrorResponse {
@@ -181,8 +188,10 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         debug!("fetching cookies from the NTS KE server");
 
+        let mut upstream_buffer = [0u8; MAX_MESSAGE_SIZE as _];
         let result = match self
             .perform_upstream_key_exchange(
+                &mut upstream_buffer,
                 FixedKeyRequest {
                     c2s: c2s.into(),
                     s2c: s2c.into(),
@@ -275,14 +284,14 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         let (supported_protocols, supported_algorithms) = server.support().await?;
         let mut protocol = None;
         for candidate_protocol in client_request.protocols().iter() {
-            if supported_protocols.contains(candidate_protocol) {
-                protocol = Some(*candidate_protocol);
+            if supported_protocols.contains(&candidate_protocol) {
+                protocol = Some(candidate_protocol);
                 break;
             }
         }
         let mut algorithm = None;
         for candidate_algorithm in client_request.algorithms().iter() {
-            if let Some(algdesc) = supported_algorithms.get(candidate_algorithm) {
+            if let Some(algdesc) = supported_algorithms.get(&candidate_algorithm) {
                 algorithm = Some(*algdesc);
                 break;
             }
@@ -293,28 +302,33 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         })
     }
 
-    async fn perform_upstream_key_exchange(
+    async fn perform_upstream_key_exchange<'c>(
         &self,
+        buffer: &'c mut [u8],
         request: FixedKeyRequest<'_>,
         server: &S::Server<'_>,
-    ) -> Result<KeyExchangeResponse<'_>, PoolError> {
+    ) -> Result<KeyExchangeResponse<'c>, PoolError> {
         // This function is needed to teach rust that the lifetimes actually do work.
         #[allow(clippy::manual_async_fn)]
-        fn workaround_lifetime_bug<'b, C: ServerConnection + 'b>(
+        fn workaround_lifetime_bug<'d: 'b, 'b, C: ServerConnection + 'b>(
+            buffer: &'d mut [u8],
             request: FixedKeyRequest<'b>,
             mut server_stream: C,
-        ) -> impl Future<Output = Result<KeyExchangeResponse<'static>, PoolError>> + Send + 'b
-        {
+        ) -> impl Future<Output = Result<KeyExchangeResponse<'d>, PoolError>> + Send + 'b {
             async move {
                 request.serialize(&mut server_stream).await?;
-                Ok(KeyExchangeResponse::parse(&mut server_stream).await?)
+                Ok(KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(
+                    server_stream,
+                    buffer,
+                ))
+                .await?)
             }
         }
 
         // TODO: Implement connection reuse
         match tokio::time::timeout(self.config.timesource_timeout, async {
             let server_stream = server.connect().await?;
-            workaround_lifetime_bug(request, server_stream).await
+            workaround_lifetime_bug(buffer, request, server_stream).await
         })
         .await
         {
@@ -347,11 +361,12 @@ mod tests {
     use crate::{
         config::NtsPoolKeConfig,
         nts::{
-            AlgorithmDescription, ErrorCode, FixedKeyRequest, KeyExchangeResponse, NtsError,
-            ProtocolId,
+            AlgorithmDescription, ErrorCode, FixedKeyRequest, KeyExchangeResponse,
+            MAX_MESSAGE_SIZE, NtsError, ProtocolId,
         },
         pool_ke::NtsPoolKe,
         servers::{Server, ServerConnection, ServerManager},
+        util::BufferBorrowingReader,
     };
 
     fn listen_tls_config(name: &str) -> TlsAcceptor {
@@ -622,14 +637,21 @@ mod tests {
         conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
             .await
             .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
-
-        #[allow(clippy::await_holding_lock)]
-        let timesource_request =
-            FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
                 .await
                 .unwrap();
+        conn.shutdown().await.unwrap();
+
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        #[allow(clippy::await_holding_lock)]
+        let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
+            manager.inner.written.lock().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
 
         assert_eq!(timesource_request.algorithm, 0);
         assert_eq!(timesource_request.protocol, 0);
@@ -690,7 +712,11 @@ mod tests {
         ])
         .await
         .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
+                .await
+                .unwrap();
         conn.shutdown().await.unwrap();
         assert_eq!(response.algorithm, 0);
         assert_eq!(response.protocol, 0);
@@ -698,10 +724,14 @@ mod tests {
 
         pool_handle.abort();
 
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         #[allow(clippy::await_holding_lock)]
-        let request = FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
-            .await
-            .unwrap();
+        let request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
+            manager.inner.written.lock().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
 
         assert_eq!(request.algorithm, 0);
         assert_eq!(request.protocol, 0);
@@ -757,7 +787,11 @@ mod tests {
         ])
         .await
         .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
+                .await
+                .unwrap();
         conn.shutdown().await.unwrap();
         assert_eq!(response.algorithm, 1);
         assert_eq!(response.protocol, 1);
@@ -765,10 +799,14 @@ mod tests {
 
         pool_handle.abort();
 
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         #[allow(clippy::await_holding_lock)]
-        let request = FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
-            .await
-            .unwrap();
+        let request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
+            manager.inner.written.lock().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
 
         assert_eq!(request.algorithm, 1);
         assert_eq!(request.protocol, 1);
@@ -820,14 +858,21 @@ mod tests {
         conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
             .await
             .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
+                .await
+                .unwrap();
         conn.shutdown().await.unwrap();
 
         #[allow(clippy::await_holding_lock)]
-        let timesource_request =
-            FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
-                .await
-                .unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
+            manager.inner.written.lock().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
 
         assert_eq!(timesource_request.algorithm, 0);
         assert_eq!(timesource_request.protocol, 0);
@@ -890,14 +935,21 @@ mod tests {
         ])
         .await
         .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
-        conn.shutdown().await.unwrap();
-
-        #[allow(clippy::await_holding_lock)]
-        let timesource_request =
-            FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
                 .await
                 .unwrap();
+        conn.shutdown().await.unwrap();
+
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        #[allow(clippy::await_holding_lock)]
+        let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
+            manager.inner.written.lock().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
 
         assert_eq!(timesource_request.algorithm, 0);
         assert_eq!(timesource_request.protocol, 0);
@@ -960,7 +1012,9 @@ mod tests {
         ])
         .await
         .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await;
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf)).await;
         conn.shutdown().await.unwrap();
 
         assert!(manager.inner.written.lock().unwrap().is_empty());
@@ -1023,7 +1077,9 @@ mod tests {
         ])
         .await
         .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await;
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf)).await;
         conn.shutdown().await.unwrap();
 
         assert!(manager.inner.written.lock().unwrap().is_empty());
@@ -1082,7 +1138,9 @@ mod tests {
         ])
         .await
         .unwrap();
-        let response = KeyExchangeResponse::parse(&mut conn).await;
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf)).await;
         conn.shutdown().await.unwrap();
 
         assert!(manager.inner.written.lock().unwrap().is_empty());
