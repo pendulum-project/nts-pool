@@ -1,0 +1,4 @@
+[
+    { "domain": "time-a", "port": 4460 },
+    { "domain": "time-b", "port": 4460 }
+]

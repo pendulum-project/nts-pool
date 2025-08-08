@@ -11,7 +11,4 @@ upstream-cas = "./testdata/testca.pem"
 allowed-protocols = [0]
 certificate-chain = "./testdata/end.fullchain.pem"
 private-key = "./testdata/end.key"
-key-exchange-servers = [
-    { domain = "time-a", port = 4460 },
-    { domain = "time-b", port = 4460 },
-]
+key-exchange-servers = "./servers.json"

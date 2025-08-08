@@ -1,30 +1,30 @@
 services:
   time-a:
     image: ghcr.io/pendulum-project/ntpd-rs:sha-0539aab
-    expose: [4460, 1231]
-    ports: ["127.0.0.1:1231:1231"]
+    expose: [4460, "1231/udp"]
+    ports: ["127.0.0.1:1231:1231/udp", "[::1]:1231:1231/udp"]
     stop_grace_period: 500ms
     environment:
       TZ: "Europe/Amsterdam"
       RUST_LOG: DEBUG
     volumes:
       - "./nts-pool-ke/testdata/a.ntpd-rs.toml:/etc/ntpd-rs/ntp.toml:ro"
-      - "./nts-pool-ke/testdata/a.test.key:/var/lib/ntpd-rs/tls/a.test.key:ro"
-      - "./nts-pool-ke/testdata/a.test.fullchain.pem:/var/lib/ntpd-rs/tls/a.test.fullchain.pem:ro"
+      - "./nts-pool-ke/testdata/time-a.key:/var/lib/ntpd-rs/tls/time-a.key:ro"
+      - "./nts-pool-ke/testdata/time-a.fullchain.pem:/var/lib/ntpd-rs/tls/time-a.fullchain.pem:ro"
       - "./nts-pool-ke/testdata/testca.pem:/var/lib/ntpd-rs/tls/testca.pem:ro"
 
   time-b:
     image: ghcr.io/pendulum-project/ntpd-rs:sha-0539aab
-    expose: [4460, 1232]
-    ports: ["127.0.0.1:1232:1232"]
+    expose: [4460, "1232/udp"]
+    ports: ["127.0.0.1:1232:1232/udp", "[::1]:1232:1232/udp"]
     stop_grace_period: 500ms
     environment:
       TZ: "Europe/Amsterdam"
       RUST_LOG: DEBUG
     volumes:
-      - "./nts-pool-ke/testdata/a.ntpd-rs.toml:/etc/ntpd-rs/ntp.toml:ro"
-      - "./nts-pool-ke/testdata/a.test.key:/var/lib/ntpd-rs/tls/a.test.key:ro"
-      - "./nts-pool-ke/testdata/a.test.fullchain.pem:/var/lib/ntpd-rs/tls/a.test.fullchain.pem:ro"
+      - "./nts-pool-ke/testdata/b.ntpd-rs.toml:/etc/ntpd-rs/ntp.toml:ro"
+      - "./nts-pool-ke/testdata/time-b.key:/var/lib/ntpd-rs/tls/time-b.key:ro"
+      - "./nts-pool-ke/testdata/time-b.fullchain.pem:/var/lib/ntpd-rs/tls/time-b.fullchain.pem:ro"
       - "./nts-pool-ke/testdata/testca.pem:/var/lib/ntpd-rs/tls/testca.pem:ro"
 
   ke:
@@ -33,6 +33,7 @@ services:
     stop_grace_period: 500ms
     ports:
       - "127.0.0.1:4460:4460"
+      - "[::1]:4460:4460"
     user: "${USER_ID:?USER_ID not set}:${GROUP_ID:?GROUP_ID not set}"
     environment:
       RUST_LOG: debug
