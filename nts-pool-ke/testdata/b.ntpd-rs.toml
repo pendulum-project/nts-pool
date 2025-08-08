@@ -7,10 +7,10 @@ reference-id = "REFB"
 
 [[nts-ke-server]]
 listen = "0.0.0.0:4460"
-certificate-chain-path = "/var/lib/ntpd-rs/tls/b.test.fullchain.pem"
-private-key-path = "/var/lib/ntpd-rs/tls/b.test.key"
+certificate-chain-path = "/var/lib/ntpd-rs/tls/time-b.fullchain.pem"
+private-key-path = "/var/lib/ntpd-rs/tls/time-b.key"
 key-exchange-timeout-ms = 1000
-accepted-pool-domains = ["pool.test"]
+accepted-pool-domains = ["localhost"]
 additional-pool-ca-certificates = ["/var/lib/ntpd-rs/tls/testca.pem"]
 ntp-server = "localhost"
 ntp-port = 1232
