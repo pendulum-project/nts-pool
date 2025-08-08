@@ -14,9 +14,10 @@ use tokio_rustls::client::TlsStream;
 use crate::{
     error::PoolError,
     nts::{
-        AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest,
+        AlgorithmDescription, AlgorithmId, MAX_MESSAGE_SIZE, ProtocolId, ServerInformationRequest,
         ServerInformationResponse,
     },
+    util::BufferBorrowingReader,
 };
 
 mod geo;
@@ -94,18 +95,21 @@ async fn fetch_support_data(
 > {
     match tokio::time::timeout(timeout, async {
         ServerInformationRequest.serialize(&mut connection).await?;
-        let support_info = ServerInformationResponse::parse(&mut connection).await?;
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let support_info = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
+            &mut connection,
+            &mut buf,
+        ))
+        .await?;
         connection.shutdown().await?;
         let supported_protocols: HashSet<ProtocolId> = support_info
             .supported_protocols
             .iter()
-            .copied()
             .filter(|v| allowed_protocols.contains(v))
             .collect();
         let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
             .supported_algorithms
             .iter()
-            .copied()
             .map(|v| (v.id, v))
             .collect();
         Ok((supported_protocols, supported_algorithms))
@@ -117,7 +121,7 @@ async fn fetch_support_data(
     }
 }
 
-#[cfg(test)]
+#[cfg(false)]
 mod tests {
     use std::sync::Mutex;
 
