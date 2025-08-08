@@ -3,6 +3,7 @@
 mod cli;
 mod config;
 mod error;
+mod haproxy;
 #[cfg(feature = "fuzz")]
 pub mod nts;
 #[cfg(not(feature = "fuzz"))]
