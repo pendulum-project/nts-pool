@@ -1,0 +1,31 @@
+[package]
+name = "nts-pool-monitor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+description.workspace = true
+publish.workspace = true
+rust-version.workspace = true # MSRV
+
+[features]
+__internal-fuzz = []
+
+[dependencies]
+aead.workspace = true
+aes-siv.workspace = true
+rand.workspace = true
+rustls.workspace = true
+rustls-platform-verifier.workspace = true
+serde = { workspace = true, features = ["derive"] }
+timestamped-socket.workspace = true
+tokio = { workspace = true, features = ["io-util", "rt-multi-thread", "macros", "net"] }
+tokio-rustls.workspace = true
+tracing.workspace = true
+zeroize.workspace = true
+
+[[bin]]
+name = "nts-pool-monitor"
+path = "bin/nts-pool-monitor.rs"
