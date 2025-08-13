@@ -18,7 +18,7 @@ impl U12 {
 
 impl Distribution<U12> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> U12 {
-        U12(rng.gen_range(0..4096))
+        U12(rng.random_range(0..4096))
     }
 }
 
@@ -49,7 +49,7 @@ impl ServerId {
         // FIXME: sort IDs so we access the filters predictably
         // FIXME: check for double rolls to reduce false positive rate
 
-        Self(from_fn(|_| rng.r#gen()))
+        Self(from_fn(|_| rng.random()))
     }
 }
 

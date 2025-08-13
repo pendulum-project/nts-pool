@@ -176,7 +176,7 @@ impl Cipher for AesSivCmac256 {
         associated_data: &[u8],
     ) -> std::io::Result<EncryptResult> {
         let mut siv = Aes128Siv::new(&self.key);
-        let nonce: [u8; 16] = rand::thread_rng().r#gen();
+        let nonce: [u8; 16] = rand::rng().random();
 
         // Prepare the buffer for in place encryption by moving the plaintext
         // back, creating space for the nonce.
@@ -250,7 +250,7 @@ impl Cipher for AesSivCmac512 {
         associated_data: &[u8],
     ) -> std::io::Result<EncryptResult> {
         let mut siv = Aes256Siv::new(&self.key);
-        let nonce: [u8; 16] = rand::thread_rng().r#gen();
+        let nonce: [u8; 16] = rand::rng().random();
 
         // Prepare the buffer for in place encryption by moving the plaintext
         // back, creating space for the nonce.
