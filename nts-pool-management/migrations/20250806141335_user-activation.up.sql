@@ -1,0 +1,6 @@
+-- Add up migration script here
+ALTER TABLE users ADD COLUMN activation_token TEXT;
+ALTER TABLE users ADD COLUMN activation_expires_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE users ADD COLUMN activated_since TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE users ADD COLUMN last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE users ADD COLUMN disabled_since TIMESTAMPTZ DEFAULT NULL;

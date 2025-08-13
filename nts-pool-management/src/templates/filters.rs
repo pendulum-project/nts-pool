@@ -1,25 +1,24 @@
-use crate::{auth::UserSession, models::user::UserRole};
+use crate::models::user::{User, UserRole};
 
-pub fn is_logged_in(session: &Option<UserSession>, _: &dyn askama::Values) -> askama::Result<bool> {
-    Ok(session.is_some())
-}
-
-pub fn is_administrator(
-    session: &Option<UserSession>,
-    _: &dyn askama::Values,
-) -> askama::Result<bool> {
-    Ok(session
+pub fn is_logged_in(user: &Option<User>, _: &dyn askama::Values) -> askama::Result<bool> {
+    Ok(user
         .as_ref()
-        .map(|session| session.role == UserRole::Administrator)
+        .map(|user| user.is_activated() && !user.is_disabled())
         .unwrap_or(false))
 }
 
-pub fn is_server_manager(
-    session: &Option<UserSession>,
-    _: &dyn askama::Values,
-) -> askama::Result<bool> {
-    Ok(session
+pub fn is_administrator(user: &Option<User>, _: &dyn askama::Values) -> askama::Result<bool> {
+    Ok(user
         .as_ref()
-        .map(|session| session.role == UserRole::Manager)
+        .map(|user| {
+            user.is_activated() && !user.is_disabled() && user.role == UserRole::Administrator
+        })
+        .unwrap_or(false))
+}
+
+pub fn is_server_manager(user: &Option<User>, _: &dyn askama::Values) -> askama::Result<bool> {
+    Ok(user
+        .as_ref()
+        .map(|user| user.is_activated() && !user.is_disabled() && user.role == UserRole::Manager)
         .unwrap_or(false))
 }

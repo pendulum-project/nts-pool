@@ -17,6 +17,7 @@ axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true, features = ["cookie"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+serde_qs = { workspace = true }
 sqlx = { workspace = true, features = [
     "runtime-tokio",
     "tls-rustls-aws-lc-rs",
@@ -48,3 +49,4 @@ lettre = { workspace = true, default-features = false, features = [
     "tokio1-rustls",
     "tracing",
 ] }
+rand = { workspace = true }

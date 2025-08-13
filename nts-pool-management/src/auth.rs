@@ -31,8 +31,6 @@ struct JwtClaims {
     iat: usize, // Issued at (as UTC timestamp)
     nbf: usize, // Not Before (as UTC timestamp)
     sub: UserId, // Subject (whom token refers to)
-    role: UserRole, // role in the application of the subject
-    email: String, // email of the subject
 }
 
 #[derive(Debug)]
@@ -48,35 +46,26 @@ impl Display for NotLoggedInError {
 
 fn create_jwt(
     encoding_key: &EncodingKey,
-    user: &User,
+    user_id: UserId,
     valid_for: std::time::Duration,
 ) -> Result<String, AppError> {
     let claims = JwtClaims {
         exp: (chrono::Utc::now() + valid_for).timestamp() as usize,
         iat: chrono::Utc::now().timestamp() as usize,
         nbf: chrono::Utc::now().timestamp() as usize,
-        sub: user.id,
-        role: user.role,
-        email: user.email.clone(),
+        sub: user_id,
     };
     Ok(encode(&Header::default(), &claims, encoding_key).context("Failed to encode JWT")?)
 }
 
-fn validate_jwt(
-    token: &str,
-    decoding_key: &DecodingKey,
-) -> Result<(UserId, UserRole, String), AppError> {
+fn validate_jwt(token: &str, decoding_key: &DecodingKey) -> Result<UserId, AppError> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = true;
     validation.validate_nbf = true;
 
     let token_data = decode::<JwtClaims>(token, decoding_key, &validation)
         .context("Failed to decode or validate JWT")?;
-    Ok((
-        token_data.claims.sub,
-        token_data.claims.role,
-        token_data.claims.email,
-    ))
+    Ok(token_data.claims.sub)
 }
 
 fn create_session_cookie(
@@ -84,7 +73,7 @@ fn create_session_cookie(
     valid_for: std::time::Duration,
     encoding_key: &EncodingKey,
 ) -> Result<Cookie<'static>, AppError> {
-    let token = create_jwt(encoding_key, user, valid_for)?;
+    let token = create_jwt(encoding_key, user.id, valid_for)?;
     let mut cookie = Cookie::new(AUTH_COOKIE_NAME, token);
     cookie.set_secure(true);
     cookie.set_http_only(true);
@@ -95,33 +84,75 @@ fn create_session_cookie(
 
 pub fn login_into(
     user: &User,
-    valid_for: std::time::Duration,
+    valid_for: Option<std::time::Duration>,
     encoding_key: &EncodingKey,
     cookie_jar: CookieJar,
 ) -> Result<CookieJar, AppError> {
-    let cookie = create_session_cookie(user, valid_for, encoding_key)?;
+    let cookie = create_session_cookie(
+        user,
+        valid_for.unwrap_or_else(|| std::time::Duration::from_secs(3600 * 24 * 14)),
+        encoding_key,
+    )?;
     Ok(cookie_jar.add(cookie))
 }
 
-/// Can be extracted from a request, but only if there is a logged in user with the administrator role.
+/// Represents a user that is logged in but possibly blocked or not activated.
 #[derive(Debug, Clone)]
-pub struct Administrator(UserSession);
+pub struct UnsafeLoggedInUser(User);
 
-impl Deref for Administrator {
-    type Target = UserSession;
+impl UnsafeLoggedInUser {
+    pub fn into_inner(self) -> User {
+        self.0
+    }
 
-    fn deref(&self) -> &Self::Target {
+    pub fn as_user(&self) -> &User {
         &self.0
     }
 }
 
-impl Administrator {
-    pub fn into_inner(self) -> UserSession {
+/// Represents an authenticated user that is activated and not blocked.
+#[derive(Debug, Clone)]
+pub struct AuthenticatedUser(User);
+
+impl AuthenticatedUser {
+    pub fn into_inner(self) -> User {
         self.0
+    }
+
+    pub fn as_user(&self) -> &User {
+        &self.0
     }
 }
 
-impl From<Administrator> for UserSession {
+/// Can be extracted from a request, but only if there is a logged in user with the administrator role.
+#[derive(Debug, Clone)]
+pub struct Administrator(AuthenticatedUser);
+
+impl Deref for Administrator {
+    type Target = User;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0.0
+    }
+}
+
+impl Administrator {
+    pub fn into_inner(self) -> AuthenticatedUser {
+        self.0
+    }
+
+    pub fn as_user(&self) -> &User {
+        &self.0.0
+    }
+}
+
+impl From<Administrator> for User {
+    fn from(administrator: Administrator) -> Self {
+        administrator.into_inner().into_inner()
+    }
+}
+
+impl From<Administrator> for AuthenticatedUser {
     fn from(administrator: Administrator) -> Self {
         administrator.into_inner()
     }
@@ -129,41 +160,37 @@ impl From<Administrator> for UserSession {
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
 #[derive(Debug, Clone)]
-pub struct Manager(UserSession);
+pub struct Manager(AuthenticatedUser);
 
 impl Deref for Manager {
-    type Target = UserSession;
+    type Target = User;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.0.0
     }
 }
 
 impl Manager {
-    pub fn into_inner(self) -> UserSession {
+    pub fn into_inner(self) -> AuthenticatedUser {
         self.0
     }
-}
 
-impl From<Manager> for UserSession {
-    fn from(server_manager: Manager) -> Self {
-        server_manager.into_inner()
+    pub fn as_user(&self) -> &User {
+        &self.0.0
     }
 }
 
-/// Can be extracted from a request, but only if there is a logged in user.
-#[derive(Debug, Clone)]
-pub struct UserSession {
-    pub user_id: UserId,
-    pub role: UserRole,
-    pub email: String,
+impl From<Manager> for User {
+    fn from(server_manager: Manager) -> Self {
+        server_manager.into_inner().into_inner()
+    }
 }
 
 task_local! {
     /// This task local is used to store the currently logged in user.
     ///
     /// Handlers should always use the extractors instead of this task local.
-    pub static USER_SESSION: Option<UserSession>;
+    pub static CURRENT_USER: Option<User>;
 }
 
 /// Middleware that retrieves the user session from the request.
@@ -177,14 +204,19 @@ pub async fn auth_middleware(
         .await
         .expect("Extracting CookieJar should never fail");
 
-    let user_session = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
+    let current_user = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
         let decoding_key = DecodingKey::from_ref(&state);
         match validate_jwt(cookie.value(), &decoding_key) {
-            Ok((user_id, role, email)) => Some(UserSession {
-                user_id,
-                role,
-                email,
-            }),
+            // get_by_id returns None if no user is found, which means the JWT will be ignored
+            Ok(user_id) => match crate::models::user::get_by_id(&state.db, user_id)
+                .await
+                .context("Failed to retrieve user from database")
+            {
+                Ok(user) => user,
+                Err(e) => {
+                    return AppError::from(e).into_response();
+                }
+            },
             Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
                 Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
                     // expected failure, ignore and no longer allow session for logged in user
@@ -210,10 +242,10 @@ pub async fn auth_middleware(
         None
     };
 
-    USER_SESSION.scope(user_session, next.run(request)).await
+    CURRENT_USER.scope(current_user, next.run(request)).await
 }
 
-impl<S> OptionalFromRequestParts<S> for UserSession
+impl<S> OptionalFromRequestParts<S> for UnsafeLoggedInUser
 where
     S: Send + Sync,
     DecodingKey: FromRef<S>,
@@ -224,11 +256,12 @@ where
         _parts: &mut Parts,
         _state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        Ok(USER_SESSION.get())
+        let user = CURRENT_USER.get();
+        Ok(user.map(UnsafeLoggedInUser))
     }
 }
 
-impl<S> FromRequestParts<S> for UserSession
+impl<S> FromRequestParts<S> for UnsafeLoggedInUser
 where
     S: Send + Sync,
     DecodingKey: FromRef<S>,
@@ -237,7 +270,48 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<UserSession>, S>(state)
+            .extract_with_state::<Option<UnsafeLoggedInUser>, S>(state)
+            .await
+        {
+            Ok(Some(session)) => Ok(session),
+            Ok(None) => Err(NotLoggedInError)?,
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl<S> OptionalFromRequestParts<S> for AuthenticatedUser
+where
+    S: Send + Sync,
+    DecodingKey: FromRef<S>,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        _parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let user = CURRENT_USER.get();
+        Ok(user.and_then(|user| {
+            if user.is_disabled() || !user.is_activated() {
+                None
+            } else {
+                Some(AuthenticatedUser(user))
+            }
+        }))
+    }
+}
+
+impl<S> FromRequestParts<S> for AuthenticatedUser
+where
+    S: Send + Sync,
+    DecodingKey: FromRef<S>,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match parts
+            .extract_with_state::<Option<AuthenticatedUser>, S>(state)
             .await
         {
             Ok(Some(session)) => Ok(session),
@@ -255,8 +329,13 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
+        match parts
+            .extract_with_state::<AuthenticatedUser, S>(state)
+            .await
+        {
+            Ok(session) if session.as_user().role == UserRole::Administrator => {
+                Ok(Administrator(session))
+            }
             _ => Err(anyhow!("No administrator user available"))?,
         }
     }
@@ -270,9 +349,24 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts.extract_with_state::<UserSession, S>(state).await {
-            Ok(session) if session.role == UserRole::Manager => Ok(Manager(session)),
+        match parts
+            .extract_with_state::<AuthenticatedUser, S>(state)
+            .await
+        {
+            Ok(session) if session.as_user().role == UserRole::Manager => Ok(Manager(session)),
             _ => Err(anyhow!("No server manager user available"))?,
         }
     }
+}
+
+/// Generate a random activation token that the user can enter to activate their account.
+pub fn generate_activation_token() -> (String, chrono::DateTime<chrono::Utc>) {
+    use rand::Rng;
+
+    let mut rng = rand::rng();
+    let activation_token = (0..8)
+        .map(|_| rng.random_range(0..10).to_string())
+        .collect();
+    let activation_token_expires_at = chrono::Utc::now() + chrono::Duration::days(1);
+    (activation_token, activation_token_expires_at)
 }

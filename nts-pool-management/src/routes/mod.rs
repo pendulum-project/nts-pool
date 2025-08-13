@@ -14,6 +14,14 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route("/login", get(login::login).post(login::login_submit))
+        .route(
+            "/register",
+            get(login::register).post(login::register_submit),
+        )
+        .route(
+            "/register/activate",
+            get(login::register_activate).post(login::register_activate_submit),
+        )
         .route("/logout", get(login::logout))
         .route("/admin", get(admin::overview))
         .route(

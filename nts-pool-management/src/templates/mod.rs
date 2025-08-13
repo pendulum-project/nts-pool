@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
-use crate::auth::{USER_SESSION, UserSession};
+use crate::{auth::CURRENT_USER, models::user::User};
 
 pub mod filters;
 
@@ -56,13 +56,13 @@ pub fn unauthorized_page() -> impl IntoResponse {
 }
 
 pub struct AppVars {
-    pub session: Option<UserSession>,
+    pub user: Option<User>,
 }
 
 impl AppVars {
     pub fn from_current_task() -> Self {
         Self {
-            session: USER_SESSION.get(),
+            user: CURRENT_USER.get(),
         }
     }
 }

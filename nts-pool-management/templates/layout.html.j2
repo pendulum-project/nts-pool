@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <title>NTS Pool</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/nts-pool.svg" />
     <link rel="stylesheet" href="/assets/variables.css" />
     <link rel="stylesheet" href="/assets/main.css" />
     <link rel="stylesheet" href="/assets/components.css" />
@@ -16,8 +17,8 @@
           <li>
             <a {% block nav_home %}{% endblock %} href="/">Home</a>
           </li>
-        {% if app.session|is_logged_in %}
-          {% if app.session|is_administrator %}
+        {% if app.user|is_logged_in %}
+          {% if app.user|is_administrator %}
             <li>
                 <a {% block nav_overview %}{% endblock %} href="/admin">Overview</a>
             </li>
@@ -34,8 +35,8 @@
         {% endif %}
         </menu>
         <div>
-          {% if let Some(s) = app.session %}
-              <span class="username">{{ s.email }}</span> <a href="/logout">Logout</a>
+          {% if let Some(u) = app.user %}
+              <span class="username">{{ u.email }}</span> <a href="/logout">Logout</a>
             {% else %}
               <a href="/login">Login</a>
             {% endif %}
