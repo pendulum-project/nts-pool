@@ -81,7 +81,7 @@ impl NtpTimestamp {
 impl Distribution<NtpTimestamp> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> NtpTimestamp {
         NtpTimestamp {
-            timestamp: rng.r#gen(),
+            timestamp: rng.random(),
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::{borrow::Cow, io::Cursor};
 
-use rand::{Rng, thread_rng};
+use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -216,7 +216,7 @@ impl NtpHeaderV3V4 {
         // it is just a randomly generated timestamp.
         // We then expect to get it back identically from the remote
         // in the origin field.
-        let transmit_timestamp = thread_rng().r#gen();
+        let transmit_timestamp = rng().random();
         packet.transmit_timestamp = transmit_timestamp;
 
         (
@@ -437,7 +437,7 @@ impl<'a> NtpPacket<'a> {
     ) -> (NtpPacket<'static>, RequestIdentifier) {
         let (header, id) = NtpHeaderV3V4::poll_message(poll_interval);
 
-        let identifier: [u8; 32] = rand::thread_rng().r#gen();
+        let identifier: [u8; 32] = rand::rng().random();
 
         let mut authenticated = vec![
             ExtensionField::UniqueIdentifier(identifier.to_vec().into()),
@@ -474,7 +474,7 @@ impl<'a> NtpPacket<'a> {
     ) -> (NtpPacket<'static>, RequestIdentifier) {
         let (header, id) = v5::NtpHeaderV5::poll_message(poll_interval);
 
-        let identifier: [u8; 32] = rand::thread_rng().r#gen();
+        let identifier: [u8; 32] = rand::rng().random();
 
         let mut authenticated = vec![
             ExtensionField::UniqueIdentifier(identifier.to_vec().into()),
