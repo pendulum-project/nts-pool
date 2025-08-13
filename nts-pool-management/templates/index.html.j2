@@ -5,6 +5,11 @@
 {% block header %}<h1>NTS Pool</h1>{% endblock %}
 
 {% block content %}
+  <p>Welcome to the NTS Pool Management System.</p>
 
-<p>Welcome to the NTS Pool Management System.</p>
+  {% if !(app.user|is_logged_in) %}
+    <p role="alert">
+      You are not logged in. Please <a href="/login">log in</a> to access the pool management system. You can also <a href="/register">register</a> for a new account.
+    </p>
+  {% endif %}
 {% endblock %}

@@ -3,7 +3,7 @@ use axum::{Form, extract::State, response::IntoResponse};
 
 use crate::{
     AppState,
-    auth::UserSession,
+    auth::Manager,
     error::AppError,
     models::time_source::{self, NewTimeSourceForm, TimeSource},
     templates::{AppVars, HtmlTemplate, filters},
@@ -15,7 +15,7 @@ struct DashboardTemplate {
     app: AppVars,
 }
 
-pub async fn dashboard(_session: UserSession) -> impl IntoResponse {
+pub async fn dashboard(_user: Manager) -> impl IntoResponse {
     HtmlTemplate(DashboardTemplate {
         app: AppVars::from_current_task(),
     })
@@ -29,10 +29,10 @@ struct TimeSourcesPageTemplate {
 }
 
 pub async fn time_sources(
-    session: UserSession,
+    user: Manager,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let time_sources = time_source::by_user(&state.db, session.user_id).await?;
+    let time_sources = time_source::by_user(&state.db, user.id).await?;
     Ok(HtmlTemplate(TimeSourcesPageTemplate {
         app: AppVars::from_current_task(),
         time_sources,
@@ -40,15 +40,15 @@ pub async fn time_sources(
 }
 
 pub async fn create_time_source(
-    session: UserSession,
+    user: Manager,
     State(state): State<AppState>,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    time_source::create(&state.db, session.user_id, new_time_source.try_into()?)
+    time_source::create(&state.db, user.id, new_time_source.try_into()?)
         .await
         .unwrap();
 
-    let time_sources = time_source::by_user(&state.db, session.user_id).await?;
+    let time_sources = time_source::by_user(&state.db, user.id).await?;
 
     Ok(HtmlTemplate(TimeSourcesPageTemplate {
         app: AppVars::from_current_task(),
@@ -62,7 +62,7 @@ struct DnsZonesPageTemplate {
     app: AppVars,
 }
 
-pub async fn dns_zones(_session: UserSession) -> impl IntoResponse {
+pub async fn dns_zones(_user: Manager) -> impl IntoResponse {
     HtmlTemplate(DnsZonesPageTemplate {
         app: AppVars::from_current_task(),
     })

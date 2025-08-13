@@ -50,6 +50,17 @@ h2 {
         min-width: 24rem;
         margin-bottom: var(--space-sm);
     }
+
+    button.secondary {
+        background-color: var(--white);
+        border: 2px solid var(--grey);
+        color: var(--grey);
+
+        &:hover {
+            background-color: var(--grey);
+            color: var(--white);
+        }
+    }
 }
 
 .centered {

@@ -1,0 +1,23 @@
+{% extends "../layout.html.j2" %}
+
+{% block header %}<h1>Activate registration</h1>{% endblock %}
+
+{% block content %}
+<section class="centered">
+  {% if let Some(reason) = resend_reason %}
+    <p>A new code was sent: {{reason|fmt("{:?}")}}</p>
+  {% endif %}
+</section>
+<section class="centered">
+  <form class="login" method="post">
+    <label for="activation_token">Activation Code</label>
+    <input id="activation_token" name="activation_token" type="text" placeholder="Activation Code" autocomplete="one-time-code" required {% if has_code_error %}class="error"{% endif %} />
+    <button type="submit" name="action" value="activate">Activate account</button>
+  </form>
+</section>
+<section class="centered">
+  <form class="login" method="post">
+    <button type="submit" name="action" value="resend" class="secondary">Resend activation code</button>
+  </form>
+</section>
+{% endblock %}

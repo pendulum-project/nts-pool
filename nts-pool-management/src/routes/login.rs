@@ -1,18 +1,25 @@
-use anyhow::anyhow;
+use std::str::FromStr;
+
+use anyhow::{Context, anyhow};
 use askama::Template;
 use axum::{
     Form,
-    extract::State,
+    extract::{Query, State},
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::CookieJar;
 use jsonwebtoken::EncodingKey;
-use serde::Deserialize;
-use sqlx::PgPool;
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, pool};
 
 use crate::{
-    auth::{AUTH_COOKIE_NAME, login_into},
+    auth::{AUTH_COOKIE_NAME, UnsafeLoggedInUser, login_into},
+    email::Mailer,
     error::AppError,
+    models::{
+        authentication_method::{AuthenticationVariant, PasswordAuthentication},
+        user::{NewUser, UserRole},
+    },
     templates::{AppVars, HtmlTemplate, filters},
 };
 
@@ -22,25 +29,41 @@ struct LoginPageTemplate {
     app: AppVars,
 }
 
-pub async fn login() -> impl IntoResponse {
+pub async fn login(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
+    if let Some(user) = user {
+        if !user.as_user().is_activated() {
+            return Redirect::to("/register/activate").into_response();
+        } else if user.as_user().is_disabled() {
+            return Redirect::to("/logout").into_response();
+        } else {
+            return Redirect::to("/").into_response();
+        }
+    }
+
     HtmlTemplate(LoginPageTemplate {
         app: AppVars::from_current_task(),
     })
+    .into_response()
 }
 
 #[derive(Debug, Deserialize)]
 pub struct LoginData {
-    username: String,
+    email: String,
     password: String,
 }
 
 pub async fn login_submit(
+    auth_user: Option<UnsafeLoggedInUser>,
     mut cookie_jar: CookieJar,
     State(encoding_key): State<EncodingKey>,
     State(db): State<PgPool>,
     Form(data): Form<LoginData>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = crate::models::user::get_by_email(&db, &data.username)
+    if auth_user.is_some() {
+        return Ok(Redirect::to("/logout").into_response());
+    }
+
+    let user = crate::models::user::get_by_email(&db, &data.email)
         .await?
         .ok_or(anyhow!("Failed to login"))?;
     let password_method =
@@ -49,18 +72,255 @@ pub async fn login_submit(
             .ok_or(anyhow!("Failed to login"))?;
 
     if password_method.verify(&data.password)? {
-        cookie_jar = login_into(
-            &user,
-            std::time::Duration::from_secs(3600 * 24 * 14),
-            &encoding_key,
-            cookie_jar,
-        )?;
+        if user.is_disabled() {
+            return Err(anyhow!("User is disabled").into());
+        }
+
+        cookie_jar = login_into(&user, None, &encoding_key, cookie_jar)?;
+        crate::models::user::update_last_login(&db, user.id).await?;
     }
 
-    Ok((cookie_jar, Redirect::to("/")))
+    Ok((
+        cookie_jar,
+        Redirect::to(if user.is_activated() {
+            "/"
+        } else {
+            "/register/activate"
+        }),
+    )
+        .into_response())
 }
 
 pub async fn logout(cookie_jar: CookieJar) -> Result<impl IntoResponse, AppError> {
     let cookie_jar = cookie_jar.remove(AUTH_COOKIE_NAME);
     Ok((cookie_jar, Redirect::to("/")))
+}
+
+#[derive(Template)]
+#[template(path = "login/register.html.j2")]
+struct RegisterPageTemplate {
+    app: AppVars,
+    fields_with_errors: Vec<&'static str>,
+}
+
+pub async fn register(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
+    if let Some(user) = user {
+        if !user.as_user().is_activated() {
+            return Redirect::to("/register/activate").into_response();
+        } else if user.as_user().is_disabled() {
+            return Redirect::to("/logout").into_response();
+        } else {
+            return Redirect::to("/").into_response();
+        }
+    }
+
+    HtmlTemplate(RegisterPageTemplate {
+        app: AppVars::from_current_task(),
+        fields_with_errors: Vec::new(),
+    })
+    .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterForm {
+    email: String,
+    password: String,
+    confirm_password: String,
+    accept_terms: bool,
+}
+
+pub async fn register_submit(
+    auth_user: Option<UnsafeLoggedInUser>,
+    State(pool): State<PgPool>,
+    State(encoding_key): State<EncodingKey>,
+    State(mailer): State<Mailer>,
+    cookie_jar: CookieJar,
+    Form(data): Form<RegisterForm>,
+) -> Result<impl IntoResponse, AppError> {
+    if auth_user.is_some() {
+        return Ok(Redirect::to("/").into_response());
+    }
+
+    let mut fields_with_errors = Vec::new();
+
+    if !data.email.contains('@') || lettre::Address::from_str(&data.email).is_err() {
+        fields_with_errors.push("email");
+    }
+
+    if data.password != data.confirm_password {
+        fields_with_errors.push("password");
+        fields_with_errors.push("confirm_password");
+    }
+
+    if !data.accept_terms {
+        fields_with_errors.push("accept_terms");
+    }
+
+    if !fields_with_errors.is_empty() {
+        Ok(HtmlTemplate(RegisterPageTemplate {
+            app: AppVars::from_current_task(),
+            fields_with_errors,
+        })
+        .into_response())
+    } else {
+        // we start by storing the new user in the database
+        let (activation_token, activation_expires_at) = crate::auth::generate_activation_token();
+        let mut tx = pool.begin().await?;
+        let user = crate::models::user::create(
+            &mut *tx,
+            NewUser {
+                email: data.email,
+                role: UserRole::Manager,
+                activation_token,
+                activation_expires_at,
+            },
+        )
+        .await?;
+
+        crate::models::authentication_method::create(
+            &mut *tx,
+            user.id,
+            AuthenticationVariant::Password(PasswordAuthentication::new(&data.password)?),
+        )
+        .await?;
+
+        tx.commit().await?;
+
+        // we send an activation email to the user
+        crate::email::send_activation_email(&mailer, &user).await?;
+
+        // we log the user in and send them to the confirmation page, waiting for them entering the activation token
+        let cookie_jar = crate::auth::login_into(&user, None, &encoding_key, cookie_jar)?;
+
+        Ok((cookie_jar, Redirect::to("/register/activate")).into_response())
+    }
+}
+
+#[derive(Template)]
+#[template(path = "login/register_activate.html.j2")]
+struct RegisterActivatePageTemplate {
+    app: AppVars,
+    has_code_error: bool,
+    resend_reason: Option<ResendReason>,
+}
+
+pub async fn register_activate(
+    user: UnsafeLoggedInUser,
+    Query(query): Query<RegisterActivateQuery>,
+) -> impl IntoResponse {
+    if user.as_user().is_disabled() {
+        return Redirect::to("/logout").into_response();
+    }
+
+    if user.as_user().is_activated() {
+        return Redirect::to("/").into_response();
+    }
+
+    HtmlTemplate(RegisterActivatePageTemplate {
+        app: AppVars::from_current_task(),
+        has_code_error: false,
+        resend_reason: query.reason,
+    })
+    .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterActivateForm {
+    activation_token: Option<String>,
+    action: RegisterActivateAction,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RegisterActivateAction {
+    Activate,
+    Resend,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ResendReason {
+    Requested,
+    Expired,
+    Invalid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegisterActivateQuery {
+    #[serde(default)]
+    reason: Option<ResendReason>,
+}
+
+pub async fn register_activate_submit(
+    auth_user: UnsafeLoggedInUser,
+    State(pool): State<PgPool>,
+    State(mailer): State<Mailer>,
+    Form(data): Form<RegisterActivateForm>,
+) -> Result<impl IntoResponse, AppError> {
+    if auth_user.as_user().is_disabled() {
+        return Ok(Redirect::to("/logout").into_response());
+    }
+
+    if auth_user.as_user().is_activated() {
+        return Ok(Redirect::to("/").into_response());
+    }
+
+    let user_has_token = auth_user.as_user().activation_token.is_some()
+        && auth_user.as_user().activation_expires_at.is_some();
+    let token_expired = auth_user
+        .as_user()
+        .activation_expires_at
+        .map(|exp| exp < chrono::Utc::now())
+        .unwrap_or(true);
+    let resend_requested = data.action == RegisterActivateAction::Resend;
+
+    if resend_requested || !user_has_token || token_expired {
+        let (activation_token, activation_expires_at) = crate::auth::generate_activation_token();
+        let user = crate::models::user::set_activation_token(
+            &pool,
+            auth_user.as_user().id,
+            activation_token,
+            activation_expires_at,
+        )
+        .await
+        .context("Failed to update activation token for user")?;
+        crate::email::send_activation_email(&mailer, &user).await?;
+        let resend_reason = if resend_requested {
+            ResendReason::Requested
+        } else if !user_has_token {
+            ResendReason::Invalid
+        } else {
+            ResendReason::Expired
+        };
+
+        return Ok(Redirect::to(&format!(
+            "/register/activate?{}",
+            serde_qs::to_string(&RegisterActivateQuery {
+                reason: Some(resend_reason),
+            })
+            .context("Failed to serialize redirect query parameters")?
+        ))
+        .into_response());
+    }
+
+    let token = auth_user
+        .as_user()
+        .activation_token
+        .as_ref()
+        .expect("Failed to get activation token despite previous check");
+
+    let activation_token_valid = data.activation_token.map(|t| t == *token).unwrap_or(false);
+
+    // we previously checked that the token was not expired
+    if activation_token_valid {
+        crate::models::user::activate_user(&pool, auth_user.as_user().id).await?;
+        Ok(Redirect::to("/").into_response())
+    } else {
+        Ok(HtmlTemplate(RegisterActivatePageTemplate {
+            app: AppVars::from_current_task(),
+            has_code_error: true,
+            resend_reason: None,
+        })
+        .into_response())
+    }
 }
