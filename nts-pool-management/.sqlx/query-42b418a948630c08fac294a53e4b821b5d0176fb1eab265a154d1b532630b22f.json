@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO users (email, role)\n            VALUES ($1, $2)\n            RETURNING id, email, role AS \"role: _\", created_at, updated_at\n        ",
+  "query": "\n            INSERT INTO users (email, role, activation_token, activation_expires_at)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, email, role AS \"role: _\", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n        ",
   "describe": {
     "columns": [
       {
@@ -30,11 +30,36 @@
       },
       {
         "ordinal": 3,
+        "name": "activation_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "activation_expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "activated_since",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_login_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "disabled_since",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 4,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -52,16 +77,23 @@
               ]
             }
           }
-        }
+        },
+        "Text",
+        "Timestamptz"
       ]
     },
     "nullable": [
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      false,
+      true,
       false,
       false
     ]
   },
-  "hash": "46cb9c2a4a45168a74dfa46465e36d6d47b87f34a03ef28bbe8f4ecdf5f61f4e"
+  "hash": "42b418a948630c08fac294a53e4b821b5d0176fb1eab265a154d1b532630b22f"
 }
