@@ -50,7 +50,7 @@ jobs:
       - name: Install nightly toolchain for direct-minimal-versions
         uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
-          toolchain: nightly
+          toolchain: nightly-2025-08-11
           targets: "${{ matrix.target }}"
         if: ${{ matrix.rust == 'msrv' }}
       - name: Install toolchain
@@ -59,7 +59,7 @@ jobs:
           toolchain: "${TARGET_RUST_VERSION}"
           targets: "${{ matrix.target }}"
       - name: Downgrade direct dependencies to minimal versions
-        run: cargo +nightly update -Z direct-minimal-versions
+        run: cargo +nightly-2025-08-11 update -Z direct-minimal-versions
         if: ${{ matrix.rust == 'msrv' }}
       - name: Install cross-compilation tools
         uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89
@@ -100,7 +100,7 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
-          toolchain: nightly
+          toolchain: nightly-2025-08-11
       - name: Install udeps
         uses: taiki-e/install-action@c07504cae06f832dc8de08911c9a9c5cddb0d2d3
         with:
@@ -214,7 +214,7 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@be73d7920c329f220ce78e0234b8f96b7ae60248
         with:
-          toolchain: nightly
+          toolchain: nightly-2025-08-11
           components: llvm-tools-preview
       - name: Install cargo fuzz & rustfilt
         uses: taiki-e/install-action@6064345e6658255e90e9500fdf9a06ab77e6909c
