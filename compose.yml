@@ -40,7 +40,7 @@ services:
       TZ: "Europe/Amsterdam"
       CARGO_HOME: "/app/.cargo"
       CARGO_TARGET_DIR: "/app/target-docker"
-      SQLX_OFFLINE: "${SQLX_OFFLINE:-0}"
+      SQLX_OFFLINE: "${DOCKER_SQLX_OFFLINE:-0}"
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-ke
@@ -82,7 +82,7 @@ services:
       NTSPOOL_JWT_SECRET: "a-string-secret-at-least-256-bits-long"
       NTSPOOL_SMTP_URL: "smtp://mailcrab:1025"
       NTSPOOL_MAIL_FROM_ADDRESS: "NTS Pool <noreply@example.com>"
-      SQLX_OFFLINE: "${SQLX_OFFLINE:-0}"
+      SQLX_OFFLINE: "${DOCKER_SQLX_OFFLINE:-0}"
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management
