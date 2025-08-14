@@ -10,7 +10,7 @@ use crate::{
     templates::{not_found_page, unauthorized_page},
 };
 
-pub struct AppError(anyhow::Error);
+pub struct AppError(eyre::Error);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
@@ -30,7 +30,7 @@ impl IntoResponse for AppError {
 
 impl<E> From<E> for AppError
 where
-    E: Into<anyhow::Error>,
+    E: Into<eyre::Error>,
 {
     fn from(err: E) -> Self {
         Self(err.into())
@@ -38,13 +38,13 @@ where
 }
 
 impl AppError {
-    pub fn into_inner(self) -> anyhow::Error {
+    pub fn into_inner(self) -> eyre::Error {
         self.0
     }
 }
 
 impl Deref for AppError {
-    type Target = anyhow::Error;
+    type Target = eyre::Error;
 
     fn deref(&self) -> &Self::Target {
         &self.0

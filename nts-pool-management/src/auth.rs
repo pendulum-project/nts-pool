@@ -1,6 +1,3 @@
-use std::{fmt::Display, ops::Deref};
-
-use anyhow::{Context, anyhow};
 use axum::{
     RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Request, State},
@@ -12,6 +9,7 @@ use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
+use eyre::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use tokio::task_local;
@@ -25,6 +23,18 @@ use crate::{
 
 pub const AUTH_COOKIE_NAME: &str = "auth";
 
+/// Generate a random activation token that the user can enter to activate their account.
+pub fn generate_activation_token() -> (String, chrono::DateTime<chrono::Utc>) {
+    use rand::Rng;
+
+    let mut rng = rand::rng();
+    let activation_token = (0..8)
+        .map(|_| rng.random_range(0..10).to_string())
+        .collect();
+    let activation_token_expires_at = chrono::Utc::now() + chrono::Duration::days(1);
+    (activation_token, activation_token_expires_at)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
     exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
@@ -33,16 +43,9 @@ struct JwtClaims {
     sub: UserId, // Subject (whom token refers to)
 }
 
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[display("User is not logged in")]
 pub struct NotLoggedInError;
-
-impl std::error::Error for NotLoggedInError {}
-
-impl Display for NotLoggedInError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "User is not logged in")
-    }
-}
 
 fn create_jwt(
     encoding_key: &EncodingKey,
@@ -55,7 +58,7 @@ fn create_jwt(
         nbf: chrono::Utc::now().timestamp() as usize,
         sub: user_id,
     };
-    Ok(encode(&Header::default(), &claims, encoding_key).context("Failed to encode JWT")?)
+    Ok(encode(&Header::default(), &claims, encoding_key).wrap_err("Failed to encode JWT")?)
 }
 
 fn validate_jwt(token: &str, decoding_key: &DecodingKey) -> Result<UserId, AppError> {
@@ -64,7 +67,7 @@ fn validate_jwt(token: &str, decoding_key: &DecodingKey) -> Result<UserId, AppEr
     validation.validate_nbf = true;
 
     let token_data = decode::<JwtClaims>(token, decoding_key, &validation)
-        .context("Failed to decode or validate JWT")?;
+        .wrap_err("Failed to decode or validate JWT")?;
     Ok(token_data.claims.sub)
 }
 
@@ -97,108 +100,36 @@ pub fn login_into(
 }
 
 /// Represents a user that is logged in but possibly blocked or not activated.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
 pub struct UnsafeLoggedInUser(User);
 
-impl UnsafeLoggedInUser {
-    pub fn into_inner(self) -> User {
-        self.0
-    }
-
-    pub fn as_user(&self) -> &User {
-        &self.0
-    }
-}
-
-impl Deref for UnsafeLoggedInUser {
-    type Target = User;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// Represents an authenticated user that is activated and not blocked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
 pub struct AuthenticatedUser(User);
 
-impl AuthenticatedUser {
-    pub fn into_inner(self) -> User {
-        self.0
-    }
-
-    pub fn as_user(&self) -> &User {
-        &self.0
-    }
-}
-
-impl Deref for AuthenticatedUser {
-    type Target = User;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// Can be extracted from a request, but only if there is a logged in user with the administrator role.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
 pub struct Administrator(AuthenticatedUser);
-
-impl Deref for Administrator {
-    type Target = User;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0.0
-    }
-}
 
 impl Administrator {
     pub fn into_inner(self) -> AuthenticatedUser {
         self.0
     }
-
-    pub fn as_user(&self) -> &User {
-        &self.0.0
-    }
 }
 
 impl From<Administrator> for User {
     fn from(administrator: Administrator) -> Self {
-        administrator.into_inner().into_inner()
-    }
-}
-
-impl From<Administrator> for AuthenticatedUser {
-    fn from(administrator: Administrator) -> Self {
-        administrator.into_inner()
+        AuthenticatedUser::from(administrator).into()
     }
 }
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
 pub struct Manager(AuthenticatedUser);
-
-impl Deref for Manager {
-    type Target = User;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0.0
-    }
-}
-
-impl Manager {
-    pub fn into_inner(self) -> AuthenticatedUser {
-        self.0
-    }
-
-    pub fn as_user(&self) -> &User {
-        &self.0.0
-    }
-}
 
 impl From<Manager> for User {
     fn from(server_manager: Manager) -> Self {
-        server_manager.into_inner().into_inner()
+        AuthenticatedUser::from(server_manager).into()
     }
 }
 
@@ -226,7 +157,7 @@ pub async fn auth_middleware(
             // get_by_id returns None if no user is found, which means the JWT will be ignored
             Ok(user_id) => match crate::models::user::get_by_id(&state.db, user_id)
                 .await
-                .context("Failed to retrieve user from database")
+                .wrap_err("Failed to retrieve user from database")
             {
                 Ok(user) => user,
                 Err(e) => {
@@ -247,7 +178,7 @@ pub async fn auth_middleware(
                     // other errors are weird, they result in a server error
                     return AppError::from(
                         e.into_inner()
-                            .context("Session state has unexpected invalid data"),
+                            .wrap_err("Session state has unexpected invalid data"),
                     )
                     .into_response();
                 }
@@ -350,7 +281,7 @@ where
             .await
         {
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
-            _ => Err(anyhow!("No administrator user available"))?,
+            _ => Err(eyre::eyre!("No administrator user available"))?,
         }
     }
 }
@@ -368,19 +299,7 @@ where
             .await
         {
             Ok(session) if session.role == UserRole::Manager => Ok(Manager(session)),
-            _ => Err(anyhow!("No server manager user available"))?,
+            _ => Err(eyre::eyre!("No server manager user available"))?,
         }
     }
-}
-
-/// Generate a random activation token that the user can enter to activate their account.
-pub fn generate_activation_token() -> (String, chrono::DateTime<chrono::Utc>) {
-    use rand::Rng;
-
-    let mut rng = rand::rng();
-    let activation_token = (0..8)
-        .map(|_| rng.random_range(0..10).to_string())
-        .collect();
-    let activation_token_expires_at = chrono::Utc::now() + chrono::Duration::days(1);
-    (activation_token, activation_token_expires_at)
 }
