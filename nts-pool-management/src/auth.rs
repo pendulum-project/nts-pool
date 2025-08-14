@@ -110,6 +110,14 @@ impl UnsafeLoggedInUser {
     }
 }
 
+impl Deref for UnsafeLoggedInUser {
+    type Target = User;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Represents an authenticated user that is activated and not blocked.
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser(User);
@@ -120,6 +128,14 @@ impl AuthenticatedUser {
     }
 
     pub fn as_user(&self) -> &User {
+        &self.0
+    }
+}
+
+impl Deref for AuthenticatedUser {
+    type Target = User;
+
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -333,9 +349,7 @@ where
             .extract_with_state::<AuthenticatedUser, S>(state)
             .await
         {
-            Ok(session) if session.as_user().role == UserRole::Administrator => {
-                Ok(Administrator(session))
-            }
+            Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(anyhow!("No administrator user available"))?,
         }
     }
@@ -353,7 +367,7 @@ where
             .extract_with_state::<AuthenticatedUser, S>(state)
             .await
         {
-            Ok(session) if session.as_user().role == UserRole::Manager => Ok(Manager(session)),
+            Ok(session) if session.role == UserRole::Manager => Ok(Manager(session)),
             _ => Err(anyhow!("No server manager user available"))?,
         }
     }

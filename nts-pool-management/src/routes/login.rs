@@ -10,7 +10,7 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use jsonwebtoken::EncodingKey;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, pool};
+use sqlx::PgPool;
 
 use crate::{
     auth::{AUTH_COOKIE_NAME, UnsafeLoggedInUser, login_into},
@@ -31,9 +31,9 @@ struct LoginPageTemplate {
 
 pub async fn login(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
     if let Some(user) = user {
-        if !user.as_user().is_activated() {
+        if !user.is_activated() {
             return Redirect::to("/register/activate").into_response();
-        } else if user.as_user().is_disabled() {
+        } else if user.is_disabled() {
             return Redirect::to("/logout").into_response();
         } else {
             return Redirect::to("/").into_response();
@@ -105,9 +105,9 @@ struct RegisterPageTemplate {
 
 pub async fn register(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
     if let Some(user) = user {
-        if !user.as_user().is_activated() {
+        if !user.is_activated() {
             return Redirect::to("/register/activate").into_response();
-        } else if user.as_user().is_disabled() {
+        } else if user.is_disabled() {
             return Redirect::to("/logout").into_response();
         } else {
             return Redirect::to("/").into_response();
@@ -208,11 +208,11 @@ pub async fn register_activate(
     user: UnsafeLoggedInUser,
     Query(query): Query<RegisterActivateQuery>,
 ) -> impl IntoResponse {
-    if user.as_user().is_disabled() {
+    if user.is_disabled() {
         return Redirect::to("/logout").into_response();
     }
 
-    if user.as_user().is_activated() {
+    if user.is_activated() {
         return Redirect::to("/").into_response();
     }
 
@@ -257,18 +257,17 @@ pub async fn register_activate_submit(
     State(mailer): State<Mailer>,
     Form(data): Form<RegisterActivateForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    if auth_user.as_user().is_disabled() {
+    if auth_user.is_disabled() {
         return Ok(Redirect::to("/logout").into_response());
     }
 
-    if auth_user.as_user().is_activated() {
+    if auth_user.is_activated() {
         return Ok(Redirect::to("/").into_response());
     }
 
-    let user_has_token = auth_user.as_user().activation_token.is_some()
-        && auth_user.as_user().activation_expires_at.is_some();
+    let user_has_token =
+        auth_user.activation_token.is_some() && auth_user.activation_expires_at.is_some();
     let token_expired = auth_user
-        .as_user()
         .activation_expires_at
         .map(|exp| exp < chrono::Utc::now())
         .unwrap_or(true);
@@ -278,7 +277,7 @@ pub async fn register_activate_submit(
         let (activation_token, activation_expires_at) = crate::auth::generate_activation_token();
         let user = crate::models::user::set_activation_token(
             &pool,
-            auth_user.as_user().id,
+            auth_user.id,
             activation_token,
             activation_expires_at,
         )
@@ -304,7 +303,6 @@ pub async fn register_activate_submit(
     }
 
     let token = auth_user
-        .as_user()
         .activation_token
         .as_ref()
         .expect("Failed to get activation token despite previous check");
@@ -313,7 +311,7 @@ pub async fn register_activate_submit(
 
     // we previously checked that the token was not expired
     if activation_token_valid {
-        crate::models::user::activate_user(&pool, auth_user.as_user().id).await?;
+        crate::models::user::activate_user(&pool, auth_user.id).await?;
         Ok(Redirect::to("/").into_response())
     } else {
         Ok(HtmlTemplate(RegisterActivatePageTemplate {
