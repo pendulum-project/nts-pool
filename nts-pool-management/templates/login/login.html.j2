@@ -3,6 +3,12 @@
 {% block header %}<h1>Login</h1>{% endblock %}
 
 {% block content %}
+{% if login_error %}
+  <section class="centered">
+    <p>Invalid username or password, please try again.</p>
+  </section>
+{% endif %}
+
 <section class="centered">
   <form class="login" method="post">
     <label for="email">E-mail</label>
@@ -12,4 +18,10 @@
     <button type="submit">Login</button>
   </form>
 </section>
+<section class="centered">
+  <a href="/register">Register</a>
+</section>
+<!-- <section class="centered">
+  <a href="/login/forgot">Forgot Password?</a>
+</section> -->
 {% endblock %}

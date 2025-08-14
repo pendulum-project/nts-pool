@@ -23,7 +23,6 @@ panic = "abort"
 debug = 2
 
 [workspace.dependencies]
-anyhow = "1.0.98"
 argon2 = "0.5.3"
 askama = "0.14.0"
 axum = "0.8.4"
@@ -48,3 +47,5 @@ rustls-platform-verifier = "0.6.0"
 tokio-rustls = { version = "0.26.0" }
 jsonwebtoken = "9.3.1"
 lettre = { version = "0.11.18", default-features = false }
+eyre = "0.6.11"
+derive_more = "2.0.1"

@@ -3,17 +3,22 @@
 {% block header %}<h1>Register</h1>{% endblock %}
 
 {% block content %}
-<section class="centered">
-  <form class="login" method="post">
-    <label for="email">E-mail</label>
-    <input id="email" name="email" type="text" placeholder="E-mail" autocomplete="email username" required {% if fields_with_errors.contains(&"email") %}class="error"{% endif %} />
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" placeholder="Password" autocomplete="new-password" required {% if fields_with_errors.contains(&"password") %}class="error"{% endif %} />
-    <label for="confirm-password">Confirm Password</label>
-    <input id="confirm-password" name="confirm_password" type="password" placeholder="Confirm Password" autocomplete="new-password" required {% if fields_with_errors.contains(&"confirm_password") %}class="error"{% endif %} />
-    <label for="accept-terms">Agree to Terms</label>
-    <input id="accept-terms" name="accept_terms" type="checkbox" placeholder="Agree to Terms" value="true" required {% if fields_with_errors.contains(&"accept_terms") %}class="error"{% endif %} />
-    <button type="submit">Register</button>
-  </form>
-</section>
+  {% if !fields_with_errors.is_empty() %}
+    <section class="centered">
+      <p>There were some errors in the register form, please fix the invalid fields.</p>
+    </section>
+  {% endif %}
+  <section class="centered">
+    <form class="login" method="post">
+      <label for="email">E-mail</label>
+      <input id="email" name="email" type="text" placeholder="E-mail" autocomplete="email username" value="{{ data_email.as_deref().unwrap_or_default() }}"required {% if fields_with_errors.contains(&"email") %}class="error"{% endif %} />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" placeholder="Password" autocomplete="new-password" required {% if fields_with_errors.contains(&"password") %}class="error"{% endif %} />
+      <label for="confirm-password">Confirm Password</label>
+      <input id="confirm-password" name="confirm_password" type="password" placeholder="Confirm Password" autocomplete="new-password" required {% if fields_with_errors.contains(&"confirm_password") %}class="error"{% endif %} />
+      <label for="accept-terms">Agree to Terms</label>
+      <input id="accept-terms" name="accept_terms" type="checkbox" placeholder="Agree to Terms" value="true" required {% if fields_with_errors.contains(&"accept_terms") %}class="error"{% endif %} />
+      <button type="submit">Register</button>
+    </form>
+  </section>
 {% endblock %}

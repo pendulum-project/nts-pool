@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use anyhow::{Context, anyhow};
 use askama::Template;
 use axum::{
     Form,
@@ -8,6 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::CookieJar;
+use eyre::{Context, OptionExt};
 use jsonwebtoken::EncodingKey;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -27,6 +27,7 @@ use crate::{
 #[template(path = "login/login.html.j2")]
 struct LoginPageTemplate {
     app: AppVars,
+    login_error: bool,
 }
 
 pub async fn login(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
@@ -42,6 +43,7 @@ pub async fn login(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
 
     HtmlTemplate(LoginPageTemplate {
         app: AppVars::from_current_task(),
+        login_error: false,
     })
     .into_response()
 }
@@ -54,10 +56,32 @@ pub struct LoginData {
 
 pub async fn login_submit(
     auth_user: Option<UnsafeLoggedInUser>,
-    mut cookie_jar: CookieJar,
+    cookie_jar: CookieJar,
     State(encoding_key): State<EncodingKey>,
     State(db): State<PgPool>,
     Form(data): Form<LoginData>,
+) -> Result<impl IntoResponse, AppError> {
+    match login_submit_internal(auth_user, cookie_jar, encoding_key, db, data).await {
+        Ok(response) => Ok(response.into_response()),
+        Err(e) if e.is::<InvalidCredentialsError>() => Ok(HtmlTemplate(LoginPageTemplate {
+            app: AppVars::from_current_task(),
+            login_error: true,
+        })
+        .into_response()),
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[display("Failed to login, invalid credentials")]
+struct InvalidCredentialsError;
+
+async fn login_submit_internal(
+    auth_user: Option<UnsafeLoggedInUser>,
+    mut cookie_jar: CookieJar,
+    encoding_key: EncodingKey,
+    db: PgPool,
+    data: LoginData,
 ) -> Result<impl IntoResponse, AppError> {
     if auth_user.is_some() {
         return Ok(Redirect::to("/logout").into_response());
@@ -65,19 +89,21 @@ pub async fn login_submit(
 
     let user = crate::models::user::get_by_email(&db, &data.email)
         .await?
-        .ok_or(anyhow!("Failed to login"))?;
+        .ok_or_eyre(InvalidCredentialsError)?;
     let password_method =
         crate::models::authentication_method::get_password_authentication_method(&db, user.id)
             .await?
-            .ok_or(anyhow!("Failed to login"))?;
+            .ok_or_eyre(InvalidCredentialsError)?;
 
     if password_method.verify(&data.password)? {
         if user.is_disabled() {
-            return Err(anyhow!("User is disabled").into());
+            return Err(eyre::eyre!("User is disabled").into());
         }
 
         cookie_jar = login_into(&user, None, &encoding_key, cookie_jar)?;
         crate::models::user::update_last_login(&db, user.id).await?;
+    } else {
+        return Err(InvalidCredentialsError.into());
     }
 
     Ok((
@@ -101,6 +127,7 @@ pub async fn logout(cookie_jar: CookieJar) -> Result<impl IntoResponse, AppError
 struct RegisterPageTemplate {
     app: AppVars,
     fields_with_errors: Vec<&'static str>,
+    data_email: Option<String>,
 }
 
 pub async fn register(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
@@ -117,6 +144,7 @@ pub async fn register(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
     HtmlTemplate(RegisterPageTemplate {
         app: AppVars::from_current_task(),
         fields_with_errors: Vec::new(),
+        data_email: None,
     })
     .into_response()
 }
@@ -147,6 +175,14 @@ pub async fn register_submit(
         fields_with_errors.push("email");
     }
 
+    // check if email is already registered
+    if crate::models::user::get_by_email(&pool, &data.email)
+        .await?
+        .is_some()
+    {
+        fields_with_errors.push("email");
+    }
+
     if data.password != data.confirm_password {
         fields_with_errors.push("password");
         fields_with_errors.push("confirm_password");
@@ -160,6 +196,7 @@ pub async fn register_submit(
         Ok(HtmlTemplate(RegisterPageTemplate {
             app: AppVars::from_current_task(),
             fields_with_errors,
+            data_email: Some(data.email),
         })
         .into_response())
     } else {
@@ -282,7 +319,7 @@ pub async fn register_activate_submit(
             activation_expires_at,
         )
         .await
-        .context("Failed to update activation token for user")?;
+        .wrap_err("Failed to update activation token for user")?;
         crate::email::send_activation_email(&mailer, &user).await?;
         let resend_reason = if resend_requested {
             ResendReason::Requested
@@ -297,7 +334,7 @@ pub async fn register_activate_submit(
             serde_qs::to_string(&RegisterActivateQuery {
                 reason: Some(resend_reason),
             })
-            .context("Failed to serialize redirect query parameters")?
+            .wrap_err("Failed to serialize redirect query parameters")?
         ))
         .into_response());
     }

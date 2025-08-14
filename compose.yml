@@ -44,6 +44,8 @@ services:
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-ke
+    ulimits:
+      core: 0
     command: ["watchexec", "--shell=none", "-o", "restart", "--", "cargo", "run", "-p", "nts-pool-ke", "--", "--config", "/app/nts-pool-ke/unsafe.pool.toml"]
 
   psql:
@@ -84,4 +86,6 @@ services:
     volumes:
       - ".:/app"
     working_dir: /app/nts-pool-management
+    ulimits:
+      core: 0
     command: ["watchexec", "--shell=none", "-o", "restart", "--", "cargo", "run", "-p", "nts-pool-management", "--"]
