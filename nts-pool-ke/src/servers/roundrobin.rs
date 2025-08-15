@@ -154,12 +154,14 @@ mod tests {
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {
+                    uuid: "UUID-a".into(),
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
                 },
                 KeyExchangeServer {
+                    uuid: "UUID-b".into(),
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
@@ -183,12 +185,14 @@ mod tests {
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {
+                    uuid: "UUID-a".into(),
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
                 },
                 KeyExchangeServer {
+                    uuid: "UUID-b".into(),
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
@@ -214,12 +218,14 @@ mod tests {
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {
+                    uuid: "UUID-a".into(),
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
                 },
                 KeyExchangeServer {
+                    uuid: "UUID-b".into(),
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),

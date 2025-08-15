@@ -279,6 +279,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct KeyExchangeServer {
+    pub uuid: String,
     pub domain: String,
     pub server_name: ServerName<'static>,
     pub regions: Vec<String>,
@@ -293,6 +294,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         #[derive(Deserialize)]
         #[serde(rename_all = "kebab-case")]
         struct BareKeyExchangeServer {
+            uuid: String,
             domain: String,
             port: u16,
             #[serde(default)]
@@ -309,6 +311,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         };
 
         Ok(KeyExchangeServer {
+            uuid: bare.uuid,
             domain: bare.domain.to_string(),
             server_name,
             regions: bare.regions,
@@ -400,8 +403,8 @@ mod tests {
         let servers: Vec<KeyExchangeServer> = serde_json::from_str(
             r#"
         [
-                { "domain": "foo.bar", "port": 1234 },
-                { "domain": "bar.foo", "port": 4321 }
+                { "uuid": "UUID-foo", "domain": "foo.bar", "port": 1234 },
+                { "uuid": "UUID-bar", "domain": "bar.foo", "port": 4321 }
         ]
         "#,
         )
@@ -411,12 +414,14 @@ mod tests {
             servers,
             [
                 KeyExchangeServer {
+                    uuid: String::from("UUID-foo"),
                     domain: String::from("foo.bar"),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     connection_address: (String::from("foo.bar"), 1234),
                     regions: vec![],
                 },
                 KeyExchangeServer {
+                    uuid: String::from("UUID-bar"),
                     domain: String::from("bar.foo"),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     connection_address: (String::from("bar.foo"), 4321),

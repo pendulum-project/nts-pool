@@ -1,4 +1,4 @@
 [
-    { "domain": "time-a", "port": 4460 },
-    { "domain": "time-b", "port": 4460 }
+    { "uuid": "UUID-A", "domain": "time-a", "port": 4460 },
+    { "uuid": "UUID-B", "domain": "time-b", "port": 4460 }
 ]

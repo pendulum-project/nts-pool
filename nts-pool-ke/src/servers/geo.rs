@@ -230,12 +230,14 @@ mod tests {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
                     KeyExchangeServer {
+                        uuid: "UUID-a".into(),
                         domain: "a.test".into(),
                         server_name: ServerName::try_from("a.test").unwrap(),
                         connection_address: ("a.test".into(), 4460),
                         regions: vec![],
                     },
                     KeyExchangeServer {
+                        uuid: "UUID-b".into(),
                         domain: "b.test".into(),
                         server_name: ServerName::try_from("b.test").unwrap(),
                         connection_address: ("b.test".into(), 4460),
@@ -274,12 +276,14 @@ mod tests {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
                     KeyExchangeServer {
+                        uuid: "UUID-a".into(),
                         domain: "a.test".into(),
                         server_name: ServerName::try_from("a.test").unwrap(),
                         connection_address: ("a.test".into(), 4460),
                         regions: vec![],
                     },
                     KeyExchangeServer {
+                        uuid: "UUID-b".into(),
                         domain: "b.test".into(),
                         server_name: ServerName::try_from("b.test").unwrap(),
                         connection_address: ("b.test".into(), 4460),
@@ -311,12 +315,14 @@ mod tests {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
                     KeyExchangeServer {
+                        uuid: "UUID-a".into(),
                         domain: "a.test".into(),
                         server_name: ServerName::try_from("a.test").unwrap(),
                         connection_address: ("a.test".into(), 4460),
                         regions: vec![],
                     },
                     KeyExchangeServer {
+                        uuid: "UUID-b".into(),
                         domain: "b.test".into(),
                         server_name: ServerName::try_from("b.test").unwrap(),
                         connection_address: ("b.test".into(), 4460),
@@ -348,18 +354,21 @@ mod tests {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
                     KeyExchangeServer {
+                        uuid: "UUID-global".into(),
                         domain: "global.test".into(),
                         server_name: ServerName::try_from("global.test").unwrap(),
                         connection_address: ("global.test".into(), 4460),
                         regions: vec![],
                     },
                     KeyExchangeServer {
+                        uuid: "UUID-eu".into(),
                         domain: "eu.test".into(),
                         server_name: ServerName::try_from("eu.test").unwrap(),
                         connection_address: ("eu.test".into(), 4460),
                         regions: vec![],
                     },
                     KeyExchangeServer {
+                        uuid: "UUID-gb".into(),
                         domain: "gb.test".into(),
                         server_name: ServerName::try_from("gb.test").unwrap(),
                         connection_address: ("gb.test".into(), 4460),
