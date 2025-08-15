@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
     time::Duration,
@@ -13,9 +14,10 @@ use tokio_rustls::client::TlsStream;
 use crate::{
     error::PoolError,
     nts::{
-        AlgorithmDescription, AlgorithmId, ProtocolId, ServerInformationRequest,
+        AlgorithmDescription, AlgorithmId, MAX_MESSAGE_SIZE, ProtocolId, ServerInformationRequest,
         ServerInformationResponse,
     },
+    util::BufferBorrowingReader,
 };
 
 mod geo;
@@ -32,7 +34,11 @@ pub trait ServerManager: Sync + Send {
     /// any denied servers.
     ///
     /// Denied servers need not be respected if no other options are available
-    fn assign_server(&self, address: SocketAddr, denied_servers: &[String]) -> Self::Server<'_>;
+    fn assign_server(
+        &self,
+        address: SocketAddr,
+        denied_servers: &[Cow<'_, str>],
+    ) -> Self::Server<'_>;
 }
 
 pub trait Server: Sync + Send {
@@ -89,16 +95,21 @@ async fn fetch_support_data(
 > {
     match tokio::time::timeout(timeout, async {
         ServerInformationRequest.serialize(&mut connection).await?;
-        let support_info = ServerInformationResponse::parse(&mut connection).await?;
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let support_info = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
+            &mut connection,
+            &mut buf,
+        ))
+        .await?;
         connection.shutdown().await?;
         let supported_protocols: HashSet<ProtocolId> = support_info
             .supported_protocols
-            .into_iter()
+            .iter()
             .filter(|v| allowed_protocols.contains(v))
             .collect();
         let supported_algorithms: HashMap<AlgorithmId, AlgorithmDescription> = support_info
             .supported_algorithms
-            .into_iter()
+            .iter()
             .map(|v| (v.id, v))
             .collect();
         Ok((supported_protocols, supported_algorithms))
@@ -198,10 +209,14 @@ mod tests {
             Some(&AlgorithmDescription { id: 1, keysize: 32 })
         );
 
-        let req = ServerInformationResponse::parse(received.get_mut().unwrap().as_slice())
-            .await
-            .unwrap();
-        assert_eq!(req.supported_algorithms.len(), 0);
-        assert_eq!(req.supported_protocols.len(), 0);
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let req = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
+            received.get_mut().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
+        assert!(req.supported_algorithms.iter().next().is_none());
+        assert!(req.supported_protocols.iter().next().is_none());
     }
 }
