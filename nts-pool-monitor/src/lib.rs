@@ -77,3 +77,4 @@ impl std::fmt::Debug for SourceNtsData {
 pub use nts::{KeyExchangeClient, NtsClientConfig};
 pub use packet::NtpPacket;
 pub use time_types::PollInterval;
+pub use tls_utils::pemfile::certs;
