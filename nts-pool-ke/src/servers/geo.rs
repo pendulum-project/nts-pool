@@ -42,6 +42,7 @@ struct GeographicServerManagerInner {
     servers: Box<[KeyExchangeServer]>,
     regions: HashMap<String, Vec<usize>>,
     geodb: maxminddb::Reader<Vec<u8>>,
+    uuid_lookup: HashMap<String, usize>,
 }
 
 impl GeographicServerManager {
@@ -71,7 +72,9 @@ impl GeographicServerManager {
             let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
 
             let mut regions: HashMap<String, Vec<usize>> = HashMap::new();
+            let mut uuid_lookup = HashMap::new();
             for (index, server) in servers.iter().enumerate() {
+                uuid_lookup.insert(server.uuid.clone(), index);
                 for region in &server.regions {
                     if let Some(region_list) = regions.get_mut(region) {
                         region_list.push(index)
@@ -88,6 +91,7 @@ impl GeographicServerManager {
                 servers,
                 regions,
                 geodb,
+                uuid_lookup,
             })
         })
         .await
@@ -153,6 +157,19 @@ impl ServerManager for GeographicServerManager {
             allowed_protocols: self.allowed_protocols.clone(),
             timeout: self.timeout,
         }
+    }
+
+    fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
+        let inner = self.inner.read().unwrap().clone();
+
+        let index = inner.uuid_lookup.get(uuid.as_ref()).copied();
+        index.map(move |index| GeographicServer {
+            inner,
+            upstream_tls: self.upstream_tls.clone(),
+            allowed_protocols: self.allowed_protocols.clone(),
+            timeout: self.timeout,
+            index,
+        })
     }
 }
 
@@ -250,6 +267,7 @@ mod tests {
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
+                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
@@ -296,6 +314,7 @@ mod tests {
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
+                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
@@ -335,6 +354,7 @@ mod tests {
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
+                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),
@@ -385,6 +405,11 @@ mod tests {
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
+                uuid_lookup: HashMap::from([
+                    ("UUID-global".into(), 0),
+                    ("UUID-eu".into(), 1),
+                    ("UUID-gb".into(), 2),
+                ]),
             }))),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: Arc::new(HashSet::new()),

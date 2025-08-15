@@ -33,6 +33,10 @@ pub trait ServerManager: Sync + Send {
     ///
     /// Denied servers need not be respected if no other options are available
     fn assign_server(&self, address: SocketAddr, denied_servers: &[String]) -> Self::Server<'_>;
+
+    /// Select a server with given UUID. This is used for making KE connections
+    /// in the monitoring.
+    fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>>;
 }
 
 pub trait Server: Sync + Send {
