@@ -107,7 +107,28 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             ClientRequest::Ordinary { denied_servers, .. } => self
                 .server_manager
                 .assign_server(source_address, denied_servers),
-            ClientRequest::Uuid { .. } => todo!(),
+            ClientRequest::Uuid { key, uuid, .. } if self.config.monitoring_keys.contains(key) => {
+                if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
+                    server
+                } else {
+                    ErrorResponse {
+                        errorcode: ErrorCode::NoSuchServer,
+                    }
+                    .serialize(&mut client_stream)
+                    .await?;
+                    client_stream.shutdown().await?;
+                    return Err(PoolError::NoSuchServer);
+                }
+            }
+            ClientRequest::Uuid { .. } => {
+                ErrorResponse {
+                    errorcode: ErrorCode::BadRequest,
+                }
+                .serialize(&mut client_stream)
+                .await?;
+                client_stream.shutdown().await?;
+                return Err(PoolError::FailedAuthentication);
+            }
         };
 
         let (protocol, algorithm) =
@@ -306,7 +327,10 @@ mod tests {
 
     use crate::{
         config::NtsPoolKeConfig,
-        nts::{AlgorithmDescription, FixedKeyRequest, KeyExchangeResponse, ProtocolId},
+        nts::{
+            AlgorithmDescription, ErrorCode, FixedKeyRequest, KeyExchangeResponse, NtsError,
+            ProtocolId,
+        },
         pool_ke::NtsPoolKe,
         servers::{Server, ServerConnection, ServerManager},
     };
@@ -362,9 +386,11 @@ mod tests {
             std::collections::HashMap<crate::nts::AlgorithmId, crate::nts::AlgorithmDescription>,
         ),
         written: Mutex<Vec<u8>>,
+        uuid_exists: bool,
         response: Vec<u8>,
         received_denied_servers: Mutex<Vec<String>>,
         received_addr: Mutex<Option<SocketAddr>>,
+        received_uuid: Mutex<Option<String>>,
     }
 
     #[derive(Clone)]
@@ -378,6 +404,7 @@ mod tests {
             response: Vec<u8>,
             protocols: &[ProtocolId],
             algorithms: &[AlgorithmDescription],
+            uuid_exists: bool,
         ) -> Self {
             Self {
                 inner: Arc::new(TestManagerInner {
@@ -388,8 +415,10 @@ mod tests {
                     ),
                     written: Mutex::new(vec![]),
                     response,
+                    uuid_exists,
                     received_denied_servers: Mutex::new(vec![]),
                     received_addr: Mutex::new(None),
+                    received_uuid: Mutex::new(None),
                 }),
             }
         }
@@ -416,8 +445,18 @@ mod tests {
             }
         }
 
-        fn get_server_by_uuid(&self, _uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
-            unimplemented!()
+        fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
+            *self.inner.received_uuid.lock().unwrap() = Some(uuid.as_ref().into());
+            if self.inner.uuid_exists {
+                Some(TestServer {
+                    name: &self.inner.name,
+                    supports: self.inner.supports.clone(),
+                    written: &self.inner.written,
+                    read_data: &self.inner.response,
+                })
+            } else {
+                None
+            }
         }
     }
 
@@ -531,6 +570,7 @@ mod tests {
             ],
             &[0],
             &[AlgorithmDescription { id: 0, keysize: 16 }],
+            false,
         );
         let pool_manager = manager.clone();
 
@@ -542,6 +582,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
+                monitoring_keys: vec![],
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -594,6 +635,7 @@ mod tests {
                 AlgorithmDescription { id: 1, keysize: 32 },
                 AlgorithmDescription { id: 0, keysize: 16 },
             ],
+            false,
         );
         let pool_manager = manager.clone();
 
@@ -605,6 +647,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
+                monitoring_keys: vec![],
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -658,6 +701,7 @@ mod tests {
                 AlgorithmDescription { id: 1, keysize: 32 },
                 AlgorithmDescription { id: 0, keysize: 16 },
             ],
+            false,
         );
         let pool_manager = manager.clone();
 
@@ -669,6 +713,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
+                monitoring_keys: vec![],
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -719,6 +764,7 @@ mod tests {
             ],
             &[0],
             &[AlgorithmDescription { id: 0, keysize: 16 }],
+            false,
         );
         let pool_manager = manager.clone();
 
@@ -730,6 +776,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: true,
+                monitoring_keys: vec![],
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
@@ -767,6 +814,253 @@ mod tests {
             manager.inner.received_addr.lock().unwrap().unwrap(),
             "1.2.3.4:9".parse().unwrap()
         );
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_get_uuid() {
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            true,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                server_tls: listen_tls_config("pool.test"),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: vec!["test".into()],
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b't', b'e', b's', b't', 0xCF,
+            1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
+        ])
+        .await
+        .unwrap();
+        let response = KeyExchangeResponse::parse(&mut conn).await.unwrap();
+        conn.shutdown().await.unwrap();
+
+        #[allow(clippy::await_holding_lock)]
+        let timesource_request =
+            FixedKeyRequest::parse(manager.inner.written.lock().unwrap().as_slice())
+                .await
+                .unwrap();
+
+        assert_eq!(timesource_request.algorithm, 0);
+        assert_eq!(timesource_request.protocol, 0);
+        assert_eq!(timesource_request.c2s.len(), 16);
+        assert_eq!(timesource_request.s2c.len(), 16);
+        assert_eq!(response.algorithm, 0);
+        assert_eq!(response.protocol, 0);
+        assert_eq!(response.server.as_deref(), Some("a.test"));
+        assert_eq!(
+            manager.inner.received_uuid.lock().unwrap().take().unwrap(),
+            "uuid"
+        );
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_get_uuid_non_existing() {
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            false,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                server_tls: listen_tls_config("pool.test"),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: vec!["test".into()],
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b't', b'e', b's', b't', 0xCF,
+            1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
+        ])
+        .await
+        .unwrap();
+        let response = KeyExchangeResponse::parse(&mut conn).await;
+        conn.shutdown().await.unwrap();
+
+        assert!(manager.inner.written.lock().unwrap().is_empty());
+
+        assert!(matches!(
+            response,
+            Err(NtsError::Error(ErrorCode::NoSuchServer))
+        ));
+        assert_eq!(
+            manager.inner.received_uuid.lock().unwrap().take().unwrap(),
+            "uuid"
+        );
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_get_uuid_authfail() {
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            true,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                server_tls: listen_tls_config("pool.test"),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: vec!["none".into()],
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b't', b'e', b's', b't', 0xCF,
+            1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
+        ])
+        .await
+        .unwrap();
+        let response = KeyExchangeResponse::parse(&mut conn).await;
+        conn.shutdown().await.unwrap();
+
+        assert!(manager.inner.written.lock().unwrap().is_empty());
+
+        assert!(matches!(
+            response,
+            Err(NtsError::Error(ErrorCode::BadRequest))
+        ));
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_get_uuid_missing_auth() {
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            true,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                server_tls: listen_tls_config("pool.test"),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: vec!["none".into()],
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80,
+            0, 0, 0,
+        ])
+        .await
+        .unwrap();
+        let response = KeyExchangeResponse::parse(&mut conn).await;
+        conn.shutdown().await.unwrap();
+
+        assert!(manager.inner.written.lock().unwrap().is_empty());
+
+        assert!(matches!(
+            response,
+            Err(NtsError::Error(ErrorCode::BadRequest))
+        ));
 
         pool_handle.abort();
     }
