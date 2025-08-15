@@ -103,9 +103,12 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         debug!("Recevied request from client");
 
-        let pick = self
-            .server_manager
-            .assign_server(source_address, &client_request.denied_servers);
+        let pick = match &client_request {
+            ClientRequest::Ordinary { denied_servers, .. } => self
+                .server_manager
+                .assign_server(source_address, denied_servers),
+            ClientRequest::Uuid { .. } => todo!(),
+        };
 
         let (protocol, algorithm) =
             match self.select_protocol_algorithm(&client_request, &pick).await {
@@ -233,14 +236,14 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
     ) -> Result<Option<(ProtocolId, AlgorithmDescription)>, PoolError> {
         let (supported_protocols, supported_algorithms) = server.support().await?;
         let mut protocol = None;
-        for candidate_protocol in client_request.protocols.iter() {
+        for candidate_protocol in client_request.protocols().iter() {
             if supported_protocols.contains(candidate_protocol) {
                 protocol = Some(*candidate_protocol);
                 break;
             }
         }
         let mut algorithm = None;
-        for candidate_algorithm in client_request.algorithms.iter() {
+        for candidate_algorithm in client_request.algorithms().iter() {
             if let Some(algdesc) = supported_algorithms.get(candidate_algorithm) {
                 algorithm = Some(*algdesc);
                 break;
