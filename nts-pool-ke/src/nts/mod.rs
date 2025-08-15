@@ -25,6 +25,7 @@ pub enum ErrorCode {
     UnrecognizedCriticalRecord,
     BadRequest,
     InternalServerError,
+    NoSuchServer,
     Unknown(u16),
 }
 
@@ -34,6 +35,7 @@ impl Display for ErrorCode {
             ErrorCode::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             ErrorCode::BadRequest => f.write_str("Bad request"),
             ErrorCode::InternalServerError => f.write_str("Internal server error"),
+            ErrorCode::NoSuchServer => f.write_str("Requested server doesn't exist"),
             ErrorCode::Unknown(id) => write!(f, "Unknown({id})"),
         }
     }
@@ -46,6 +48,7 @@ impl ErrorCode {
             0 => Self::UnrecognizedCriticalRecord,
             1 => Self::BadRequest,
             2 => Self::InternalServerError,
+            0xF000 => Self::NoSuchServer,
             _ => Self::Unknown(code),
         })
     }
@@ -55,6 +58,7 @@ impl ErrorCode {
             ErrorCode::UnrecognizedCriticalRecord => writer.write_u16(0).await,
             ErrorCode::BadRequest => writer.write_u16(1).await,
             ErrorCode::InternalServerError => writer.write_u16(2).await,
+            ErrorCode::NoSuchServer => writer.write_u16(0xF000).await,
             ErrorCode::Unknown(code) => writer.write_u16(code).await,
         }
     }
