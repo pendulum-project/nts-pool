@@ -151,7 +151,8 @@ impl ClientRequest {
                 NtsRecord::Unknown { .. }
                 | NtsRecord::KeepAlive
                 | NtsRecord::Port { .. }
-                | NtsRecord::Server { .. } => {}
+                | NtsRecord::Server { .. }
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::Error { .. }
                 | NtsRecord::Warning { .. }
@@ -243,7 +244,8 @@ impl ServerInformationResponse {
                 NtsRecord::KeepAlive
                 | NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
-                | NtsRecord::Port { .. } => {}
+                | NtsRecord::Port { .. }
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::NextProtocol { .. }
@@ -349,7 +351,8 @@ impl FixedKeyRequest {
                 NtsRecord::KeepAlive
                 | NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
-                | NtsRecord::Port { .. } => {}
+                | NtsRecord::Port { .. }
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedNextProtocolList { .. }
@@ -442,7 +445,9 @@ impl KeyExchangeResponse {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
-                NtsRecord::Unknown { .. } | NtsRecord::KeepAlive => {}
+                NtsRecord::Unknown { .. }
+                | NtsRecord::KeepAlive
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::NtpServerDeny { .. }
                 | NtsRecord::FixedKeyRequest { .. }
