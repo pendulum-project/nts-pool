@@ -152,6 +152,7 @@ pub enum ErrorCode {
     UnrecognizedCriticalRecord,
     BadRequest,
     InternalServerError,
+    NoSuchServer,
     Unknown(u16),
 }
 
@@ -161,6 +162,7 @@ impl From<u16> for ErrorCode {
             0 => Self::UnrecognizedCriticalRecord,
             1 => Self::BadRequest,
             2 => Self::InternalServerError,
+            0xF000 => Self::NoSuchServer,
             v => Self::Unknown(v),
         }
     }
@@ -172,6 +174,7 @@ impl From<ErrorCode> for u16 {
             ErrorCode::UnrecognizedCriticalRecord => 0,
             ErrorCode::BadRequest => 1,
             ErrorCode::InternalServerError => 2,
+            ErrorCode::NoSuchServer => 0xF000,
             ErrorCode::Unknown(v) => v,
         }
     }
@@ -183,6 +186,7 @@ impl std::fmt::Display for ErrorCode {
             ErrorCode::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             ErrorCode::BadRequest => f.write_str("Bad request"),
             ErrorCode::InternalServerError => f.write_str("Internal server error"),
+            ErrorCode::NoSuchServer => f.write_str("Requested server doesn't exist"),
             ErrorCode::Unknown(id) => write!(f, "Unknown({id})"),
         }
     }
@@ -275,6 +279,7 @@ pub struct KeyExchangeResult {
 pub struct NtsClientConfig {
     pub certificates: Arc<[Certificate]>,
     pub protocol_version: NtpVersion,
+    pub authorization_key: String,
 }
 
 impl Default for NtsClientConfig {
@@ -282,6 +287,7 @@ impl Default for NtsClientConfig {
         Self {
             certificates: Default::default(),
             protocol_version: NtpVersion::V4,
+            authorization_key: "".into(),
         }
     }
 }
@@ -290,6 +296,7 @@ pub struct KeyExchangeClient {
     connector: TlsConnector,
     protocols: Box<[NextProtocol]>,
     algorithms: Box<[AeadAlgorithm]>,
+    authorization_key: String,
 }
 
 impl KeyExchangeClient {
@@ -317,6 +324,7 @@ impl KeyExchangeClient {
                 AeadAlgorithm::AeadAesSivCmac256,
             ]
             .into(),
+            authorization_key: config.authorization_key,
         })
     }
 
@@ -324,10 +332,13 @@ impl KeyExchangeClient {
         &self,
         io: impl AsyncRead + AsyncWrite + Unpin,
         server_name: String,
+        uuid: impl AsRef<str>,
     ) -> Result<KeyExchangeResult, NtsError> {
         let request = Request::KeyExchange {
             algorithms: self.algorithms.as_ref().into(),
             protocols: self.protocols.as_ref().into(),
+            authentication_key: Some(self.authorization_key.as_str().into()),
+            uuid: Some(uuid.as_ref().into()),
         };
 
         let mut io = self

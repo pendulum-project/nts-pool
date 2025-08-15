@@ -38,6 +38,13 @@ pub enum NtsRecord<'a> {
         critical: bool,
         data: Cow<'a, [u8]>,
     },
+
+    Authentication {
+        key: Cow<'a, str>,
+    },
+    UUIDRequest {
+        uuid: Cow<'a, str>,
+    },
 }
 
 impl NtsRecord<'_> {
@@ -58,6 +65,8 @@ impl NtsRecord<'_> {
             5 => Self::parse_new_cookie(body).await,
             6 => Self::parse_server(body).await,
             7 => Self::parse_port(body).await,
+            0x4F00 => Self::parse_authentication(body).await,
+            0x4F01 => Self::parse_uuid_request(body).await,
             _ => {
                 let mut data = vec![0; size.into()];
                 body.read_exact(&mut data).await?;
@@ -149,6 +158,26 @@ impl NtsRecord<'_> {
         }
     }
 
+    async fn parse_authentication(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
+        let mut key = String::new();
+        reader.read_to_string(&mut key).await?;
+        if reader.limit() != 0 {
+            return Err(ErrorKind::UnexpectedEof.into());
+        }
+
+        Ok(Self::Authentication { key: key.into() })
+    }
+
+    async fn parse_uuid_request(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
+        let mut uuid = String::new();
+        reader.read_to_string(&mut uuid).await?;
+        if reader.limit() != 0 {
+            return Err(ErrorKind::UnexpectedEof.into());
+        }
+
+        Ok(Self::UUIDRequest { uuid: uuid.into() })
+    }
+
     pub async fn serialize(&self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         writer.write_u16(self.record_type()).await?;
         let size: u16 = self
@@ -173,6 +202,8 @@ impl NtsRecord<'_> {
             NtsRecord::NewCookie { cookie_data } => writer.write_all(cookie_data).await?,
             NtsRecord::Server { name } => writer.write_all(name.as_bytes()).await?,
             NtsRecord::Port { port } => writer.write_u16(*port).await?,
+            NtsRecord::Authentication { key } => writer.write_all(key.as_bytes()).await?,
+            NtsRecord::UUIDRequest { uuid } => writer.write_all(uuid.as_bytes()).await?,
             NtsRecord::Unknown { data, .. } => writer.write_all(data).await?,
         }
         Ok(())
@@ -190,6 +221,8 @@ impl NtsRecord<'_> {
             NtsRecord::NewCookie { .. } => 5,
             NtsRecord::Server { .. } => 6 | CRITICAL_BIT,
             NtsRecord::Port { .. } => 7 | CRITICAL_BIT,
+            NtsRecord::Authentication { .. } => 0x4F00,
+            NtsRecord::UUIDRequest { .. } => 0x4F01 | CRITICAL_BIT,
             NtsRecord::Unknown {
                 record_type,
                 critical,
@@ -208,6 +241,8 @@ impl NtsRecord<'_> {
             NtsRecord::NewCookie { cookie_data } => cookie_data.len(),
             NtsRecord::Server { name } => name.len(),
             NtsRecord::Port { .. } => size_of::<u16>(),
+            NtsRecord::Authentication { key } => key.len(),
+            NtsRecord::UUIDRequest { uuid } => uuid.len(),
             NtsRecord::Unknown { data, .. } => data.len(),
         }
     }
@@ -528,6 +563,52 @@ mod tests {
         let mut buf = vec![];
         serialize(NtsRecord::Port { port: 123 }, &mut buf);
         assert_eq!(buf, [0x80, 7, 0, 2, 0, 123]);
+    }
+
+    #[test]
+    fn test_authentication() {
+        let Ok(NtsRecord::Authentication { key }) =
+            parse(&[0x4F, 0, 0, 5, b'h', b'e', b'l', b'l', b'o'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(key, "hello");
+
+        let Ok(NtsRecord::Authentication { key }) =
+            parse(&[0xCF, 0, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(key, "hello");
+
+        assert!(parse(&[0x4F, 0, 0, 5, b'h', b'e', b'l']).is_err());
+
+        let mut buf = vec![];
+        serialize(NtsRecord::Authentication { key: "hi".into() }, &mut buf);
+        assert_eq!(buf, &[0x4F, 0, 0, 2, b'h', b'i']);
+    }
+
+    #[test]
+    fn test_uuid_request() {
+        let Ok(NtsRecord::UUIDRequest { uuid }) =
+            parse(&[0x4F, 1, 0, 5, b'h', b'e', b'l', b'l', b'o'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(uuid, "hello");
+
+        let Ok(NtsRecord::UUIDRequest { uuid }) =
+            parse(&[0xCF, 1, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(uuid, "hello");
+
+        assert!(parse(&[0xCF, 1, 0, 5, b'h', b'e', b'l']).is_err());
+
+        let mut buf = vec![];
+        serialize(NtsRecord::UUIDRequest { uuid: "hi".into() }, &mut buf);
+        assert_eq!(buf, &[0xCF, 1, 0, 2, b'h', b'i']);
     }
 
     #[test]
