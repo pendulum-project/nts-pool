@@ -291,7 +291,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         D: serde::Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case", deny_unknown_fields)]
+        #[serde(rename_all = "kebab-case")]
         struct BareKeyExchangeServer {
             domain: String,
             port: u16,
