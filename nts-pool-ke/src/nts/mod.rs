@@ -159,7 +159,8 @@ impl ClientRequest {
                 | NtsRecord::FixedKeyRequest { .. }
                 | NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedAlgorithmList { .. }
-                | NtsRecord::SupportedNextProtocolList { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::SupportedNextProtocolList { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -251,7 +252,8 @@ impl ServerInformationResponse {
                 | NtsRecord::NextProtocol { .. }
                 | NtsRecord::AeadAlgorithm { .. }
                 | NtsRecord::FixedKeyRequest { .. }
-                | NtsRecord::NtpServerDeny { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::NtpServerDeny { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -357,7 +359,8 @@ impl FixedKeyRequest {
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedNextProtocolList { .. }
                 | NtsRecord::SupportedAlgorithmList { .. }
-                | NtsRecord::NtpServerDeny { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::NtpServerDeny { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -452,7 +455,8 @@ impl KeyExchangeResponse {
                 NtsRecord::NtpServerDeny { .. }
                 | NtsRecord::FixedKeyRequest { .. }
                 | NtsRecord::SupportedAlgorithmList { .. }
-                | NtsRecord::SupportedNextProtocolList { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::SupportedNextProtocolList { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 

@@ -54,6 +54,9 @@ pub enum NtsRecord {
     Authentication {
         key: String,
     },
+    UUIDRequest {
+        uuid: String,
+    },
 }
 
 impl NtsRecord {
@@ -80,6 +83,7 @@ impl NtsRecord {
             0x4002 => Self::parse_fixed_key_request(body).await,
             0x4003 => Self::parse_ntp_server_deny(body).await,
             0x4F00 => Self::parse_authentication(body).await,
+            0x4F01 => Self::parse_uuid_request(body).await,
             _ => {
                 let mut data = vec![0; size.into()];
                 body.read_exact(&mut data).await?;
@@ -240,6 +244,15 @@ impl NtsRecord {
         Ok(Self::Authentication { key })
     }
 
+    async fn parse_uuid_request(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
+        let mut uuid = String::new();
+        reader.read_to_string(&mut uuid).await?;
+        if reader.limit() != 0 {
+            return Err(ErrorKind::UnexpectedEof.into());
+        }
+        Ok(Self::UUIDRequest { uuid })
+    }
+
     pub async fn serialize(&self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         writer.write_u16(self.record_type()).await?;
         let size: u16 = self
@@ -287,6 +300,7 @@ impl NtsRecord {
             }
             NtsRecord::NtpServerDeny { denied } => writer.write_all(denied.as_bytes()).await?,
             NtsRecord::Authentication { key } => writer.write_all(key.as_bytes()).await?,
+            NtsRecord::UUIDRequest { uuid } => writer.write_all(uuid.as_bytes()).await?,
         }
         Ok(())
     }
@@ -314,6 +328,7 @@ impl NtsRecord {
             NtsRecord::FixedKeyRequest { .. } => 0x4002 | CRITICAL_BIT,
             NtsRecord::NtpServerDeny { .. } => 0x4003,
             NtsRecord::Authentication { .. } => 0x4F00,
+            NtsRecord::UUIDRequest { .. } => 0x4F01 | CRITICAL_BIT,
         }
     }
 
@@ -338,6 +353,7 @@ impl NtsRecord {
             NtsRecord::FixedKeyRequest { c2s, s2c } => c2s.len() + s2c.len(),
             NtsRecord::NtpServerDeny { denied } => denied.len(),
             NtsRecord::Authentication { key } => key.len(),
+            NtsRecord::UUIDRequest { uuid } => uuid.len(),
         }
     }
 }
@@ -847,6 +863,29 @@ mod tests {
         let mut buf = vec![];
         serialize(NtsRecord::Authentication { key: "hi".into() }, &mut buf);
         assert_eq!(buf, &[0x4F, 0, 0, 2, b'h', b'i']);
+    }
+
+    #[test]
+    fn test_uuid_request() {
+        let Ok(NtsRecord::UUIDRequest { uuid }) =
+            parse(&[0x4F, 1, 0, 5, b'h', b'e', b'l', b'l', b'o'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(uuid, "hello");
+
+        let Ok(NtsRecord::UUIDRequest { uuid }) =
+            parse(&[0xCF, 1, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(uuid, "hello");
+
+        assert!(parse(&[0xCF, 1, 0, 5, b'h', b'e', b'l']).is_err());
+
+        let mut buf = vec![];
+        serialize(NtsRecord::UUIDRequest { uuid: "hi".into() }, &mut buf);
+        assert_eq!(buf, &[0xCF, 1, 0, 2, b'h', b'i']);
     }
 
     #[test]
