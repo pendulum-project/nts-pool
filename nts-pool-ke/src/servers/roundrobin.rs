@@ -18,6 +18,7 @@ use crate::{
 
 pub struct RoundRobinServerManager {
     servers: Box<[KeyExchangeServer]>,
+    uuid_lookup: HashMap<String, usize>,
     allowed_protocols: HashSet<ProtocolId>,
     upstream_tls: TlsConnector,
     next_start: AtomicUsize,
@@ -29,8 +30,14 @@ impl RoundRobinServerManager {
         let server_file = std::fs::File::open(config.key_exchange_servers)?;
         let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
 
+        let mut uuid_lookup = HashMap::new();
+        for (index, server) in servers.iter().enumerate() {
+            uuid_lookup.insert(server.uuid.clone(), index);
+        }
+
         Ok(Self {
             servers,
+            uuid_lookup,
             allowed_protocols: config.allowed_protocols,
             upstream_tls: config.upstream_tls,
             next_start: AtomicUsize::new(0),
@@ -71,6 +78,15 @@ impl ServerManager for RoundRobinServerManager {
             server: &self.servers[start_index % self.servers.len()],
             owner: self,
         }
+    }
+
+    fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
+        self.uuid_lookup
+            .get(uuid.as_ref())
+            .map(|&index| RoundRobinServer {
+                server: &self.servers[index],
+                owner: self,
+            })
     }
 }
 
@@ -118,7 +134,11 @@ impl Server for RoundRobinServer<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, sync::Arc, time::Duration};
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+        time::Duration,
+    };
 
     use rustls::{
         RootCertStore,
@@ -169,6 +189,7 @@ mod tests {
                 },
             ]
             .into(),
+            uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
@@ -178,6 +199,40 @@ mod tests {
         let first_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
         let second_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
         assert_ne!(first_server.name(), second_server.name());
+    }
+
+    #[test]
+    fn test_lookup_by_uuid() {
+        let manager = RoundRobinServerManager {
+            servers: [
+                KeyExchangeServer {
+                    uuid: "UUID-a".into(),
+                    domain: "a.test".into(),
+                    server_name: ServerName::try_from("a.test").unwrap(),
+                    connection_address: ("a.test".into(), 4460),
+                    regions: vec![],
+                },
+                KeyExchangeServer {
+                    uuid: "UUID-b".into(),
+                    domain: "b.test".into(),
+                    server_name: ServerName::try_from("b.test").unwrap(),
+                    connection_address: ("b.test".into(), 4460),
+                    regions: vec![],
+                },
+            ]
+            .into(),
+            uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+            upstream_tls: upstream_tls_config(),
+            allowed_protocols: HashSet::new(),
+            next_start: 0.into(),
+            timeout: Duration::from_secs(1),
+        };
+
+        let server = manager.get_server_by_uuid("UUID-a").unwrap();
+        assert_eq!(server.name(), "a.test");
+
+        let server = manager.get_server_by_uuid("UUID-b").unwrap();
+        assert_eq!(server.name(), "b.test");
     }
 
     #[test]
@@ -200,6 +255,7 @@ mod tests {
                 },
             ]
             .into(),
+            uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
@@ -233,6 +289,7 @@ mod tests {
                 },
             ]
             .into(),
+            uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),

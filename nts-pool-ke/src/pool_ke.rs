@@ -427,6 +427,10 @@ mod tests {
                 read_data: &self.inner.response,
             }
         }
+
+        fn get_server_by_uuid(&self, _uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
+            unimplemented!()
+        }
     }
 
     struct TestServer<'a> {
