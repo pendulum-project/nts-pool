@@ -17,17 +17,6 @@ impl Display for DecryptError {
 
 impl std::error::Error for DecryptError {}
 
-#[derive(Debug)]
-pub struct KeyError;
-
-impl Display for KeyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid key")
-    }
-}
-
-impl std::error::Error for KeyError {}
-
 struct Buffer<'a> {
     buffer: &'a mut [u8],
     valid: usize,
@@ -116,8 +105,10 @@ pub trait CipherProvider {
     fn get(&self, context: &[ExtensionField<'_>]) -> Option<CipherHolder<'_>>;
 }
 
+#[cfg(test)]
 pub struct NoCipher;
 
+#[cfg(test)]
 impl CipherProvider for NoCipher {
     fn get<'a>(&self, _context: &[ExtensionField<'_>]) -> Option<CipherHolder<'_>> {
         None

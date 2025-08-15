@@ -1,20 +1,31 @@
-use std::io::Cursor;
+use std::{
+    fs::File,
+    io::{BufReader, Cursor},
+    sync::Arc,
+};
 
-use nts_pool_monitor::{KeyExchangeClient, NtpPacket, NtpVersion, NtsClientConfig, PollInterval};
+use nts_pool_monitor::{
+    KeyExchangeClient, NtpPacket, NtpVersion, NtsClientConfig, PollInterval, certs,
+};
 use tokio::net::TcpStream;
 
 #[tokio::main]
 async fn main() {
-    let io = TcpStream::connect("time.tweede.golf:4460").await.unwrap();
+    let io = TcpStream::connect("localhost:4460").await.unwrap();
 
     let client = KeyExchangeClient::new(NtsClientConfig {
-        certificates: [].into(),
+        certificates: certs(&mut BufReader::new(
+            File::open("./nts-pool-ke/testdata/testca.pem").unwrap(),
+        ))
+        .collect::<Result<Arc<_>, _>>()
+        .unwrap(),
         protocol_version: NtpVersion::V4,
+        authorization_key: "testmonitor".into(),
     })
     .unwrap();
 
     let result = client
-        .exchange_keys(io, "time.tweede.golf".into())
+        .exchange_keys(io, "localhost".into(), "UUID-A")
         .await
         .unwrap();
 

@@ -5,6 +5,8 @@ pub enum PoolError {
     NtsError(NtsError),
     IO(std::io::Error),
     Rustls(rustls::Error),
+    FailedAuthentication,
+    NoSuchServer,
     Timeout,
     NoProxy,
 }
@@ -33,6 +35,8 @@ impl std::fmt::Display for PoolError {
             Self::NtsError(e) => e.fmt(f),
             Self::IO(e) => e.fmt(f),
             Self::Rustls(e) => e.fmt(f),
+            Self::NoSuchServer => f.write_str("Requested server does not exist"),
+            Self::FailedAuthentication => f.write_str("Invalid authentication for request"),
             Self::Timeout => f.write_str("Timeout occured"),
             Self::NoProxy => f.write_str("No proxy header found"),
         }

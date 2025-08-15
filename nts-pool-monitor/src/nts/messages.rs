@@ -15,6 +15,8 @@ pub enum Request<'a> {
         algorithms: Cow<'a, [AeadAlgorithm]>,
         #[cfg_attr(feature = "__internal-fuzz", allow(private_interfaces))]
         protocols: Cow<'a, [NextProtocol]>,
+        authentication_key: Option<Cow<'a, str>>,
+        uuid: Option<Cow<'a, str>>,
     },
 }
 
@@ -50,11 +52,15 @@ impl Request<'_> {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
-                NtsRecord::Unknown { .. } | NtsRecord::Server { .. } | NtsRecord::Port { .. } => {}
+                NtsRecord::Unknown { .. }
+                | NtsRecord::Server { .. }
+                | NtsRecord::Port { .. }
+                | NtsRecord::Authentication { .. } => {}
                 // not allowed
                 NtsRecord::Error { .. }
                 | NtsRecord::Warning { .. }
-                | NtsRecord::NewCookie { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::NewCookie { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -62,6 +68,8 @@ impl Request<'_> {
             Ok(Request::KeyExchange {
                 algorithms,
                 protocols,
+                authentication_key: None,
+                uuid: None,
             })
         } else {
             Err(NtsError::Invalid)
@@ -76,7 +84,14 @@ impl Request<'_> {
             Request::KeyExchange {
                 algorithms,
                 protocols,
+                authentication_key,
+                uuid,
             } => {
+                if let Some(key) = authentication_key {
+                    NtsRecord::Authentication { key }
+                        .serialize(&mut writer)
+                        .await?;
+                }
                 NtsRecord::NextProtocol {
                     protocol_ids: protocols,
                 }
@@ -87,6 +102,11 @@ impl Request<'_> {
                 }
                 .serialize(&mut writer)
                 .await?;
+                if let Some(uuid) = uuid {
+                    NtsRecord::UUIDRequest { uuid }
+                        .serialize(&mut writer)
+                        .await?;
+                }
                 NtsRecord::EndOfMessage.serialize(&mut writer).await?;
             }
         }
@@ -170,8 +190,12 @@ impl KeyExchangeResponse<'_> {
                 NtsRecord::Unknown { critical: true, .. } => {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
+                // Problematic
+                NtsRecord::UUIDRequest { .. } => {
+                    return Err(NtsError::Invalid);
+                }
                 // Ignored
-                NtsRecord::Unknown { .. } => {}
+                NtsRecord::Unknown { .. } | NtsRecord::Authentication { .. } => {}
             }
         }
 
@@ -507,6 +531,8 @@ mod tests {
                     .as_slice()
                     .into(),
                     protocols: [NextProtocol::NTPv4].as_slice().into(),
+                    authentication_key: None,
+                    uuid: None,
                 },
                 &mut buf
             ),
@@ -516,6 +542,31 @@ mod tests {
             buf,
             [
                 0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 4, 0, 17, 0, 15, 0x80, 0, 0, 0
+            ]
+        );
+    }
+
+    #[test]
+    fn test_uuid_request_serialize() {
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                Request::serialize,
+                Request::KeyExchange {
+                    algorithms: [AeadAlgorithm::AeadAesSivCmac256].as_slice().into(),
+                    protocols: [NextProtocol::NTPv4].as_slice().into(),
+                    authentication_key: Some("test".into()),
+                    uuid: Some("uuid".into()),
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x4f, 0, 0, 4, b't', b'e', b's', b't', 0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 15,
+                0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0
             ]
         );
     }

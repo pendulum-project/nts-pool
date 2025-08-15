@@ -25,6 +25,7 @@ pub enum ErrorCode {
     UnrecognizedCriticalRecord,
     BadRequest,
     InternalServerError,
+    NoSuchServer,
     Unknown(u16),
 }
 
@@ -34,6 +35,7 @@ impl Display for ErrorCode {
             ErrorCode::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             ErrorCode::BadRequest => f.write_str("Bad request"),
             ErrorCode::InternalServerError => f.write_str("Internal server error"),
+            ErrorCode::NoSuchServer => f.write_str("Requested server doesn't exist"),
             ErrorCode::Unknown(id) => write!(f, "Unknown({id})"),
         }
     }
@@ -46,6 +48,7 @@ impl ErrorCode {
             0 => Self::UnrecognizedCriticalRecord,
             1 => Self::BadRequest,
             2 => Self::InternalServerError,
+            0xF000 => Self::NoSuchServer,
             _ => Self::Unknown(code),
         })
     }
@@ -55,6 +58,7 @@ impl ErrorCode {
             ErrorCode::UnrecognizedCriticalRecord => writer.write_u16(0).await,
             ErrorCode::BadRequest => writer.write_u16(1).await,
             ErrorCode::InternalServerError => writer.write_u16(2).await,
+            ErrorCode::NoSuchServer => writer.write_u16(0xF000).await,
             ErrorCode::Unknown(code) => writer.write_u16(code).await,
         }
     }
@@ -111,19 +115,45 @@ impl Display for NtsError {
 impl core::error::Error for NtsError {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ClientRequest {
-    pub algorithms: Vec<AlgorithmId>,
-    pub protocols: Vec<ProtocolId>,
-    pub denied_servers: Vec<String>,
+pub enum ClientRequest {
+    Ordinary {
+        algorithms: Vec<AlgorithmId>,
+        protocols: Vec<ProtocolId>,
+        denied_servers: Vec<String>,
+    },
+    Uuid {
+        algorithms: Vec<AlgorithmId>,
+        protocols: Vec<ProtocolId>,
+        key: String,
+        uuid: String,
+    },
 }
 
 impl ClientRequest {
+    pub fn algorithms(&self) -> &[AlgorithmId] {
+        match self {
+            ClientRequest::Ordinary { algorithms, .. } | ClientRequest::Uuid { algorithms, .. } => {
+                algorithms
+            }
+        }
+    }
+
+    pub fn protocols(&self) -> &[ProtocolId] {
+        match self {
+            ClientRequest::Ordinary { protocols, .. } | ClientRequest::Uuid { protocols, .. } => {
+                protocols
+            }
+        }
+    }
+
     pub async fn parse(reader: impl AsyncRead + Unpin) -> Result<ClientRequest, NtsError> {
         let mut reader = reader.take(MAX_MESSAGE_SIZE);
 
         let mut algorithms = None;
         let mut protocols = None;
         let mut denied_servers = vec![];
+        let mut authentication_key = None;
+        let mut given_uuid = None;
 
         loop {
             let record = NtsRecord::parse(&mut reader).await?;
@@ -143,6 +173,18 @@ impl ClientRequest {
                     algorithms = Some(algorithm_ids)
                 }
                 NtsRecord::NtpServerDeny { denied } => denied_servers.push(denied),
+                NtsRecord::Authentication { key } => {
+                    if authentication_key.is_some() {
+                        return Err(NtsError::Invalid);
+                    }
+                    authentication_key = Some(key)
+                }
+                NtsRecord::UUIDRequest { uuid } if authentication_key.is_some() => {
+                    if given_uuid.is_some() {
+                        return Err(NtsError::Invalid);
+                    }
+                    given_uuid = Some(uuid)
+                }
                 // Unknown critical
                 NtsRecord::Unknown { critical: true, .. } => {
                     return Err(NtsError::UnrecognizedCriticalRecord);
@@ -158,16 +200,29 @@ impl ClientRequest {
                 | NtsRecord::FixedKeyRequest { .. }
                 | NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedAlgorithmList { .. }
-                | NtsRecord::SupportedNextProtocolList { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::SupportedNextProtocolList { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
         if let (Some(algorithms), Some(protocols)) = (algorithms, protocols) {
-            Ok(ClientRequest {
-                algorithms,
-                protocols,
-                denied_servers,
-            })
+            if let (Some(key), Some(uuid)) = (authentication_key, given_uuid) {
+                if !denied_servers.is_empty() {
+                    return Err(NtsError::Invalid);
+                }
+                Ok(ClientRequest::Uuid {
+                    algorithms,
+                    protocols,
+                    key,
+                    uuid,
+                })
+            } else {
+                Ok(ClientRequest::Ordinary {
+                    algorithms,
+                    protocols,
+                    denied_servers,
+                })
+            }
         } else {
             Err(NtsError::Invalid)
         }
@@ -243,13 +298,15 @@ impl ServerInformationResponse {
                 NtsRecord::KeepAlive
                 | NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
-                | NtsRecord::Port { .. } => {}
+                | NtsRecord::Port { .. }
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::NextProtocol { .. }
                 | NtsRecord::AeadAlgorithm { .. }
                 | NtsRecord::FixedKeyRequest { .. }
-                | NtsRecord::NtpServerDeny { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::NtpServerDeny { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -349,12 +406,14 @@ impl FixedKeyRequest {
                 NtsRecord::KeepAlive
                 | NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
-                | NtsRecord::Port { .. } => {}
+                | NtsRecord::Port { .. }
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedNextProtocolList { .. }
                 | NtsRecord::SupportedAlgorithmList { .. }
-                | NtsRecord::NtpServerDeny { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::NtpServerDeny { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -442,12 +501,15 @@ impl KeyExchangeResponse {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
-                NtsRecord::Unknown { .. } | NtsRecord::KeepAlive => {}
+                NtsRecord::Unknown { .. }
+                | NtsRecord::KeepAlive
+                | NtsRecord::Authentication { .. } => {}
                 // Not allowed
                 NtsRecord::NtpServerDeny { .. }
                 | NtsRecord::FixedKeyRequest { .. }
                 | NtsRecord::SupportedAlgorithmList { .. }
-                | NtsRecord::SupportedNextProtocolList { .. } => return Err(NtsError::Invalid),
+                | NtsRecord::SupportedNextProtocolList { .. }
+                | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
 
@@ -584,28 +646,38 @@ mod tests {
 
     #[test]
     fn test_client_request_basic() {
-        let Ok(request) = pwrap(
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
             ClientRequest::parse,
             &[0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x80, 0, 0, 0],
-        ) else {
+        )
+        else {
             panic!("Expected parse");
         };
-        assert_eq!(request.algorithms, [0]);
-        assert_eq!(request.protocols, [0]);
-        assert_eq!(request.denied_servers, [] as [String; 0]);
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, [] as [String; 0]);
 
-        let Ok(request) = pwrap(
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
             ClientRequest::parse,
             &[
                 0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x40, 3, 0, 5, b'h', b'e', b'l', b'l',
                 b'o', 0x80, 0, 0, 0,
             ],
-        ) else {
+        )
+        else {
             panic!("Expected parse");
         };
-        assert_eq!(request.algorithms, [4]);
-        assert_eq!(request.protocols, [0]);
-        assert_eq!(request.denied_servers, ["hello"]);
+        assert_eq!(algorithms, [4]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, ["hello"]);
     }
 
     #[test]
@@ -636,53 +708,90 @@ mod tests {
 
     #[test]
     fn test_client_request_ignores_unneccessary() {
-        let Ok(request) = pwrap(
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
             ClientRequest::parse,
             &[
                 0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 50, 0, 0, 0x80, 0, 0, 0,
             ],
-        ) else {
+        )
+        else {
             panic!("Expected parse");
         };
-        assert_eq!(request.algorithms, [0]);
-        assert_eq!(request.protocols, [0]);
-        assert_eq!(request.denied_servers, [] as [String; 0]);
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, [] as [String; 0]);
 
-        let Ok(request) = pwrap(
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
             ClientRequest::parse,
             &[
                 0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 0, 0, 0, 0x80, 0, 0, 0,
             ],
-        ) else {
+        )
+        else {
             panic!("Expected parse");
         };
-        assert_eq!(request.algorithms, [0]);
-        assert_eq!(request.protocols, [0]);
-        assert_eq!(request.denied_servers, [] as [String; 0]);
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, [] as [String; 0]);
 
-        let Ok(request) = pwrap(
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
             ClientRequest::parse,
             &[
                 0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
             ],
-        ) else {
+        )
+        else {
             panic!("Expected parse");
         };
-        assert_eq!(request.algorithms, [0]);
-        assert_eq!(request.protocols, [0]);
-        assert_eq!(request.denied_servers, [] as [String; 0]);
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, [] as [String; 0]);
 
-        let Ok(request) = pwrap(
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
             ClientRequest::parse,
             &[
                 0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
             ],
-        ) else {
+        )
+        else {
             panic!("Expected parse");
         };
-        assert_eq!(request.algorithms, [0]);
-        assert_eq!(request.protocols, [0]);
-        assert_eq!(request.denied_servers, [] as [String; 0]);
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, [] as [String; 0]);
+
+        let Ok(ClientRequest::Ordinary {
+            algorithms,
+            protocols,
+            denied_servers,
+        }) = pwrap(
+            ClientRequest::parse,
+            &[
+                0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            ],
+        )
+        else {
+            panic!("Expected parse");
+        };
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(denied_servers, [] as [String; 0]);
     }
 
     #[test]
@@ -738,6 +847,230 @@ mod tests {
                 ClientRequest::parse,
                 &[
                     0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'h', b'i', 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_client_request_uuid_basic() {
+        let Ok(ClientRequest::Uuid {
+            algorithms,
+            protocols,
+            key,
+            uuid,
+        }) = pwrap(
+            ClientRequest::parse,
+            &[
+                0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+                b'c', b'd', 0x80, 0, 0, 0,
+            ],
+        )
+        else {
+            panic!("Expected parse");
+        };
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(key, "ab");
+        assert_eq!(uuid, "cd");
+    }
+
+    #[test]
+    fn test_client_request_uuid_requires_authentication() {
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'c', b'd', 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'c', b'd', 0x4F, 0,
+                    0, 2, b'a', b'b'
+                ]
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_client_request_uuid_ignores_non_problematic() {
+        let Ok(ClientRequest::Uuid {
+            algorithms,
+            protocols,
+            key,
+            uuid,
+        }) = pwrap(
+            ClientRequest::parse,
+            &[
+                0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+                b'c', b'd', 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            ],
+        )
+        else {
+            panic!("Expected parse");
+        };
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(key, "ab");
+        assert_eq!(uuid, "cd");
+
+        let Ok(ClientRequest::Uuid {
+            algorithms,
+            protocols,
+            key,
+            uuid,
+        }) = pwrap(
+            ClientRequest::parse,
+            &[
+                0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+                b'c', b'd', 0x80, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
+            ],
+        )
+        else {
+            panic!("Expected parse");
+        };
+        assert_eq!(algorithms, [0]);
+        assert_eq!(protocols, [0]);
+        assert_eq!(key, "ab");
+        assert_eq!(uuid, "cd");
+    }
+
+    #[test]
+    fn test_client_request_uuid_reject_problematic() {
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x80, 1, 0, 2, 0, 1, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x80, 2, 0, 2, 0, 1, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x80, 3, 0, 2, 0, 1, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x80, 4, 0, 2, 0, 1, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x80, 5, 0, 2, 1, 2, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0xC0, 4, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0xC0, 1, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0xC0, 5, 0, 0, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x40, 3, 0, 2, b'h', b'i', 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0x4F, 0, 0, 2, 5, 6, 0x80, 0, 0, 0
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            pwrap(
+                ClientRequest::parse,
+                &[
+                    0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0,
+                    2, b'c', b'd', 0xCF, 0, 0, 2, 1, 2, 0x80, 0, 0, 0
                 ]
             )
             .is_err()
@@ -865,6 +1198,16 @@ mod tests {
             )
             .is_err()
         );
+        assert!(
+            pwrap(
+                ServerInformationResponse::parse,
+                &[
+                    0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x4F, 1, 0, 2, 1, 2, 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -937,6 +1280,20 @@ mod tests {
             ServerInformationResponse::parse,
             &[
                 0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 50, 0, 0, 0x80, 0, 0, 0,
+            ],
+        ) else {
+            panic!("Expected succesfull parse");
+        };
+        assert_eq!(
+            response.supported_algorithms,
+            [AlgorithmDescription { id: 0, keysize: 16 }]
+        );
+        assert_eq!(response.supported_protocols, [0]);
+
+        let Ok(response) = pwrap(
+            ServerInformationResponse::parse,
+            &[
+                0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x4f, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
             ],
         ) else {
             panic!("Expected succesfull parse");
@@ -1156,6 +1513,16 @@ mod tests {
             )
             .is_err()
         );
+        assert!(
+            pwrap(
+                KeyExchangeResponse::parse,
+                &[
+                    0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x4F, 1, 0, 2, b'h', b'i', 0x80, 0,
+                    0, 0
+                ]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1191,6 +1558,20 @@ mod tests {
             KeyExchangeResponse::parse,
             &[
                 0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 0, 0, 0, 0x80, 0, 0, 0,
+            ],
+        ) else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(response.protocol, 0);
+        assert_eq!(response.algorithm, 4);
+        assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
+        assert_eq!(response.port, None);
+        assert_eq!(response.server, None);
+
+        let Ok(response) = pwrap(
+            KeyExchangeResponse::parse,
+            &[
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x4f, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
             ],
         ) else {
             panic!("Expected succesful parse");
