@@ -5,6 +5,7 @@ use super::{AlgorithmDescription, AlgorithmId, ErrorCode, ProtocolId, WarningCod
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NtsRecord {
+    /// Standard NTS records
     EndOfMessage,
     NextProtocol {
         protocol_ids: Vec<ProtocolId>,
@@ -32,6 +33,8 @@ pub enum NtsRecord {
         critical: bool,
         data: Vec<u8>,
     },
+
+    /// NTS pool draft
     KeepAlive,
     SupportedNextProtocolList {
         supported_protocols: Vec<ProtocolId>,
@@ -45,6 +48,11 @@ pub enum NtsRecord {
     },
     NtpServerDeny {
         denied: String,
+    },
+
+    /// Internal pool NTS records
+    Authentication {
+        key: String,
     },
 }
 
@@ -71,6 +79,7 @@ impl NtsRecord {
             0x4001 => Self::parse_supported_algorithm_list(body).await,
             0x4002 => Self::parse_fixed_key_request(body).await,
             0x4003 => Self::parse_ntp_server_deny(body).await,
+            0x4F00 => Self::parse_authentication(body).await,
             _ => {
                 let mut data = vec![0; size.into()];
                 body.read_exact(&mut data).await?;
@@ -222,6 +231,15 @@ impl NtsRecord {
         Ok(Self::NtpServerDeny { denied })
     }
 
+    async fn parse_authentication(mut reader: Take<impl AsyncRead + Unpin>) -> Result<Self, Error> {
+        let mut key = String::new();
+        reader.read_to_string(&mut key).await?;
+        if reader.limit() != 0 {
+            return Err(ErrorKind::UnexpectedEof.into());
+        }
+        Ok(Self::Authentication { key })
+    }
+
     pub async fn serialize(&self, mut writer: impl AsyncWrite + Unpin) -> Result<(), Error> {
         writer.write_u16(self.record_type()).await?;
         let size: u16 = self
@@ -268,6 +286,7 @@ impl NtsRecord {
                 writer.write_all(s2c).await?
             }
             NtsRecord::NtpServerDeny { denied } => writer.write_all(denied.as_bytes()).await?,
+            NtsRecord::Authentication { key } => writer.write_all(key.as_bytes()).await?,
         }
         Ok(())
     }
@@ -294,6 +313,7 @@ impl NtsRecord {
             NtsRecord::SupportedAlgorithmList { .. } => 0x4001 | CRITICAL_BIT,
             NtsRecord::FixedKeyRequest { .. } => 0x4002 | CRITICAL_BIT,
             NtsRecord::NtpServerDeny { .. } => 0x4003,
+            NtsRecord::Authentication { .. } => 0x4F00,
         }
     }
 
@@ -317,6 +337,7 @@ impl NtsRecord {
             } => supported_algorithms.len() * 2 * size_of::<u16>(),
             NtsRecord::FixedKeyRequest { c2s, s2c } => c2s.len() + s2c.len(),
             NtsRecord::NtpServerDeny { denied } => denied.len(),
+            NtsRecord::Authentication { key } => key.len(),
         }
     }
 }
@@ -803,6 +824,29 @@ mod tests {
             &mut buf,
         );
         assert_eq!(buf, &[0x40, 3, 0, 2, b'h', b'i']);
+    }
+
+    #[test]
+    fn test_authentication() {
+        let Ok(NtsRecord::Authentication { key }) =
+            parse(&[0x4F, 0, 0, 5, b'h', b'e', b'l', b'l', b'o'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(key, "hello");
+
+        let Ok(NtsRecord::Authentication { key }) =
+            parse(&[0xCF, 0, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'])
+        else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(key, "hello");
+
+        assert!(parse(&[0x4F, 0, 0, 5, b'h', b'e', b'l']).is_err());
+
+        let mut buf = vec![];
+        serialize(NtsRecord::Authentication { key: "hi".into() }, &mut buf);
+        assert_eq!(buf, &[0x4F, 0, 0, 2, b'h', b'i']);
     }
 
     #[test]
