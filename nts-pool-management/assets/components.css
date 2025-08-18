@@ -38,6 +38,11 @@ input[type="password"]:hover {
     border: var(--border-width) solid var(--primary);
 }
 
+input[type="text"].error,
+input[type="password"].error {
+    border: var(--border-width) solid var(--error);
+}
+
 h2 {
     margin-bottom: var(--space-sm);
 }
