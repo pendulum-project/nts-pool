@@ -21,7 +21,13 @@
         <dt>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</dt>
       </dl>
       <form action="/management/time-sources/{{ ts.id }}/delete" method="POST">
-        <button type="submit">Delete</button>
+        <details class="confirmation-btn">
+          <summary></summary>
+          <div>
+            <p>Are you sure?</p>
+            <button type="submit">Yes, delete</button>
+          </div>
+        </details>
       </form>
     </article>
   {% endfor %}
