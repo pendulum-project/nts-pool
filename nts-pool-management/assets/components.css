@@ -127,9 +127,10 @@ details.confirmation-btn[open] summary::marker {
 details.confirmation-btn[open] > div {
     margin-top: var(--space-sm);
     display: block;
+    animation: animateDown 0.1s ease-in-out forwards;
 }
 
-details.confirmation-btn div {
+details.confirmation-btn > div {
     display: none;
 
     & p {
@@ -137,3 +138,13 @@ details.confirmation-btn div {
     }
 }
 
+@keyframes animateDown {
+  0% {
+    opacity: 0;
+    transform: translatey(-15px);
+  }
+  100% {
+    opacity: 1;
+    transform: translatey(0);
+  }
+}
