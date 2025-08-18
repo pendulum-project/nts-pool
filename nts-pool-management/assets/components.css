@@ -84,26 +84,6 @@ dt {
     padding-left: var(--space-sm);
 }
 
-/* details.confirmation-btn { */
-/*     margin-top: var(--space-md); */
-/* } */
-
-/* summary::marker { */
-/*     content: "Delete"; */
-/* } */
-
-/* details.confirmation-btn[open] > summary::marker { */
-/*     content: "Cancel"; */
-/* } */
-
-/* summary::marker, */
-/* details.confirmation-btn[open] > summary::marker { */
-/*     cursor: pointer; */
-/*     color: var(--primary); */
-/*     text-decoration: underline; */
-/* } */
-
-
 details.confirmation-btn {
     width: 200px;
     padding: var(--space-sm) 0;
