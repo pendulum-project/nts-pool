@@ -10,6 +10,8 @@
   --background: #f4f4f4;
   --background-alt: #ffffff;
   --white: #ffffff;
+  --black: #000000;
+  --error: #ce4242;
 
   /* spacing */
   --space-xs: 0.5rem;
@@ -17,4 +19,5 @@
   --space-md: 2.5rem;
 
   --border-radius: 0.75rem;
+  --border-width: 2px;
 }
