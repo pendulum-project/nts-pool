@@ -33,7 +33,8 @@ input[type="password"] {
     border-radius: var(--border-radius);
 }
 
-input[type="text"]:hover {
+input[type="text"]:hover,
+input[type="password"]:hover {
     border: var(--border-width) solid var(--primary);
 }
 
@@ -44,11 +45,18 @@ h2 {
 .login {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
+    gap: var(--space-md);
+
+    fieldset {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+        padding: 0;
+        border: 0;
+    }
 
     input {
         min-width: 24rem;
-        margin-bottom: var(--space-sm);
     }
 
     button.secondary {
@@ -129,5 +137,4 @@ aside.error {
     border: var(--border-width) solid var(--error);
     border-radius: var(--border-radius);
     background-color: color-mix(in lab, var(--error), var(--white) 70%);
-    margin-bottom: var(--space-sm);
 }
