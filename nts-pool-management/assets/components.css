@@ -5,7 +5,7 @@ button,
 a.btn {
     display: inline-block;
     background-color: var(--primary);
-    border: 2px solid var(--primary);
+    border: var(--border-width) solid var(--primary);
     border-radius: var(--border-radius);
     padding: var(--space-sm) var(--space-md);
     text-decoration: none;
@@ -22,19 +22,19 @@ a.btn:hover,
 [type="submit"]:hover,
 [type="reset"]:hover {
     color: var(--white);
-    border: 2px solid var(--primary);
+    border: var(--border-width) solid var(--primary);
     cursor: pointer;
 }
 
 input[type="text"],
 input[type="password"] {
     padding: var(--space-sm);
-    border: 2px solid var(--grey);
+    border: var(--border-width) solid var(--grey);
     border-radius: var(--border-radius);
 }
 
 input[type="text"]:hover {
-    border: 2px solid var(--primary);
+    border: var(--border-width) solid var(--primary);
 }
 
 h2 {
@@ -53,7 +53,7 @@ h2 {
 
     button.secondary {
         background-color: var(--white);
-        border: 2px solid var(--grey);
+        border: var(--border-width) solid var(--grey);
         color: var(--grey);
 
         &:hover {
@@ -121,4 +121,13 @@ details.confirmation-btn > div {
     opacity: 1;
     transform: translatey(0);
   }
+}
+
+aside.error {
+    color: color-mix(in lab, var(--error), var(--black) 50%);
+    padding: var(--space-sm);
+    border: var(--border-width) solid var(--error);
+    border-radius: var(--border-radius);
+    background-color: color-mix(in lab, var(--error), var(--white) 70%);
+    margin-bottom: var(--space-sm);
 }
