@@ -63,12 +63,6 @@ h2 {
     }
 }
 
-.centered {
-    display: flex;
-    justify-content: center;
-    margin-top: var(--space-md);
-}
-
 article.server-list {
     background-color: var(--white);
     border-radius: var(--border-radius);

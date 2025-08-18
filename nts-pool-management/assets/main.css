@@ -67,3 +67,7 @@ footer {
   padding: 0 var(--space-md) 0 var(--space-md);
   background-color: var(--background-alt);
 }
+
+form.login {
+  max-width: 33rem;
+}
