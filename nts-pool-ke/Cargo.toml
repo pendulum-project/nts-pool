@@ -34,6 +34,7 @@ tokio = { workspace = true, default-features = false, features = [
     "net",
     "macros",
     "time",
+    "signal",
     "sync",
 ] }
 toml = { workspace = true, default-features = false, features = ["parse"] }

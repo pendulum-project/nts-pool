@@ -1,6 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use tokio::{io::AsyncWriteExt, net::TcpListener};
+use tokio::{
+    io::AsyncWriteExt,
+    net::TcpListener,
+    select,
+    signal::unix::{SignalKind, signal},
+};
 use tracing::{debug, info};
 
 use crate::{
@@ -43,6 +48,8 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn serve_inner(self: Arc<Self>, listener: TcpListener) -> std::io::Result<()> {
         let connectionpermits = Arc::new(tokio::sync::Semaphore::new(self.config.max_connections));
+        let mut shutdown =
+            signal(SignalKind::terminate()).expect("Unable to configure termination signal");
 
         info!("listening on '{:?}'", listener.local_addr());
 
@@ -52,7 +59,11 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 .acquire_owned()
                 .await
                 .expect("Semaphore shouldn't be closed");
-            let (client_stream, source_address) = listener.accept().await?;
+            let (client_stream, source_address) = select! {
+                biased;
+                _ = shutdown.recv() => { break; }
+                accept_result = listener.accept() => { accept_result? }
+            };
             let self_clone = self.clone();
 
             tokio::spawn(async move {
@@ -69,6 +80,10 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 drop(permit);
             });
         }
+
+        info!("Shutting down");
+
+        Ok(())
     }
 
     async fn handle_client(
