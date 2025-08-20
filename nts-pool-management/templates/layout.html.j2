@@ -15,7 +15,7 @@
       <nav>
         <menu>
           <li>
-            <a {% block nav_home %}{% endblock %} href="/">Home</a>
+            <a href="/"><img src="/assets/nts-pool.svg" /><strong>NTS Pool</strong></a>
           </li>
         {% if app.user|is_logged_in %}
           {% if app.user|is_administrator %}
