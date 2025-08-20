@@ -1,76 +1,25 @@
-use std::{
-    fs::File,
-    io::{BufReader, Cursor},
-    sync::Arc,
-};
+use std::{fs::File, io::BufReader, sync::Arc, time::Duration};
 
-use nts_pool_monitor::{
-    KeyExchangeClient, NtpPacket, NtpVersion, NtsClientConfig, PollInterval, certs,
-};
-use tokio::net::TcpStream;
+use nts_pool_monitor::{NtpVersion, NtsClientConfig, Probe, ProbeConfig, certs};
 
 #[tokio::main]
 async fn main() {
-    let io = TcpStream::connect("localhost:4460").await.unwrap();
+    let config = ProbeConfig {
+        poolke: "localhost".into(),
+        nts_config: NtsClientConfig {
+            certificates: certs(&mut BufReader::new(
+                File::open("./nts-pool-ke/testdata/testca.pem").unwrap(),
+            ))
+            .collect::<Result<Arc<_>, _>>()
+            .unwrap(),
+            protocol_version: NtpVersion::V4,
+            authorization_key: "testmonitor".into(),
+        },
+        nts_timeout: Duration::from_secs(1),
+        ntp_timeout: Duration::from_secs(1),
+    };
 
-    let client = KeyExchangeClient::new(NtsClientConfig {
-        certificates: certs(&mut BufReader::new(
-            File::open("./nts-pool-ke/testdata/testca.pem").unwrap(),
-        ))
-        .collect::<Result<Arc<_>, _>>()
-        .unwrap(),
-        protocol_version: NtpVersion::V4,
-        authorization_key: "testmonitor".into(),
-    })
-    .unwrap();
+    let probe = Probe::new(config).unwrap();
 
-    let result = client
-        .exchange_keys(io, "localhost".into(), "UUID-A")
-        .await
-        .unwrap();
-
-    let mut nts = result.nts;
-
-    let cookie = nts.cookies.get().unwrap();
-
-    let request = NtpPacket::nts_poll_message(&cookie, 0, PollInterval::NEVER);
-
-    let mut buf = [0; 1024];
-    let mut cursor = Cursor::new(buf.as_mut_slice());
-    request
-        .0
-        .serialize(&mut cursor, nts.c2s.as_ref(), None)
-        .unwrap();
-    let size = cursor.position() as usize;
-    let msg = &buf[..size];
-
-    let addr = tokio::net::lookup_host((result.remote, result.port))
-        .await
-        .unwrap()
-        .next()
-        .unwrap();
-    let mut socket = timestamped_socket::socket::connect_address(
-        addr,
-        timestamped_socket::socket::GeneralTimestampMode::SoftwareAll,
-    )
-    .unwrap();
-
-    let send = socket.send(msg).await.unwrap().unwrap();
-
-    let received = socket.recv(&mut buf).await.unwrap();
-
-    assert_eq!(received.remote_addr, addr);
-    let recv = received.timestamp.unwrap();
-
-    let incoming = NtpPacket::deserialize(&buf[..received.bytes_read], nts.s2c.as_ref()).unwrap();
-
-    assert!(incoming.valid_server_response(request.1, true));
-
-    println!(
-        "{:?} {:?} {:?} {:?}",
-        send,
-        incoming.receive_timestamp(),
-        incoming.transmit_timestamp(),
-        recv
-    );
+    probe.probe("UUID-B").await;
 }
