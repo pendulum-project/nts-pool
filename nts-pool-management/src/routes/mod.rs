@@ -11,22 +11,27 @@ use crate::{
 };
 
 mod admin;
-mod login;
+pub(crate) mod auth;
 mod management;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
-        .route("/login", get(login::login).post(login::login_submit))
-        .route(
-            "/register",
-            get(login::register).post(login::register_submit),
-        )
+        .route("/login", get(auth::login).post(auth::login_submit))
+        .route("/register", get(auth::register).post(auth::register_submit))
         .route(
             "/register/activate",
-            get(login::register_activate).post(login::register_activate_submit),
+            get(auth::register_activate).post(auth::register_activate_submit),
         )
-        .route("/logout", get(login::logout))
+        .route(
+            "/login/forgot-password",
+            get(auth::forgot_password).post(auth::forgot_password_submit),
+        )
+        .route(
+            "/login/reset-password",
+            get(auth::reset_password).post(auth::reset_password_submit),
+        )
+        .route("/logout", get(auth::logout))
         .route("/admin", get(admin::overview))
         .route(
             "/management/time-sources",

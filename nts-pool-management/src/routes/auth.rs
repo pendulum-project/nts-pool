@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::{
-    auth::{AUTH_COOKIE_NAME, UnsafeLoggedInUser, login_into},
+    auth::{
+        AUTH_COOKIE_NAME, UnsafeLoggedInUser, is_too_large_password, is_valid_password, login_into,
+    },
     email::Mailer,
     error::AppError,
     models::{
@@ -95,6 +97,11 @@ async fn login_submit_internal(
             .await?
             .ok_or_eyre(InvalidCredentialsError)?;
 
+    // prevent too large password from being used
+    if is_too_large_password(&data.password) {
+        return Err(InvalidCredentialsError.into());
+    }
+
     if password_method.verify(&data.password)? {
         if user.is_disabled() {
             return Err(eyre::eyre!("User is disabled").into());
@@ -173,10 +180,9 @@ pub async fn register_submit(
 
     if !data.email.contains('@') || lettre::Address::from_str(&data.email).is_err() {
         fields_with_errors.push("email");
-    }
 
     // check if email is already registered
-    if crate::models::user::get_by_email(&pool, &data.email)
+    } else if crate::models::user::get_by_email(&pool, &data.email)
         .await?
         .is_some()
     {
@@ -186,6 +192,8 @@ pub async fn register_submit(
     if data.password != data.confirm_password {
         fields_with_errors.push("password");
         fields_with_errors.push("confirm_password");
+    } else if !is_valid_password(&data.password) {
+        fields_with_errors.push("password");
     }
 
     if !data.accept_terms {
@@ -358,4 +366,200 @@ pub async fn register_activate_submit(
         })
         .into_response())
     }
+}
+
+#[derive(Template)]
+#[template(path = "login/forgot_password.html.j2")]
+struct ForgotPasswordPageTemplate {
+    app: AppVars,
+    requested: bool,
+    failed: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ForgotPasswordQuery {
+    requested: Option<bool>,
+    failed: Option<bool>,
+}
+
+pub async fn forgot_password(
+    user: Option<UnsafeLoggedInUser>,
+    Query(query): Query<ForgotPasswordQuery>,
+) -> impl IntoResponse {
+    if let Some(user) = user {
+        if user.is_disabled() {
+            return Redirect::to("/logout").into_response();
+        } else {
+            return Redirect::to("/").into_response();
+        }
+    }
+
+    HtmlTemplate(ForgotPasswordPageTemplate {
+        app: AppVars::from_current_task(),
+        requested: query.requested.unwrap_or_default(),
+        failed: query.failed.unwrap_or_default(),
+    })
+    .into_response()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ForgotPasswordSubmitForm {
+    email: String,
+}
+
+pub async fn forgot_password_submit(
+    user: Option<UnsafeLoggedInUser>,
+    State(pool): State<PgPool>,
+    State(mailer): State<Mailer>,
+    Form(form): Form<ForgotPasswordSubmitForm>,
+) -> Result<impl IntoResponse, AppError> {
+    if let Some(user) = user {
+        if user.is_disabled() {
+            return Ok(Redirect::to("/logout").into_response());
+        } else {
+            return Ok(Redirect::to("/").into_response());
+        }
+    }
+
+    if let Some(user) = crate::models::user::get_by_email(&pool, &form.email).await?
+        && let Some(mut password_auth) =
+            crate::models::authentication_method::get_password_authentication_method_row(
+                &pool, user.id,
+            )
+            .await?
+        && let Some(password_variant_ref) = password_auth.as_password_variant_mut()
+    {
+        let (token, expires_at) = crate::auth::generate_password_reset_token();
+        password_variant_ref.set_password_reset_token(&token, expires_at);
+        crate::models::authentication_method::update_variant(
+            &pool,
+            password_auth.id,
+            password_auth.variant.0,
+        )
+        .await?;
+
+        crate::email::send_password_reset_email(&mailer, &user, &token).await?;
+    }
+    // Implement forgot password logic here
+    Ok(Redirect::to("/login/forgot-password?requested=true").into_response())
+}
+
+#[derive(Template)]
+#[template(path = "login/password_reset.html.j2")]
+struct PasswordResetPageTemplate {
+    app: AppVars,
+    password_error: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ResetPasswordQuery {
+    pub token: String,
+    pub email: String,
+}
+
+pub async fn reset_password(
+    user: Option<UnsafeLoggedInUser>,
+    Query(query): Query<ResetPasswordQuery>,
+    State(pool): State<PgPool>,
+) -> Result<impl IntoResponse, AppError> {
+    if let Some(user) = user {
+        if user.is_disabled() {
+            return Ok(Redirect::to("/logout").into_response());
+        } else {
+            return Ok(Redirect::to("/").into_response());
+        }
+    }
+
+    let Some(user) = crate::models::user::get_by_email(&pool, &query.email).await? else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let Some(password_auth) =
+        crate::models::authentication_method::get_password_authentication_method(&pool, user.id)
+            .await?
+    else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let (Some(password_reset_token), Some(password_reset_expires_at)) = (
+        password_auth.password_reset_token,
+        password_auth.password_reset_token_expires_at,
+    ) else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    if password_reset_token != query.token || password_reset_expires_at < chrono::Utc::now() {
+        return Ok(Redirect::to("/login/forgot-password?failed=true").into_response());
+    }
+
+    Ok(HtmlTemplate(PasswordResetPageTemplate {
+        app: AppVars::from_current_task(),
+        password_error: false,
+    })
+    .into_response())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResetPasswordForm {
+    password: String,
+    confirm_password: String,
+}
+
+pub async fn reset_password_submit(
+    user: Option<UnsafeLoggedInUser>,
+    Query(query): Query<ResetPasswordQuery>,
+    State(pool): State<PgPool>,
+    Form(form): Form<ResetPasswordForm>,
+) -> Result<impl IntoResponse, AppError> {
+    if let Some(user) = user {
+        if user.is_disabled() {
+            return Ok(Redirect::to("/logout").into_response());
+        } else {
+            return Ok(Redirect::to("/").into_response());
+        }
+    }
+
+    let Some(user) = crate::models::user::get_by_email(&pool, &query.email).await? else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let Some(mut auth_row) =
+        crate::models::authentication_method::get_password_authentication_method_row(
+            &pool, user.id,
+        )
+        .await?
+    else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    // this should never fail
+    let password_auth = auth_row
+        .as_password_variant_mut()
+        .ok_or_eyre("Could not extract password auth variant")?;
+
+    let (Some(password_reset_token), Some(password_reset_expires_at)) = (
+        password_auth.password_reset_token.as_deref(),
+        password_auth.password_reset_token_expires_at,
+    ) else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    if password_reset_token != query.token || password_reset_expires_at < chrono::Utc::now() {
+        return Ok(Redirect::to("/login/forgot-password?failed=true").into_response());
+    }
+
+    if form.password != form.confirm_password || !is_valid_password(&form.password) {
+        return Ok(HtmlTemplate(PasswordResetPageTemplate {
+            app: AppVars::from_current_task(),
+            password_error: true,
+        })
+        .into_response());
+    }
+
+    password_auth.update_password(&form.password)?;
+
+    crate::models::authentication_method::update_variant(&pool, auth_row.id, auth_row.variant.0)
+        .await?;
+
+    Ok(Redirect::to("/login").into_response())
 }

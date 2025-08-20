@@ -82,6 +82,7 @@ services:
       NTSPOOL_JWT_SECRET: "a-string-secret-at-least-256-bits-long"
       NTSPOOL_SMTP_URL: "smtp://mailcrab:1025"
       NTSPOOL_MAIL_FROM_ADDRESS: "NTS Pool <noreply@example.com>"
+      NTSPOOL_BASE_URL: "http://localhost:3000"
       SQLX_OFFLINE: "${DOCKER_SQLX_OFFLINE:-0}"
     volumes:
       - ".:/app"

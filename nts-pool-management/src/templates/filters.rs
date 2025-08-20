@@ -16,7 +16,7 @@ pub fn is_administrator(user: &Option<User>, _: &dyn askama::Values) -> askama::
         .unwrap_or(false))
 }
 
-pub fn is_server_manager(user: &Option<User>, _: &dyn askama::Values) -> askama::Result<bool> {
+pub fn is_manager(user: &Option<User>, _: &dyn askama::Values) -> askama::Result<bool> {
     Ok(user
         .as_ref()
         .map(|user| user.is_activated() && !user.is_disabled() && user.role == UserRole::Manager)
