@@ -57,12 +57,14 @@ pub fn unauthorized_page() -> impl IntoResponse {
 
 pub struct AppVars {
     pub user: Option<User>,
+    pub base_url: String,
 }
 
 impl AppVars {
     pub fn from_current_task() -> Self {
         Self {
             user: CURRENT_USER.get(),
+            base_url: crate::get_base_url(),
         }
     }
 }

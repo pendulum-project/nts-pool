@@ -22,6 +22,26 @@ pub struct AuthenticationMethod {
     pub updated_at: DateTime<Utc>,
 }
 
+impl AuthenticationMethod {
+    pub fn as_password_variant(&self) -> Option<&PasswordAuthentication> {
+        match self.variant.as_ref() {
+            AuthenticationVariant::Password(password) => Some(password),
+        }
+    }
+
+    pub fn as_password_variant_mut(&mut self) -> Option<&mut PasswordAuthentication> {
+        match self.variant.as_mut() {
+            AuthenticationVariant::Password(password) => Some(password),
+        }
+    }
+
+    pub fn into_password_variant(self) -> Option<PasswordAuthentication> {
+        match self.variant.0 {
+            AuthenticationVariant::Password(password) => Some(password),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum AuthenticationVariant {
@@ -32,6 +52,8 @@ pub enum AuthenticationVariant {
 pub struct PasswordAuthentication {
     /// See https://github.com/P-H-C/phc-string-format for format details
     phc_string: String,
+    pub password_reset_token: Option<String>,
+    pub password_reset_token_expires_at: Option<DateTime<Utc>>,
 }
 
 impl PasswordAuthentication {
@@ -39,6 +61,8 @@ impl PasswordAuthentication {
         let password_hash = hash_password(password)?;
         Ok(Self {
             phc_string: password_hash,
+            password_reset_token: None,
+            password_reset_token_expires_at: None,
         })
     }
 
@@ -47,6 +71,8 @@ impl PasswordAuthentication {
         new_password: &str,
     ) -> Result<(), argon2::password_hash::Error> {
         self.phc_string = hash_password(new_password)?;
+        self.password_reset_token = None;
+        self.password_reset_token_expires_at = None;
         Ok(())
     }
 
@@ -57,6 +83,11 @@ impl PasswordAuthentication {
         Ok(Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)
             .is_ok())
+    }
+
+    pub(crate) fn set_password_reset_token(&mut self, token: &str, expires_at: DateTime<Utc>) {
+        self.password_reset_token = Some(token.to_string());
+        self.password_reset_token_expires_at = Some(expires_at);
     }
 }
 
@@ -70,11 +101,11 @@ fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error>
         .to_string())
 }
 
-pub async fn get_password_authentication_method(
+pub async fn get_password_authentication_method_row(
     conn: impl DbConnLike<'_>,
     user_id: UserId,
-) -> Result<Option<PasswordAuthentication>, sqlx::Error> {
-    let auth_method = sqlx::query_as!(
+) -> Result<Option<AuthenticationMethod>, sqlx::Error> {
+    sqlx::query_as!(
         AuthenticationMethod,
         r#"
             SELECT id, user_id, variant AS "variant: _", created_at, updated_at
@@ -84,17 +115,36 @@ pub async fn get_password_authentication_method(
         user_id as _
     )
     .fetch_optional(conn)
-    .await?;
+    .await
+}
 
-    if let Some(auth_method) = auth_method {
-        // TODO: remove when multiple authentication variants are supported
-        #[allow(irrefutable_let_patterns)]
-        if let Json(AuthenticationVariant::Password(p)) = auth_method.variant {
-            return Ok(Some(p));
-        }
-    }
+pub async fn get_password_authentication_method(
+    conn: impl DbConnLike<'_>,
+    user_id: UserId,
+) -> Result<Option<PasswordAuthentication>, sqlx::Error> {
+    Ok(get_password_authentication_method_row(conn, user_id)
+        .await?
+        .and_then(|auth_method| auth_method.into_password_variant()))
+}
 
-    Ok(None)
+pub async fn update_variant(
+    conn: impl DbConnLike<'_>,
+    auth_id: AuthenticationMethodId,
+    variant: AuthenticationVariant,
+) -> Result<AuthenticationMethod, sqlx::Error> {
+    sqlx::query_as!(
+        AuthenticationMethod,
+        r#"
+            UPDATE authentication_methods
+            SET variant = $1, updated_at = NOW()
+            WHERE id = $2
+            RETURNING id, user_id, variant AS "variant: _", created_at, updated_at
+        "#,
+        Json(variant) as _,
+        auth_id as _
+    )
+    .fetch_one(conn)
+    .await
 }
 
 pub async fn create(

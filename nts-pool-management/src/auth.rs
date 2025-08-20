@@ -35,6 +35,30 @@ pub fn generate_activation_token() -> (String, chrono::DateTime<chrono::Utc>) {
     (activation_token, activation_token_expires_at)
 }
 
+/// Generate a random password reset token that the user can use to reset their password.
+pub fn generate_password_reset_token() -> (String, chrono::DateTime<chrono::Utc>) {
+    use rand::{Rng, distr::Alphanumeric};
+
+    let token = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(30)
+        .map(char::from)
+        .collect();
+    let expires = chrono::Utc::now() + chrono::Duration::days(1);
+    (token, expires)
+}
+
+/// Checks if a password is valid for use in our system.
+pub fn is_valid_password(password: &str) -> bool {
+    password.len() >= 8 && !is_too_large_password(password)
+}
+
+/// Checks if the password is too large, should be used to prevent running the
+/// password hash function on too large passwords.
+pub fn is_too_large_password(password: &str) -> bool {
+    password.len() > 256
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
     exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)

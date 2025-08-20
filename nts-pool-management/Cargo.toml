@@ -32,7 +32,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true, features = [
     "env-filter",
 ] }
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 uuid = { workspace = true, features = ["serde"] }
 rustls = { workspace = true }
 jsonwebtoken = { workspace = true }

@@ -65,6 +65,10 @@ async fn pool_conn(
     }
 }
 
+fn get_base_url() -> String {
+    std::env::var("NTSPOOL_BASE_URL").expect("NTSPOOL_BASE_URL not set")
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -86,30 +90,14 @@ async fn main() {
         .await
         .expect("Error initializing database connection");
 
+    // Setup JWT encoding and decoding keys
     let jwt_secret = std::env::var("NTSPOOL_JWT_SECRET")
         .expect("Missing NTSPOOL_JWT_SECRET environment variable");
     let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes());
     let jwt_decoding_key = jsonwebtoken::DecodingKey::from_secret(jwt_secret.as_bytes());
 
-    // // Insert an administrator account and set an 'admin' password
-    // let user = crate::models::user::create(
-    //     &db,
-    //     crate::models::user::NewUser {
-    //         email: "admin@example.com".into(),
-    //         role: user::UserRole::Administrator,
-    //     },
-    // )
-    // .await
-    // .expect("Created admin user");
-    // crate::models::authentication_method::create(
-    //     &db,
-    //     user.id,
-    //     crate::models::authentication_method::AuthenticationVariant::Password(
-    //         crate::models::authentication_method::PasswordAuthentication::new("admin").expect("Failed to create password hash"),
-    //     ),
-    // )
-    // .await
-    // .expect("Failed to create authentication method");
+    // Get the base URL for the application to make sure it is set correctly
+    get_base_url();
 
     // Setup mail transport for sending mails
     let mail_transport_url = std::env::var("NTSPOOL_SMTP_URL").expect("NTSPOOL_SMTP_URL not set");
