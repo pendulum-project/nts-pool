@@ -7,6 +7,7 @@ mod identifiers;
 mod io;
 mod nts;
 mod packet;
+mod probe;
 mod time_types;
 mod tls_utils;
 
@@ -74,7 +75,7 @@ impl std::fmt::Debug for SourceNtsData {
     }
 }
 
-pub use nts::{KeyExchangeClient, NtsClientConfig};
-pub use packet::NtpPacket;
-pub use time_types::PollInterval;
+pub use nts::NtsClientConfig;
 pub use tls_utils::pemfile::certs;
+
+pub use probe::{Probe, ProbeConfig};
