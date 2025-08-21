@@ -21,5 +21,5 @@ async fn main() {
 
     let probe = Probe::new(config).unwrap();
 
-    probe.probe("UUID-B").await;
+    println!("{:#?}", probe.probe("UUID-B").await);
 }
