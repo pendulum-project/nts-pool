@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -108,7 +109,7 @@ impl ServerManager for GeographicServerManager {
     fn assign_server(
         &self,
         address: std::net::SocketAddr,
-        denied_servers: &[String],
+        denied_servers: &[Cow<'_, str>],
     ) -> Self::Server<'_> {
         let inner = self.inner.read().unwrap().clone();
         let region =
@@ -135,7 +136,10 @@ impl ServerManager for GeographicServerManager {
         let rotated_servers = right.iter().chain(left.iter()).copied();
 
         for index in rotated_servers {
-            if denied_servers.contains(&inner.servers[index].domain) {
+            if denied_servers
+                .iter()
+                .any(|v| *v == inner.servers[index].domain)
+            {
                 continue;
             }
 

@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::atomic::AtomicUsize,
@@ -52,7 +53,11 @@ impl ServerManager for RoundRobinServerManager {
     where
         Self: 'a;
 
-    fn assign_server(&self, _address: SocketAddr, denied_servers: &[String]) -> Self::Server<'_> {
+    fn assign_server(
+        &self,
+        _address: SocketAddr,
+        denied_servers: &[Cow<'_, str>],
+    ) -> Self::Server<'_> {
         use std::sync::atomic::Ordering;
         let start_index = self.next_start.fetch_add(1, Ordering::Relaxed);
 
@@ -62,7 +67,7 @@ impl ServerManager for RoundRobinServerManager {
         let rotated_servers = right.iter().chain(left.iter());
 
         for server in rotated_servers {
-            if denied_servers.contains(&server.domain) {
+            if denied_servers.iter().any(|v| *v == server.domain) {
                 continue;
             }
 
