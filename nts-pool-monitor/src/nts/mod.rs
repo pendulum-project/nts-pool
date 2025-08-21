@@ -4,8 +4,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
 use crate::{
-    NtpVersion, SourceNtsData,
-    cookiestash::CookieStash,
+    NtpVersion,
     packet::{AesSivCmac256, AesSivCmac512, Cipher},
     tls_utils::{self, Certificate, ServerName, TLS13},
 };
@@ -267,11 +266,13 @@ impl std::fmt::Display for NtsError {
 
 impl std::error::Error for NtsError {}
 
-#[derive(Debug)]
 pub struct KeyExchangeResult {
     pub remote: String,
     pub port: u16,
-    pub nts: Box<SourceNtsData>,
+    pub cookies: Vec<Vec<u8>>,
+    pub c2s: Box<dyn Cipher>,
+    pub s2c: Box<dyn Cipher>,
+    #[allow(unused)]
     pub protocol_version: NtpVersion,
 }
 
@@ -362,26 +363,19 @@ impl KeyExchangeClient {
             response.algorithm,
         )?;
 
-        let mut cookies = CookieStash::default();
-        for cookie in response.cookies.into_owned().into_iter() {
-            cookies.store(cookie.into_owned());
-        }
-
-        if cookies.is_empty() {
-            return Err(NtsError::NoCookie);
-        }
-
         Ok(KeyExchangeResult {
             remote: response
                 .server
                 .unwrap_or(Cow::Owned(server_name))
                 .into_owned(),
             port: response.port.unwrap_or(NTP_DEFAULT_PORT),
-            nts: Box::new(SourceNtsData {
-                cookies,
-                c2s: keys.c2s,
-                s2c: keys.s2c,
-            }),
+            cookies: response
+                .cookies
+                .iter()
+                .map(|v| v.clone().into_owned())
+                .collect(),
+            c2s: keys.c2s,
+            s2c: keys.s2c,
             protocol_version: match response.protocol {
                 NextProtocol::NTPv4 => NtpVersion::V4,
                 NextProtocol::DraftNTPv5 => NtpVersion::V5,

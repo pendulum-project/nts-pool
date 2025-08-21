@@ -21,6 +21,16 @@ impl std::fmt::Debug for NtpTimestamp {
 }
 
 impl NtpTimestamp {
+    // Epoch offset between NTP and UNIX timescales
+    const UNIX_EPOCH_OFFSET: u32 = (70 * 365 + 17) * 86400;
+
+    pub(crate) fn from_net_timestamp(ts: timestamped_socket::socket::Timestamp) -> NtpTimestamp {
+        NtpTimestamp::from_seconds_nanos_since_ntp_era(
+            Self::UNIX_EPOCH_OFFSET.wrapping_add(ts.seconds as _),
+            ts.nanos,
+        )
+    }
+
     pub(crate) const fn from_bits(bits: [u8; 8]) -> NtpTimestamp {
         NtpTimestamp {
             timestamp: u64::from_be_bytes(bits),
