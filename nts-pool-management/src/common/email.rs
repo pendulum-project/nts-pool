@@ -4,7 +4,7 @@ use askama::Template;
 use eyre::Context;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
-use crate::{error::AppError, routes::auth::ResetPasswordQuery};
+use crate::{config::BaseUrl, error::AppError, routes::auth::ResetPasswordQuery};
 
 pub type MailTransport = AsyncSmtpTransport<Tokio1Executor>;
 
@@ -72,6 +72,7 @@ pub(crate) async fn send_password_reset_email(
     mailer: &Mailer,
     user: &crate::models::user::User,
     token: &str,
+    base_url: &BaseUrl,
 ) -> Result<(), AppError> {
     let qs = serde_qs::to_string(&ResetPasswordQuery {
         token: token.to_string(),
@@ -80,7 +81,7 @@ pub(crate) async fn send_password_reset_email(
     .wrap_err("Failed to serialize query string")?;
     let body_content = PasswordResetTemplate {
         user,
-        reset_url: &format!("{}/login/reset-password?{qs}", crate::get_base_url()),
+        reset_url: &format!("{}/login/reset-password?{qs}", base_url),
     }
     .render()
     .wrap_err("Failed to render password reset email")?;

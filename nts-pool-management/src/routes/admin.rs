@@ -3,18 +3,20 @@ use axum::response::IntoResponse;
 
 use crate::{
     auth::Administrator,
+    context::AppContext,
     error::AppError,
-    templates::{AppVars, HtmlTemplate, filters},
+    templates::{HtmlTemplate, filters},
 };
 
 #[derive(Template)]
 #[template(path = "admin/overview.html.j2")]
 struct OverviewTemplate {
-    app: AppVars,
+    app: AppContext,
 }
 
-pub async fn overview(_admin: Administrator) -> Result<impl IntoResponse, AppError> {
-    Ok(HtmlTemplate(OverviewTemplate {
-        app: AppVars::from_current_task(),
-    }))
+pub async fn overview(
+    _admin: Administrator,
+    app: AppContext,
+) -> Result<impl IntoResponse, AppError> {
+    Ok(HtmlTemplate(OverviewTemplate { app }))
 }

@@ -1,3 +1,4 @@
+use eyre::Context;
 use serde::Deserialize;
 
 use crate::{
@@ -39,7 +40,12 @@ impl TryFrom<NewTimeSourceForm> for NewTimeSource {
         let port = if form.port.is_empty() {
             None
         } else {
-            Some(form.port.parse::<u16>()?.into())
+            Some(
+                form.port
+                    .parse::<u16>()
+                    .wrap_err("Could not parse into port number")?
+                    .into(),
+            )
         };
 
         Ok(Self {

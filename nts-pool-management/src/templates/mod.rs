@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
-use crate::{auth::CURRENT_USER, models::user::User};
+use crate::context::AppContext;
 
 pub mod filters;
 
@@ -28,43 +28,25 @@ where
 #[derive(Template)]
 #[template(path = "not_found_page.html.j2")]
 pub struct NotFoundPageTemplate {
-    app: AppVars,
+    app: AppContext,
 }
 
-pub fn not_found_page() -> impl IntoResponse {
+pub fn not_found_page(context: AppContext) -> impl IntoResponse {
     (
         StatusCode::NOT_FOUND,
-        HtmlTemplate(NotFoundPageTemplate {
-            app: AppVars::from_current_task(),
-        }),
+        HtmlTemplate(NotFoundPageTemplate { app: context }),
     )
 }
 
 #[derive(Template)]
 #[template(path = "unauthorized_page.html.j2")]
 pub struct UnauthorizedTemplate {
-    app: AppVars,
+    app: AppContext,
 }
 
-pub fn unauthorized_page() -> impl IntoResponse {
+pub fn unauthorized_page(context: AppContext) -> impl IntoResponse {
     (
         StatusCode::UNAUTHORIZED,
-        HtmlTemplate(UnauthorizedTemplate {
-            app: AppVars::from_current_task(),
-        }),
+        HtmlTemplate(UnauthorizedTemplate { app: context }),
     )
-}
-
-pub struct AppVars {
-    pub user: Option<User>,
-    pub base_url: String,
-}
-
-impl AppVars {
-    pub fn from_current_task() -> Self {
-        Self {
-            user: CURRENT_USER.get(),
-            base_url: crate::get_base_url(),
-        }
-    }
 }
