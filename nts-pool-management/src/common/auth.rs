@@ -9,14 +9,13 @@ use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
-use eyre::Context;
+use eyre::{Context, OptionExt};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use tokio::task_local;
 use tracing::debug;
 
 use crate::{
-    AppState,
+    AppState, InfallibleUnwrap,
     error::AppError,
     models::user::{User, UserId, UserRole},
 };
@@ -123,45 +122,134 @@ pub fn login_into(
     Ok(cookie_jar.add(cookie))
 }
 
+pub trait IntoUserOption {
+    fn into_user_option(self) -> Option<User>;
+}
+
+impl IntoUserOption for User {
+    fn into_user_option(self) -> Option<User> {
+        Some(self)
+    }
+}
+
+impl IntoUserOption for Option<User> {
+    fn into_user_option(self) -> Option<User> {
+        self
+    }
+}
+
 /// Represents a user that is logged in but possibly blocked or not activated.
-#[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
+#[derive(Debug, Clone, derive_more::Deref, derive_more::Into, derive_more::From)]
 pub struct UnsafeLoggedInUser(User);
+
+impl IntoUserOption for UnsafeLoggedInUser {
+    fn into_user_option(self) -> Option<User> {
+        Some(self.into())
+    }
+}
+
+impl IntoUserOption for Option<UnsafeLoggedInUser> {
+    fn into_user_option(self) -> Option<User> {
+        self.map(|user| user.into())
+    }
+}
 
 /// Represents an authenticated user that is activated and not blocked.
 #[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
-pub struct AuthenticatedUser(User);
+pub struct AuthorizedUser(User);
+
+impl IntoUserOption for AuthorizedUser {
+    fn into_user_option(self) -> Option<User> {
+        Some(self.into())
+    }
+}
+
+impl IntoUserOption for Option<AuthorizedUser> {
+    fn into_user_option(self) -> Option<User> {
+        self.map(|user| user.into())
+    }
+}
+
+impl TryFrom<User> for AuthorizedUser {
+    type Error = AppError;
+
+    fn try_from(user: User) -> Result<Self, Self::Error> {
+        if user.is_disabled() {
+            Err(eyre::eyre!("User is disabled").into())
+        } else if !user.is_activated() {
+            Err(eyre::eyre!("User is not activated").into())
+        } else {
+            Ok(AuthorizedUser(user))
+        }
+    }
+}
 
 /// Can be extracted from a request, but only if there is a logged in user with the administrator role.
 #[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
-pub struct Administrator(AuthenticatedUser);
+pub struct Administrator(AuthorizedUser);
 
-impl Administrator {
-    pub fn into_inner(self) -> AuthenticatedUser {
-        self.0
+impl IntoUserOption for Administrator {
+    fn into_user_option(self) -> Option<User> {
+        Some(self.into())
+    }
+}
+
+impl IntoUserOption for Option<Administrator> {
+    fn into_user_option(self) -> Option<User> {
+        self.map(|admin| admin.into())
     }
 }
 
 impl From<Administrator> for User {
     fn from(administrator: Administrator) -> Self {
-        AuthenticatedUser::from(administrator).into()
+        AuthorizedUser::from(administrator).into()
+    }
+}
+
+impl TryFrom<User> for Administrator {
+    type Error = AppError;
+
+    fn try_from(user: User) -> Result<Self, Self::Error> {
+        if user.role == UserRole::Administrator {
+            Ok(Administrator(AuthorizedUser(user)))
+        } else {
+            Err(eyre::eyre!("User is not an administrator").into())
+        }
     }
 }
 
 /// Can be extracted from a request, but only if there is a logged in user with the server manager role.
 #[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
-pub struct Manager(AuthenticatedUser);
+pub struct Manager(AuthorizedUser);
 
-impl From<Manager> for User {
-    fn from(server_manager: Manager) -> Self {
-        AuthenticatedUser::from(server_manager).into()
+impl IntoUserOption for Manager {
+    fn into_user_option(self) -> Option<User> {
+        Some(self.into())
     }
 }
 
-task_local! {
-    /// This task local is used to store the currently logged in user.
-    ///
-    /// Handlers should always use the extractors instead of this task local.
-    pub static CURRENT_USER: Option<User>;
+impl IntoUserOption for Option<Manager> {
+    fn into_user_option(self) -> Option<User> {
+        self.map(|manager| manager.into())
+    }
+}
+
+impl From<Manager> for User {
+    fn from(server_manager: Manager) -> Self {
+        AuthorizedUser::from(server_manager).into()
+    }
+}
+
+impl TryFrom<User> for Manager {
+    type Error = AppError;
+
+    fn try_from(user: User) -> Result<Self, Self::Error> {
+        if user.role == UserRole::Manager {
+            Ok(Manager(AuthorizedUser(user)))
+        } else {
+            Err(eyre::eyre!("User is not a server manager").into())
+        }
+    }
 }
 
 /// Middleware that retrieves the user session from the request.
@@ -173,7 +261,7 @@ pub async fn auth_middleware(
     let cookie_jar = request
         .extract_parts::<CookieJar>()
         .await
-        .expect("Extracting CookieJar should never fail");
+        .infallible_unwrap();
 
     let current_user = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
         let decoding_key = DecodingKey::from_ref(&state);
@@ -213,7 +301,8 @@ pub async fn auth_middleware(
         None
     };
 
-    CURRENT_USER.scope(current_user, next.run(request)).await
+    request.extensions_mut().insert(current_user);
+    next.run(request).await
 }
 
 impl<S> OptionalFromRequestParts<S> for UnsafeLoggedInUser
@@ -224,10 +313,14 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(
-        _parts: &mut Parts,
+        parts: &mut Parts,
         _state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let user = CURRENT_USER.get();
+        let user = parts
+            .extensions
+            .get::<Option<User>>()
+            .ok_or_eyre("No user in request extensions")?
+            .clone();
         Ok(user.map(UnsafeLoggedInUser))
     }
 }
@@ -251,7 +344,7 @@ where
     }
 }
 
-impl<S> OptionalFromRequestParts<S> for AuthenticatedUser
+impl<S> OptionalFromRequestParts<S> for AuthorizedUser
 where
     S: Send + Sync,
     DecodingKey: FromRef<S>,
@@ -259,21 +352,26 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(
-        _parts: &mut Parts,
-        _state: &S,
+        parts: &mut Parts,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let user = CURRENT_USER.get();
-        Ok(user.and_then(|user| {
-            if user.is_disabled() || !user.is_activated() {
-                None
-            } else {
-                Some(AuthenticatedUser(user))
-            }
-        }))
+        match parts
+            .extract_with_state::<Option<UnsafeLoggedInUser>, S>(state)
+            .await
+        {
+            Ok(Some(session)) => Ok(Some(
+                session
+                    .0
+                    .try_into()
+                    .wrap_err("Failed to convert to AuthenticatedUser")?,
+            )),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
-impl<S> FromRequestParts<S> for AuthenticatedUser
+impl<S> FromRequestParts<S> for AuthorizedUser
 where
     S: Send + Sync,
     DecodingKey: FromRef<S>,
@@ -282,7 +380,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<AuthenticatedUser>, S>(state)
+            .extract_with_state::<Option<AuthorizedUser>, S>(state)
             .await
         {
             Ok(Some(session)) => Ok(session),
@@ -300,10 +398,7 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts
-            .extract_with_state::<AuthenticatedUser, S>(state)
-            .await
-        {
+        match parts.extract_with_state::<AuthorizedUser, S>(state).await {
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
         }
@@ -318,10 +413,7 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts
-            .extract_with_state::<AuthenticatedUser, S>(state)
-            .await
-        {
+        match parts.extract_with_state::<AuthorizedUser, S>(state).await {
             Ok(session) if session.role == UserRole::Manager => Ok(Manager(session)),
             _ => Err(eyre::eyre!("No server manager user available"))?,
         }

@@ -4,14 +4,19 @@ use axum::{extract::FromRef, middleware};
 use sqlx::PgPool;
 use tracing::info;
 
-use crate::email::{MailTransport, Mailer};
+use crate::{
+    config::AppConfig,
+    email::{MailTransport, Mailer},
+};
 
-pub mod auth;
-pub mod email;
-pub mod error;
+pub use common::*;
+
+mod common;
 pub mod models;
 pub mod routes;
 pub mod templates;
+#[cfg(test)]
+pub mod test;
 
 #[derive(Clone, FromRef)]
 pub struct AppState {
@@ -19,6 +24,7 @@ pub struct AppState {
     jwt_encoding_key: jsonwebtoken::EncodingKey,
     jwt_decoding_key: jsonwebtoken::DecodingKey,
     mailer: Mailer,
+    config: AppConfig,
 }
 
 pub trait DbConnLike<'a>:
@@ -33,7 +39,7 @@ impl<'a, T> DbConnLike<'a> for T where
 
 /// Connect to the database, retrying if necessary. Once connected, run
 /// migrations to update the database schema to the latest version.
-async fn pool_conn(
+pub async fn pool_conn(
     db_conn_str: &str,
     mut remaining_tries: u32,
     retry_interval: std::time::Duration,
@@ -65,12 +71,10 @@ async fn pool_conn(
     }
 }
 
-fn get_base_url() -> String {
-    std::env::var("NTSPOOL_BASE_URL").expect("NTSPOOL_BASE_URL not set")
-}
-
 #[tokio::main]
 async fn main() {
+    let config = AppConfig::from_env().expect("Failed to load configuration");
+
     tracing_subscriber::fmt::init();
 
     // Workaround because ring is also in our dependencies: install aws-lc-rs default crypto provider
@@ -79,36 +83,29 @@ async fn main() {
         .expect("Failed to install default crypto provider");
 
     // Setup database connection
-    let db_conn_str = std::env::var("NTSPOOL_DATABASE_URL")
-        .or_else(|_| std::env::var("DATABASE_URL"))
-        .expect("Missing NTSPOOL_DATABASE_URL/DATABASE_URL environment variable");
-    let db_run_migrations = std::env::var("NTSPOOL_DATABASE_RUN_MIGRATIONS")
-        .map(|v| v == "true" || v == "1")
-        .unwrap_or(true);
     let db_retry_interval = std::time::Duration::from_millis(1000);
-    let db = pool_conn(&db_conn_str, 5, db_retry_interval, db_run_migrations)
-        .await
-        .expect("Error initializing database connection");
+    let db = pool_conn(
+        &config.database_url,
+        5,
+        db_retry_interval,
+        config.database_run_migrations,
+    )
+    .await
+    .expect("Error initializing database connection");
 
     // Setup JWT encoding and decoding keys
-    let jwt_secret = std::env::var("NTSPOOL_JWT_SECRET")
-        .expect("Missing NTSPOOL_JWT_SECRET environment variable");
-    let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes());
-    let jwt_decoding_key = jsonwebtoken::DecodingKey::from_secret(jwt_secret.as_bytes());
-
-    // Get the base URL for the application to make sure it is set correctly
-    get_base_url();
+    let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(config.jwt_secret.as_bytes());
+    let jwt_decoding_key = jsonwebtoken::DecodingKey::from_secret(config.jwt_secret.as_bytes());
 
     // Setup mail transport for sending mails
-    let mail_transport_url = std::env::var("NTSPOOL_SMTP_URL").expect("NTSPOOL_SMTP_URL not set");
-    let mail_transport = MailTransport::from_url(&mail_transport_url)
+    let mail_transport = MailTransport::from_url(&config.mail_smtp_url)
         .expect("Failed to create mail transport")
         .build();
-    let mail_from_address = lettre::message::Mailbox::from_str(
-        &std::env::var("NTSPOOL_MAIL_FROM_ADDRESS").expect("NTSPOOL_MAIL_FROM_ADDRESS not set"),
-    )
-    .expect("Failed to create mail from address");
+    let mail_from_address = lettre::message::Mailbox::from_str(&config.mail_from_address)
+        .expect("Failed to create mail from address");
     let mailer = Mailer::new(mail_transport, mail_from_address);
+
+    let serve_dir_service = tower_http::services::ServeDir::new(&config.assets_path);
 
     // construct the application state
     let state = AppState {
@@ -116,21 +113,25 @@ async fn main() {
         jwt_encoding_key,
         jwt_decoding_key,
         mailer,
+        config,
     };
 
     // setup routes
     let router = routes::create_router()
+        .with_state(state.clone())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            context::context_middleware,
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,
         ))
-        .with_state(state)
-        .nest_service(
-            "/assets",
-            tower_http::services::ServeDir::new(
-                std::env::var("NTSPOOL_ASSETS_DIR").unwrap_or("./assets".into()),
-            ),
-        );
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            error::error_middleware,
+        ))
+        .nest_service("/assets", serve_dir_service);
 
     // start listening for incoming connections
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

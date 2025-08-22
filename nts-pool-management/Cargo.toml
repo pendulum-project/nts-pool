@@ -33,7 +33,7 @@ tracing-subscriber = { workspace = true, default-features = true, features = [
     "env-filter",
 ] }
 chrono = { workspace = true, features = ["serde"] }
-uuid = { workspace = true, features = ["serde"] }
+uuid = { workspace = true, features = ["serde", "v4"] }
 rustls = { workspace = true }
 jsonwebtoken = { workspace = true }
 lettre = { workspace = true, default-features = false, features = [
@@ -51,3 +51,6 @@ lettre = { workspace = true, default-features = false, features = [
 rand = { workspace = true }
 eyre = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+testcontainers = { workspace = true }
