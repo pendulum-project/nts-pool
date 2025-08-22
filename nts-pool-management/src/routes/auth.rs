@@ -16,23 +16,24 @@ use crate::{
     auth::{
         AUTH_COOKIE_NAME, UnsafeLoggedInUser, is_too_large_password, is_valid_password, login_into,
     },
+    context::AppContext,
     email::Mailer,
     error::AppError,
     models::{
         authentication_method::{AuthenticationVariant, PasswordAuthentication},
         user::{NewUser, UserRole},
     },
-    templates::{AppVars, HtmlTemplate, filters},
+    templates::{HtmlTemplate, filters},
 };
 
 #[derive(Template)]
 #[template(path = "login/login.html.j2")]
 struct LoginPageTemplate {
-    app: AppVars,
+    app: AppContext,
     login_error: bool,
 }
 
-pub async fn login(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
+pub async fn login(user: Option<UnsafeLoggedInUser>, app: AppContext) -> impl IntoResponse {
     if let Some(user) = user {
         if !user.is_activated() {
             return Redirect::to("/register/activate").into_response();
@@ -44,7 +45,7 @@ pub async fn login(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
     }
 
     HtmlTemplate(LoginPageTemplate {
-        app: AppVars::from_current_task(),
+        app,
         login_error: false,
     })
     .into_response()
@@ -58,15 +59,16 @@ pub struct LoginData {
 
 pub async fn login_submit(
     auth_user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
     cookie_jar: CookieJar,
     State(encoding_key): State<EncodingKey>,
     State(db): State<PgPool>,
     Form(data): Form<LoginData>,
 ) -> Result<impl IntoResponse, AppError> {
-    match login_submit_internal(auth_user, cookie_jar, encoding_key, db, data).await {
+    match login_submit_internal(auth_user.clone(), cookie_jar, encoding_key, db, data).await {
         Ok(response) => Ok(response.into_response()),
         Err(e) if e.is::<InvalidCredentialsError>() => Ok(HtmlTemplate(LoginPageTemplate {
-            app: AppVars::from_current_task(),
+            app,
             login_error: true,
         })
         .into_response()),
@@ -90,27 +92,38 @@ async fn login_submit_internal(
     }
 
     let user = crate::models::user::get_by_email(&db, &data.email)
-        .await?
+        .await
+        .wrap_err("Failed to load user from database")?
         .ok_or_eyre(InvalidCredentialsError)?;
     let password_method =
         crate::models::authentication_method::get_password_authentication_method(&db, user.id)
-            .await?
+            .await
+            .wrap_err("Failed to load authentication method from database")?
             .ok_or_eyre(InvalidCredentialsError)?;
 
     // prevent too large password from being used
     if is_too_large_password(&data.password) {
-        return Err(InvalidCredentialsError.into());
+        return Err(eyre::eyre!("Password provided is too large")
+            .wrap_err(InvalidCredentialsError)
+            .into());
     }
 
-    if password_method.verify(&data.password)? {
+    if password_method
+        .verify(&data.password)
+        .wrap_err("Failed to run password verification")?
+    {
         if user.is_disabled() {
             return Err(eyre::eyre!("User is disabled").into());
         }
 
         cookie_jar = login_into(&user, None, &encoding_key, cookie_jar)?;
-        crate::models::user::update_last_login(&db, user.id).await?;
+        crate::models::user::update_last_login(&db, user.id)
+            .await
+            .wrap_err("Failed to update last login time")?;
     } else {
-        return Err(InvalidCredentialsError.into());
+        return Err(eyre::eyre!("Password could not be verified")
+            .wrap_err(InvalidCredentialsError)
+            .into());
     }
 
     Ok((
@@ -132,12 +145,12 @@ pub async fn logout(cookie_jar: CookieJar) -> Result<impl IntoResponse, AppError
 #[derive(Template)]
 #[template(path = "login/register.html.j2")]
 struct RegisterPageTemplate {
-    app: AppVars,
+    app: AppContext,
     fields_with_errors: Vec<&'static str>,
     data_email: Option<String>,
 }
 
-pub async fn register(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
+pub async fn register(user: Option<UnsafeLoggedInUser>, app: AppContext) -> impl IntoResponse {
     if let Some(user) = user {
         if !user.is_activated() {
             return Redirect::to("/register/activate").into_response();
@@ -149,7 +162,7 @@ pub async fn register(user: Option<UnsafeLoggedInUser>) -> impl IntoResponse {
     }
 
     HtmlTemplate(RegisterPageTemplate {
-        app: AppVars::from_current_task(),
+        app,
         fields_with_errors: Vec::new(),
         data_email: None,
     })
@@ -166,6 +179,7 @@ pub struct RegisterForm {
 
 pub async fn register_submit(
     auth_user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
     State(pool): State<PgPool>,
     State(encoding_key): State<EncodingKey>,
     State(mailer): State<Mailer>,
@@ -183,7 +197,8 @@ pub async fn register_submit(
 
     // check if email is already registered
     } else if crate::models::user::get_by_email(&pool, &data.email)
-        .await?
+        .await
+        .wrap_err("Failed to load user from database")?
         .is_some()
     {
         fields_with_errors.push("email");
@@ -202,7 +217,7 @@ pub async fn register_submit(
 
     if !fields_with_errors.is_empty() {
         Ok(HtmlTemplate(RegisterPageTemplate {
-            app: AppVars::from_current_task(),
+            app,
             fields_with_errors,
             data_email: Some(data.email),
         })
@@ -220,16 +235,20 @@ pub async fn register_submit(
                 activation_expires_at,
             },
         )
-        .await?;
+        .await
+        .wrap_err("Failed to create user")?;
 
         crate::models::authentication_method::create(
             &mut *tx,
             user.id,
-            AuthenticationVariant::Password(PasswordAuthentication::new(&data.password)?),
+            AuthenticationVariant::Password(
+                PasswordAuthentication::new(&data.password).wrap_err("Failed to hash password")?,
+            ),
         )
-        .await?;
+        .await
+        .wrap_err("Failed to create password authentication method")?;
 
-        tx.commit().await?;
+        tx.commit().await.wrap_err("Transaction commit failed")?;
 
         // we send an activation email to the user
         crate::email::send_activation_email(&mailer, &user).await?;
@@ -244,13 +263,14 @@ pub async fn register_submit(
 #[derive(Template)]
 #[template(path = "login/register_activate.html.j2")]
 struct RegisterActivatePageTemplate {
-    app: AppVars,
+    app: AppContext,
     has_code_error: bool,
     resend_reason: Option<ResendReason>,
 }
 
 pub async fn register_activate(
     user: UnsafeLoggedInUser,
+    app: AppContext,
     Query(query): Query<RegisterActivateQuery>,
 ) -> impl IntoResponse {
     if user.is_disabled() {
@@ -262,7 +282,7 @@ pub async fn register_activate(
     }
 
     HtmlTemplate(RegisterActivatePageTemplate {
-        app: AppVars::from_current_task(),
+        app,
         has_code_error: false,
         resend_reason: query.reason,
     })
@@ -298,6 +318,7 @@ pub struct RegisterActivateQuery {
 
 pub async fn register_activate_submit(
     auth_user: UnsafeLoggedInUser,
+    app: AppContext,
     State(pool): State<PgPool>,
     State(mailer): State<Mailer>,
     Form(data): Form<RegisterActivateForm>,
@@ -360,7 +381,7 @@ pub async fn register_activate_submit(
         Ok(Redirect::to("/").into_response())
     } else {
         Ok(HtmlTemplate(RegisterActivatePageTemplate {
-            app: AppVars::from_current_task(),
+            app,
             has_code_error: true,
             resend_reason: None,
         })
@@ -371,7 +392,7 @@ pub async fn register_activate_submit(
 #[derive(Template)]
 #[template(path = "login/forgot_password.html.j2")]
 struct ForgotPasswordPageTemplate {
-    app: AppVars,
+    app: AppContext,
     requested: bool,
     failed: bool,
 }
@@ -384,6 +405,7 @@ pub struct ForgotPasswordQuery {
 
 pub async fn forgot_password(
     user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
     Query(query): Query<ForgotPasswordQuery>,
 ) -> impl IntoResponse {
     if let Some(user) = user {
@@ -395,7 +417,7 @@ pub async fn forgot_password(
     }
 
     HtmlTemplate(ForgotPasswordPageTemplate {
-        app: AppVars::from_current_task(),
+        app,
         requested: query.requested.unwrap_or_default(),
         failed: query.failed.unwrap_or_default(),
     })
@@ -409,6 +431,7 @@ pub struct ForgotPasswordSubmitForm {
 
 pub async fn forgot_password_submit(
     user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
     State(pool): State<PgPool>,
     State(mailer): State<Mailer>,
     Form(form): Form<ForgotPasswordSubmitForm>,
@@ -438,7 +461,7 @@ pub async fn forgot_password_submit(
         )
         .await?;
 
-        crate::email::send_password_reset_email(&mailer, &user, &token).await?;
+        crate::email::send_password_reset_email(&mailer, &user, &token, &app.base_url).await?;
     }
     // Implement forgot password logic here
     Ok(Redirect::to("/login/forgot-password?requested=true").into_response())
@@ -447,7 +470,7 @@ pub async fn forgot_password_submit(
 #[derive(Template)]
 #[template(path = "login/password_reset.html.j2")]
 struct PasswordResetPageTemplate {
-    app: AppVars,
+    app: AppContext,
     password_error: bool,
 }
 
@@ -459,6 +482,7 @@ pub struct ResetPasswordQuery {
 
 pub async fn reset_password(
     user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
     Query(query): Query<ResetPasswordQuery>,
     State(pool): State<PgPool>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -493,7 +517,7 @@ pub async fn reset_password(
     }
 
     Ok(HtmlTemplate(PasswordResetPageTemplate {
-        app: AppVars::from_current_task(),
+        app,
         password_error: false,
     })
     .into_response())
@@ -507,6 +531,7 @@ pub struct ResetPasswordForm {
 
 pub async fn reset_password_submit(
     user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
     Query(query): Query<ResetPasswordQuery>,
     State(pool): State<PgPool>,
     Form(form): Form<ResetPasswordForm>,
@@ -527,7 +552,8 @@ pub async fn reset_password_submit(
         crate::models::authentication_method::get_password_authentication_method_row(
             &pool, user.id,
         )
-        .await?
+        .await
+        .wrap_err("Failed to load authentication method row")?
     else {
         return Ok(Redirect::to("/").into_response());
     };
@@ -550,16 +576,70 @@ pub async fn reset_password_submit(
 
     if form.password != form.confirm_password || !is_valid_password(&form.password) {
         return Ok(HtmlTemplate(PasswordResetPageTemplate {
-            app: AppVars::from_current_task(),
+            app,
             password_error: true,
         })
         .into_response());
     }
 
-    password_auth.update_password(&form.password)?;
+    password_auth
+        .update_password(&form.password)
+        .wrap_err("Could not update password")?;
 
     crate::models::authentication_method::update_variant(&pool, auth_row.id, auth_row.variant.0)
-        .await?;
+        .await
+        .wrap_err("Failed to update authentication method variant")?;
 
     Ok(Redirect::to("/login").into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::response::IntoResponse;
+
+    use crate::context::AppContext;
+
+    #[tokio::test]
+    async fn test_login_page_success() {
+        let response = crate::routes::auth::login(None, AppContext::default())
+            .await
+            .into_response();
+        assert!(response.status().is_success());
+    }
+
+    #[tokio::test]
+    async fn test_login_page_with_user_redirects() {
+        let admin_user = crate::models::user::User::test_admin();
+
+        let response = crate::routes::auth::login(
+            Some(admin_user.clone().into()),
+            AppContext::default().with_user(admin_user.clone()),
+        )
+        .await
+        .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .unwrap(),
+            "/"
+        );
+
+        let manager_user = crate::models::user::User::test_manager();
+        let response = super::login(
+            Some(manager_user.clone().into()),
+            AppContext::default().with_user(manager_user.clone()),
+        )
+        .await
+        .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .unwrap(),
+            "/"
+        );
+    }
 }

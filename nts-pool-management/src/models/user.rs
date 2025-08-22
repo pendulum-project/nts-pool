@@ -40,6 +40,75 @@ impl User {
             .map(|since| Utc::now() > since)
             .unwrap_or(false)
     }
+
+    #[cfg(test)]
+    pub fn test_admin() -> Self {
+        use uuid::Uuid;
+
+        Self {
+            id: Uuid::new_v4().into(),
+            email: "admin@example.com".to_string(),
+            role: UserRole::Administrator,
+            activation_token: None,
+            activation_expires_at: None,
+            activated_since: Some(chrono::Utc::now() - chrono::TimeDelta::seconds(10)),
+            last_login_at: chrono::Utc::now(),
+            disabled_since: None,
+            created_at: chrono::Utc::now() - chrono::TimeDelta::seconds(20),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn test_manager() -> Self {
+        use uuid::Uuid;
+        Self {
+            id: Uuid::new_v4().into(),
+            email: "manager@example.com".to_string(),
+            role: UserRole::Manager,
+            activation_token: None,
+            activation_expires_at: None,
+            activated_since: Some(chrono::Utc::now() - chrono::TimeDelta::seconds(10)),
+            last_login_at: chrono::Utc::now(),
+            disabled_since: None,
+            created_at: chrono::Utc::now() - chrono::TimeDelta::seconds(20),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn test_disabled_manager() -> Self {
+        use uuid::Uuid;
+        Self {
+            id: Uuid::new_v4().into(),
+            email: "manager+disabled@example.com".to_string(),
+            role: UserRole::Manager,
+            activation_token: None,
+            activation_expires_at: None,
+            activated_since: Some(chrono::Utc::now() - chrono::TimeDelta::seconds(100)),
+            last_login_at: chrono::Utc::now(),
+            disabled_since: Some(chrono::Utc::now() - chrono::TimeDelta::seconds(60)),
+            created_at: chrono::Utc::now() - chrono::TimeDelta::seconds(120),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn test_not_activated_manager() -> Self {
+        use uuid::Uuid;
+        Self {
+            id: Uuid::new_v4().into(),
+            email: "manager+not-activated@example.com".to_string(),
+            role: UserRole::Manager,
+            activation_token: Some("some-token".to_string()),
+            activation_expires_at: Some(chrono::Utc::now() + chrono::TimeDelta::seconds(3600)),
+            activated_since: None,
+            last_login_at: chrono::Utc::now(),
+            disabled_since: None,
+            created_at: chrono::Utc::now() - chrono::TimeDelta::seconds(120),
+            updated_at: chrono::Utc::now(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

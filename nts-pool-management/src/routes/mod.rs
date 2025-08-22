@@ -7,7 +7,8 @@ use axum::{
 
 use crate::{
     AppState,
-    templates::{AppVars, HtmlTemplate, filters, not_found_page},
+    context::AppContext,
+    templates::{HtmlTemplate, filters, not_found_page},
 };
 
 mod admin;
@@ -44,17 +45,15 @@ pub fn create_router() -> Router<AppState> {
         )
         .route("/management/dns-zones", get(management::dns_zones))
         .route("/management", get(management::dashboard))
-        .fallback(async || not_found_page())
+        .fallback(async |app: AppContext| not_found_page(app))
 }
 
 #[derive(Template)]
 #[template(path = "index.html.j2")]
 struct IndexTemplate {
-    app: AppVars,
+    app: AppContext,
 }
 
-pub async fn index() -> impl IntoResponse {
-    HtmlTemplate(IndexTemplate {
-        app: AppVars::from_current_task(),
-    })
+pub async fn index(app: AppContext) -> impl IntoResponse {
+    HtmlTemplate(IndexTemplate { app })
 }
