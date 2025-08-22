@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{net::TcpStream, select, time::timeout};
 
 use crate::{
-    NtsClientConfig,
-    nts::{KeyExchangeClient, NtsError},
+    nts::{KeyExchangeClient, NtsClientConfig, NtsError},
     packet::{Cipher, NtpPacket},
     time_types::{NtpTimestamp, PollInterval},
 };

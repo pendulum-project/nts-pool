@@ -1,7 +1,15 @@
 use std::fmt::Display;
 
-use crate::{cookiestash::CookieStash, packet::Cipher};
+use rustls::pki_types::pem::PemObject;
 
+use crate::{
+    control::{ProbeControlConfig, run_probing},
+    cookiestash::CookieStash,
+    packet::Cipher,
+    tls_utils::Certificate,
+};
+
+mod control;
 mod cookiestash;
 mod identifiers;
 mod io;
@@ -75,7 +83,24 @@ impl std::fmt::Debug for SourceNtsData {
     }
 }
 
-pub use nts::NtsClientConfig;
-pub use tls_utils::pemfile::certs;
+pub async fn monitor_main() {
+    let mut receiver = run_probing(ProbeControlConfig {
+        management_interface: "".into(),
+        authorization_key: "testmonitor".into(),
+        certificates: [Certificate::from_pem_slice(include_bytes!(
+            "../../nts-pool-ke/testdata/testca.pem"
+        ))
+        .unwrap()]
+        .into(),
+    })
+    .await;
 
-pub use probe::{Probe, ProbeConfig};
+    loop {
+        if let Some((uuid, result)) = receiver.recv().await {
+            println!("{}: {:?}", uuid, result);
+        } else {
+            println!("Shutting down");
+            break;
+        }
+    }
+}
