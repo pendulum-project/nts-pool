@@ -227,40 +227,26 @@ async fn run_probing_inner<
     result_receiver
 }
 
-struct MockManagmentRequestor;
+struct ReqwestManagementRequestor;
 
-impl ManagementRequestor for MockManagmentRequestor {
+impl ManagementRequestor for ReqwestManagementRequestor {
     async fn get_command(
         config: &ProbeControlConfig,
     ) -> Result<ProbeControlCommand, std::io::Error> {
-        static RAN: AtomicBool = AtomicBool::new(false);
-        if RAN.load(std::sync::atomic::Ordering::Relaxed) {
-            Ok(ProbeControlCommand {
-                timesources: HashSet::from(["UUID-A".into(), "UUID-B".into()]),
-                poolke: "localhost".into(),
-                update_interval: Duration::from_secs(10),
-                probe_interval: Duration::from_secs(4),
-                nts_timeout: Duration::from_secs(3),
-                ntp_timeout: Duration::from_secs(3),
-            })
-        } else {
-            RAN.store(true, std::sync::atomic::Ordering::Relaxed);
-            Ok(ProbeControlCommand {
-                timesources: HashSet::from(["UUID-A".into()]),
-                poolke: "localhost".into(),
-                update_interval: Duration::from_secs(10),
-                probe_interval: Duration::from_secs(4),
-                nts_timeout: Duration::from_secs(3),
-                ntp_timeout: Duration::from_secs(3),
-            })
-        }
+        let result = reqwest::Client::new()
+            .get(&config.management_interface)
+            .bearer_auth(&config.authorization_key)
+            .send()
+            .await
+            .map_err(std::io::Error::other)?;
+        result.json().await.map_err(std::io::Error::other)
     }
 }
 
 pub async fn run_probing(
     config: ProbeControlConfig,
 ) -> tokio::sync::mpsc::Receiver<(String, ProbeResult)> {
-    run_probing_inner::<Probe, _, MockManagmentRequestor>(
+    run_probing_inner::<Probe, _, ReqwestManagementRequestor>(
         config,
         Box::pin(async {
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
