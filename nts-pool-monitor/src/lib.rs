@@ -85,7 +85,7 @@ impl std::fmt::Debug for SourceNtsData {
 
 pub async fn monitor_main() {
     let mut receiver = run_probing(ProbeControlConfig {
-        management_interface: "".into(),
+        management_interface: "http://localhost:3000/monitoring/get_work".into(),
         authorization_key: "testmonitor".into(),
         certificates: [Certificate::from_pem_slice(include_bytes!(
             "../../nts-pool-ke/testdata/testca.pem"

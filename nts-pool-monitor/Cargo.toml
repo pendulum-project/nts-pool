@@ -19,6 +19,7 @@ aes-siv.workspace = true
 rand.workspace = true
 rustls.workspace = true
 rustls-platform-verifier.workspace = true
+reqwest = { workspace = true, features = ["http2", "json"] }
 serde = { workspace = true, features = ["derive"] }
 timestamped-socket.workspace = true
 tokio = { workspace = true, features = ["io-util", "rt-multi-thread", "macros", "net", "signal", "sync"] }

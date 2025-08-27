@@ -14,6 +14,7 @@ use crate::{
 mod admin;
 pub(crate) mod auth;
 mod management;
+mod monitoring;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
@@ -45,6 +46,7 @@ pub fn create_router() -> Router<AppState> {
         )
         .route("/management/dns-zones", get(management::dns_zones))
         .route("/management", get(management::dashboard))
+        .route("/monitoring/get_work", get(monitoring::get_work))
         .fallback(async |app: AppContext| not_found_page(app))
 }
 
