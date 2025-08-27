@@ -218,7 +218,6 @@ pub enum NtsError {
     Dns(tls_utils::InvalidDnsNameError),
     UnrecognizedCriticalRecord,
     Invalid,
-    NoCookie,
     NoOverlappingProtocol,
     NoOverlappingAlgorithm,
     UnknownWarning(u16),
@@ -251,7 +250,6 @@ impl std::fmt::Display for NtsError {
             NtsError::Dns(error) => error.fmt(f),
             NtsError::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             NtsError::Invalid => f.write_str("Invalid request or response"),
-            NtsError::NoCookie => f.write_str("Remote provided no cookies"),
             NtsError::NoOverlappingProtocol => f.write_str("No overlap in supported protocols"),
             NtsError::NoOverlappingAlgorithm => {
                 f.write_str("No overlap in supported AEAD algorithms")

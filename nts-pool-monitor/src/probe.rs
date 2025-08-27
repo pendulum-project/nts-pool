@@ -190,7 +190,7 @@ impl Probe {
 
         let mut buf = [0; 1024];
         let mut cursor = Cursor::new(buf.as_mut_slice());
-        request.serialize(&mut cursor, inputs.c2s.as_ref(), None)?;
+        request.serialize(&mut cursor, inputs.c2s.as_ref())?;
         let size = cursor.position() as usize;
         let msg = &buf[..size];
 

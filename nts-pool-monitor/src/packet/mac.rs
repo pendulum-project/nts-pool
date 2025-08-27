@@ -17,13 +17,6 @@ impl<'a> Mac<'a> {
     // crypto-NAK.
     pub(super) const MAXIMUM_SIZE: usize = 24;
 
-    pub(super) fn into_owned(self) -> Mac<'static> {
-        Mac {
-            keyid: self.keyid,
-            mac: Cow::Owned(self.mac.into_owned()),
-        }
-    }
-
     pub(super) fn serialize(&self, mut w: impl NonBlockingWrite) -> std::io::Result<()> {
         w.write_all(&self.keyid.to_be_bytes())?;
         w.write_all(&self.mac)

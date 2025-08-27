@@ -1,10 +1,9 @@
-use std::{borrow::Cow, io::Cursor};
+use std::io::Cursor;
 
 use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    NtpVersion,
     identifiers::ReferenceId,
     io::NonBlockingWrite,
     time_types::{NtpDuration, NtpTimestamp, PollInterval},
@@ -16,8 +15,6 @@ mod crypto;
 mod error;
 mod extension_fields;
 mod mac;
-
-pub mod v5;
 
 pub use crypto::{AesSivCmac256, AesSivCmac512, Cipher, CipherProvider};
 pub use error::PacketParsingError;
@@ -58,10 +55,6 @@ impl NtpLeapIndicator {
             NtpLeapIndicator::Unknown => 3,
             NtpLeapIndicator::Unsynchronized => 3,
         }
-    }
-
-    pub fn is_synchronized(&self) -> bool {
-        !matches!(self, Self::Unsynchronized)
     }
 }
 
@@ -121,7 +114,6 @@ pub struct NtpPacket<'a> {
 pub enum NtpHeader {
     V3(NtpHeaderV3V4),
     V4(NtpHeaderV3V4),
-    V5(v5::NtpHeaderV5),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -230,14 +222,6 @@ impl NtpHeaderV3V4 {
 }
 
 impl<'a> NtpPacket<'a> {
-    pub fn into_owned(self) -> NtpPacket<'static> {
-        NtpPacket::<'static> {
-            header: self.header,
-            efdata: self.efdata.into_owned(),
-            mac: self.mac.map(|v| v.into_owned()),
-        }
-    }
-
     #[allow(clippy::result_large_err)]
     pub fn deserialize(
         data: &'a [u8],
@@ -307,78 +291,18 @@ impl<'a> NtpPacket<'a> {
                     }
                 }
             }
-            5 => {
-                let (header, header_size) =
-                    v5::NtpHeaderV5::deserialize(data).map_err(|e| e.generalize())?;
-
-                let construct_packet = |remaining_bytes: &'a [u8], efdata| {
-                    let mac = if !remaining_bytes.is_empty() {
-                        Some(Mac::deserialize(remaining_bytes)?)
-                    } else {
-                        None
-                    };
-
-                    let packet = NtpPacket {
-                        header: NtpHeader::V5(header),
-                        efdata,
-                        mac,
-                    };
-
-                    Ok::<_, ParsingError<std::convert::Infallible>>(packet)
-                };
-
-                let res_packet = match ExtensionFieldData::deserialize(
-                    data,
-                    header_size,
-                    cipher,
-                    ExtensionHeaderVersion::V5,
-                ) {
-                    Ok(decoded) => {
-                        let packet = construct_packet(decoded.remaining_bytes, decoded.efdata)
-                            .map_err(|e| e.generalize())?;
-
-                        Ok(packet)
-                    }
-                    Err(e) => {
-                        // return early if it is anything but a decrypt error
-                        let invalid = e.get_decrypt_error()?;
-
-                        let packet = construct_packet(invalid.remaining_bytes, invalid.efdata)
-                            .map_err(|e| e.generalize())?;
-
-                        Err(ParsingError::DecryptError(packet))
-                    }
-                };
-
-                let packet = res_packet?;
-
-                match packet.draft_id() {
-                    Some(id) if id == v5::DRAFT_VERSION => Ok(packet),
-                    received @ (Some(_) | None) => {
-                        tracing::error!(
-                            expected = v5::DRAFT_VERSION,
-                            received,
-                            "Mismatched draft ID ignoring packet!"
-                        );
-                        Err(ParsingError::V5(v5::V5Error::InvalidDraftIdentification))
-                    }
-                }
-            }
             _ => Err(PacketParsingError::InvalidVersion(version)),
         }
     }
 
     #[cfg(test)]
-    pub fn serialize_without_encryption_vec(
-        &self,
-        desired_size: Option<usize>,
-    ) -> std::io::Result<Vec<u8>> {
+    pub fn serialize_without_encryption_vec(&self) -> std::io::Result<Vec<u8>> {
         use crate::packet::crypto::NoCipher;
 
         let mut buffer = vec![0u8; 1024];
         let mut cursor = Cursor::new(buffer.as_mut_slice());
 
-        self.serialize(&mut cursor, &NoCipher, desired_size)?;
+        self.serialize(&mut cursor, &NoCipher)?;
 
         let length = cursor.position() as usize;
         let buffer = cursor.into_inner()[..length].to_vec();
@@ -390,14 +314,10 @@ impl<'a> NtpPacket<'a> {
         &self,
         w: &mut Cursor<&mut [u8]>,
         cipher: &(impl CipherProvider + ?Sized),
-        desired_size: Option<usize>,
     ) -> std::io::Result<()> {
-        let start = w.position();
-
         match self.header {
             NtpHeader::V3(header) => header.serialize(&mut *w, 3)?,
             NtpHeader::V4(header) => header.serialize(&mut *w, 4)?,
-            NtpHeader::V5(header) => header.serialize(&mut *w)?,
         };
 
         match self.header {
@@ -406,25 +326,10 @@ impl<'a> NtpPacket<'a> {
                 self.efdata
                     .serialize(&mut *w, cipher, ExtensionHeaderVersion::V4)?
             }
-            NtpHeader::V5(_) => {
-                self.efdata
-                    .serialize(&mut *w, cipher, ExtensionHeaderVersion::V5)?
-            }
         }
 
         if let Some(ref mac) = self.mac {
             mac.serialize(&mut *w)?;
-        }
-
-        if let Some(desired_size) = desired_size {
-            let written = (w.position() - start) as usize;
-            if desired_size > written {
-                ExtensionField::Padding(desired_size - written).serialize(
-                    w,
-                    4,
-                    ExtensionHeaderVersion::V5,
-                )?;
-            }
         }
 
         Ok(())
@@ -467,46 +372,7 @@ impl<'a> NtpPacket<'a> {
         )
     }
 
-    pub fn nts_poll_message_v5(
-        cookie: &'a [u8],
-        new_cookies: u8,
-        poll_interval: PollInterval,
-    ) -> (NtpPacket<'static>, RequestIdentifier) {
-        let (header, id) = v5::NtpHeaderV5::poll_message(poll_interval);
-
-        let identifier: [u8; 32] = rand::rng().random();
-
-        let mut authenticated = vec![
-            ExtensionField::UniqueIdentifier(identifier.to_vec().into()),
-            ExtensionField::NtsCookie(cookie.to_vec().into()),
-        ];
-
-        for _ in 1..new_cookies {
-            authenticated.push(ExtensionField::NtsCookiePlaceholder {
-                cookie_length: cookie.len() as u16,
-            });
-        }
-
-        let draft_id = ExtensionField::DraftIdentification(Cow::Borrowed(v5::DRAFT_VERSION));
-        authenticated.push(draft_id);
-
-        (
-            NtpPacket {
-                header: NtpHeader::V5(header),
-                efdata: ExtensionFieldData {
-                    authenticated,
-                    encrypted: vec![],
-                    untrusted: vec![],
-                },
-                mac: None,
-            },
-            RequestIdentifier {
-                uid: Some(identifier),
-                ..id
-            },
-        )
-    }
-
+    #[cfg(test)]
     pub fn poll_message(poll_interval: PollInterval) -> (Self, RequestIdentifier) {
         let (header, id) = NtpHeaderV3V4::poll_message(poll_interval);
         (
@@ -518,55 +384,6 @@ impl<'a> NtpPacket<'a> {
             id,
         )
     }
-
-    pub fn poll_message_upgrade_request(poll_interval: PollInterval) -> (Self, RequestIdentifier) {
-        let (mut header, id) = NtpHeaderV3V4::poll_message(poll_interval);
-
-        header.reference_timestamp = v5::UPGRADE_TIMESTAMP;
-
-        (
-            NtpPacket {
-                header: NtpHeader::V4(header),
-                efdata: ExtensionFieldData {
-                    authenticated: vec![],
-                    encrypted: vec![],
-                    untrusted: vec![],
-                },
-                mac: None,
-            },
-            id,
-        )
-    }
-
-    pub fn poll_message_v5(poll_interval: PollInterval) -> (Self, RequestIdentifier) {
-        let (header, id) = v5::NtpHeaderV5::poll_message(poll_interval);
-
-        let draft_id = ExtensionField::DraftIdentification(Cow::Borrowed(v5::DRAFT_VERSION));
-
-        (
-            NtpPacket {
-                header: NtpHeader::V5(header),
-                efdata: ExtensionFieldData {
-                    authenticated: vec![],
-                    encrypted: vec![],
-                    untrusted: vec![draft_id],
-                },
-                mac: None,
-            },
-            id,
-        )
-    }
-
-    fn draft_id(&self) -> Option<&'_ str> {
-        self.efdata
-            .untrusted
-            .iter()
-            .chain(self.efdata.authenticated.iter())
-            .find_map(|ef| match ef {
-                ExtensionField::DraftIdentification(id) => Some(&**id),
-                _ => None,
-            })
-    }
 }
 
 impl<'a> NtpPacket<'a> {
@@ -577,75 +394,10 @@ impl<'a> NtpPacket<'a> {
         })
     }
 
-    pub fn version(&self) -> NtpVersion {
-        match self.header {
-            NtpHeader::V3(_) => NtpVersion::V3,
-            NtpHeader::V4(_) => NtpVersion::V4,
-            NtpHeader::V5(_) => NtpVersion::V5,
-        }
-    }
-
-    pub fn header(&self) -> NtpHeader {
-        self.header
-    }
-
-    pub fn leap(&self) -> NtpLeapIndicator {
-        match self.header {
-            NtpHeader::V3(header) => header.leap,
-            NtpHeader::V4(header) => header.leap,
-            NtpHeader::V5(header) => header.leap,
-        }
-    }
-
-    pub fn mode(&self) -> NtpAssociationMode {
-        match self.header {
-            NtpHeader::V3(header) => header.mode,
-            NtpHeader::V4(header) => header.mode,
-
-            // FIXME long term the return type should change to capture both mode types
-            NtpHeader::V5(header) => match header.mode {
-                v5::NtpMode::Request => NtpAssociationMode::Client,
-                v5::NtpMode::Response => NtpAssociationMode::Server,
-            },
-        }
-    }
-
+    #[cfg(test)]
     pub fn poll(&self) -> PollInterval {
         match self.header {
             NtpHeader::V3(h) | NtpHeader::V4(h) => h.poll,
-            NtpHeader::V5(h) => h.poll,
-        }
-    }
-
-    pub fn stratum(&self) -> u8 {
-        match self.header {
-            NtpHeader::V3(header) => header.stratum,
-            NtpHeader::V4(header) => header.stratum,
-            NtpHeader::V5(header) => header.stratum,
-        }
-    }
-
-    pub fn precision(&self) -> i8 {
-        match self.header {
-            NtpHeader::V3(header) => header.precision,
-            NtpHeader::V4(header) => header.precision,
-            NtpHeader::V5(header) => header.precision,
-        }
-    }
-
-    pub fn root_delay(&self) -> NtpDuration {
-        match self.header {
-            NtpHeader::V3(header) => header.root_delay,
-            NtpHeader::V4(header) => header.root_delay,
-            NtpHeader::V5(header) => header.root_delay,
-        }
-    }
-
-    pub fn root_dispersion(&self) -> NtpDuration {
-        match self.header {
-            NtpHeader::V3(header) => header.root_dispersion,
-            NtpHeader::V4(header) => header.root_dispersion,
-            NtpHeader::V5(header) => header.root_dispersion,
         }
     }
 
@@ -653,7 +405,6 @@ impl<'a> NtpPacket<'a> {
         match self.header {
             NtpHeader::V3(header) => header.receive_timestamp,
             NtpHeader::V4(header) => header.receive_timestamp,
-            NtpHeader::V5(header) => header.receive_timestamp,
         }
     }
 
@@ -661,16 +412,6 @@ impl<'a> NtpPacket<'a> {
         match self.header {
             NtpHeader::V3(header) => header.transmit_timestamp,
             NtpHeader::V4(header) => header.transmit_timestamp,
-            NtpHeader::V5(header) => header.transmit_timestamp,
-        }
-    }
-
-    pub fn reference_id(&self) -> ReferenceId {
-        match self.header {
-            NtpHeader::V3(header) => header.reference_id,
-            NtpHeader::V4(header) => header.reference_id,
-            // TODO NTPv5 does not have reference IDs so this should always be None for now
-            NtpHeader::V5(_header) => ReferenceId::NONE,
         }
     }
 
@@ -678,10 +419,6 @@ impl<'a> NtpPacket<'a> {
         match self.header {
             NtpHeader::V3(header) => header.reference_id,
             NtpHeader::V4(header) => header.reference_id,
-            // Kiss code in ntpv5 is the first four bytes of the server cookie
-            NtpHeader::V5(header) => {
-                ReferenceId::from_bytes(header.server_cookie.0[..4].try_into().unwrap())
-            }
         }
     }
 
@@ -689,7 +426,6 @@ impl<'a> NtpPacket<'a> {
         match self.header {
             NtpHeader::V3(header) => header.stratum == 0,
             NtpHeader::V4(header) => header.stratum == 0,
-            NtpHeader::V5(header) => header.stratum == 0,
         }
     }
 
@@ -697,17 +433,6 @@ impl<'a> NtpPacket<'a> {
         self.is_kiss()
             && match self.header {
                 NtpHeader::V3(_) | NtpHeader::V4(_) => self.kiss_code().is_deny(),
-                NtpHeader::V5(header) => header.poll == PollInterval::NEVER,
-            }
-    }
-
-    pub fn is_kiss_rate(&self, own_interval: PollInterval) -> bool {
-        self.is_kiss()
-            && match self.header {
-                NtpHeader::V3(_) | NtpHeader::V4(_) => self.kiss_code().is_rate(),
-                NtpHeader::V5(header) => {
-                    header.poll > own_interval && header.poll != PollInterval::NEVER
-                }
             }
     }
 
@@ -715,7 +440,6 @@ impl<'a> NtpPacket<'a> {
         self.is_kiss()
             && match self.header {
                 NtpHeader::V3(_) | NtpHeader::V4(_) => self.kiss_code().is_rstr(),
-                NtpHeader::V5(_) => false,
             }
     }
 
@@ -723,18 +447,7 @@ impl<'a> NtpPacket<'a> {
         self.is_kiss()
             && match self.header {
                 NtpHeader::V3(_) | NtpHeader::V4(_) => self.kiss_code().is_ntsn(),
-                NtpHeader::V5(header) => header.flags.authnak,
             }
-    }
-
-    pub fn is_upgrade(&self) -> bool {
-        matches!(
-            self.header,
-            NtpHeader::V4(NtpHeaderV3V4 {
-                reference_timestamp: v5::UPGRADE_TIMESTAMP,
-                ..
-            }),
-        )
     }
 
     pub fn valid_server_response(&self, identifier: RequestIdentifier, nts_enabled: bool) -> bool {
@@ -763,26 +476,6 @@ impl<'a> NtpPacket<'a> {
             NtpHeader::V4(header) => {
                 header.origin_timestamp == identifier.expected_origin_timestamp
             }
-            NtpHeader::V5(header) => {
-                header.client_cookie
-                    == v5::NtpClientCookie::from_ntp_timestamp(identifier.expected_origin_timestamp)
-            }
-        }
-    }
-
-    pub fn untrusted_extension_fields(&self) -> impl Iterator<Item = &ExtensionField<'_>> {
-        self.efdata.untrusted.iter()
-    }
-
-    pub fn authenticated_extension_fields(&self) -> impl Iterator<Item = &ExtensionField<'_>> {
-        self.efdata.authenticated.iter()
-    }
-
-    pub fn push_additional(&mut self, ef: ExtensionField<'static>) {
-        if !self.efdata.authenticated.is_empty() || !self.efdata.encrypted.is_empty() {
-            self.efdata.authenticated.push(ef);
-        } else {
-            self.efdata.untrusted.push(ef);
         }
     }
 }
@@ -807,55 +500,10 @@ fn check_uid_extensionfield<'a, I: IntoIterator<Item = &'a ExtensionField<'a>>>(
 
 #[cfg(any(test, feature = "__internal-fuzz"))]
 impl NtpPacket<'_> {
-    pub fn test() -> Self {
-        Self::default()
-    }
-
     pub fn set_mode(&mut self, mode: NtpAssociationMode) {
         match &mut self.header {
             NtpHeader::V3(header) => header.mode = mode,
             NtpHeader::V4(header) => header.mode = mode,
-            NtpHeader::V5(header) => {
-                header.mode = match mode {
-                    NtpAssociationMode::Client => v5::NtpMode::Request,
-                    NtpAssociationMode::Server => v5::NtpMode::Response,
-                    _ => todo!("NTPv5 can only handle client-server"),
-                }
-            }
-        }
-    }
-
-    pub fn set_origin_timestamp(&mut self, timestamp: NtpTimestamp) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.origin_timestamp = timestamp,
-            NtpHeader::V4(header) => header.origin_timestamp = timestamp,
-            NtpHeader::V5(header) => {
-                header.client_cookie = v5::NtpClientCookie::from_ntp_timestamp(timestamp)
-            }
-        }
-    }
-
-    pub fn set_transmit_timestamp(&mut self, timestamp: NtpTimestamp) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.transmit_timestamp = timestamp,
-            NtpHeader::V4(header) => header.transmit_timestamp = timestamp,
-            NtpHeader::V5(header) => header.transmit_timestamp = timestamp,
-        }
-    }
-
-    pub fn set_receive_timestamp(&mut self, timestamp: NtpTimestamp) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.receive_timestamp = timestamp,
-            NtpHeader::V4(header) => header.receive_timestamp = timestamp,
-            NtpHeader::V5(header) => header.receive_timestamp = timestamp,
-        }
-    }
-
-    pub fn set_precision(&mut self, precision: i8) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.precision = precision,
-            NtpHeader::V4(header) => header.precision = precision,
-            NtpHeader::V5(header) => header.precision = precision,
         }
     }
 
@@ -863,39 +511,6 @@ impl NtpPacket<'_> {
         match &mut self.header {
             NtpHeader::V3(header) => header.leap = leap,
             NtpHeader::V4(header) => header.leap = leap,
-            NtpHeader::V5(header) => header.leap = leap,
-        }
-    }
-
-    pub fn set_stratum(&mut self, stratum: u8) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.stratum = stratum,
-            NtpHeader::V4(header) => header.stratum = stratum,
-            NtpHeader::V5(header) => header.stratum = stratum,
-        }
-    }
-
-    pub fn set_reference_id(&mut self, reference_id: ReferenceId) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.reference_id = reference_id,
-            NtpHeader::V4(header) => header.reference_id = reference_id,
-            NtpHeader::V5(_header) => todo!("NTPv5 does not have reference IDs"),
-        }
-    }
-
-    pub fn set_root_delay(&mut self, root_delay: NtpDuration) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.root_delay = root_delay,
-            NtpHeader::V4(header) => header.root_delay = root_delay,
-            NtpHeader::V5(header) => header.root_delay = root_delay,
-        }
-    }
-
-    pub fn set_root_dispersion(&mut self, root_dispersion: NtpDuration) {
-        match &mut self.header {
-            NtpHeader::V3(header) => header.root_dispersion = root_dispersion,
-            NtpHeader::V4(header) => header.root_dispersion = root_dispersion,
-            NtpHeader::V5(header) => header.root_dispersion = root_dispersion,
         }
     }
 }
@@ -912,6 +527,8 @@ impl Default for NtpPacket<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use crate::{packet::crypto::NoCipher, time_types::PollIntervalLimits};
 
     use super::*;
@@ -964,7 +581,7 @@ mod tests {
             reference,
             NtpPacket::deserialize(packet, &NoCipher).unwrap()
         );
-        match reference.serialize_without_encryption_vec(None) {
+        match reference.serialize_without_encryption_vec() {
             Ok(buf) => assert_eq!(packet[..], buf[..]),
             Err(e) => panic!("{e:?}"),
         }
@@ -993,7 +610,7 @@ mod tests {
             reference,
             NtpPacket::deserialize(packet, &NoCipher).unwrap()
         );
-        match reference.serialize_without_encryption_vec(None) {
+        match reference.serialize_without_encryption_vec() {
             Ok(buf) => assert_eq!(packet[..], buf[..]),
             Err(e) => panic!("{e:?}"),
         }
@@ -1025,7 +642,7 @@ mod tests {
             reference,
             NtpPacket::deserialize(packet, &NoCipher).unwrap()
         );
-        match reference.serialize_without_encryption_vec(None) {
+        match reference.serialize_without_encryption_vec() {
             Ok(buf) => assert_eq!(packet[..], buf[..]),
             Err(e) => panic!("{e:?}"),
         }
@@ -1056,7 +673,7 @@ mod tests {
                 header.set_leap(NtpLeapIndicator::from_bits(leap_type));
                 header.set_mode(NtpAssociationMode::from_bits(mode));
 
-                let data = header.serialize_without_encryption_vec(None).unwrap();
+                let data = header.serialize_without_encryption_vec().unwrap();
                 let copy = NtpPacket::deserialize(&data, &NoCipher).unwrap();
                 assert_eq!(header, copy);
             }
@@ -1067,7 +684,7 @@ mod tests {
             packet[0] = i;
 
             if let Ok(a) = NtpPacket::deserialize(&packet, &NoCipher) {
-                let b = a.serialize_without_encryption_vec(None).unwrap();
+                let b = a.serialize_without_encryption_vec().unwrap();
                 assert_eq!(packet[..], b[..]);
             }
         }
@@ -1082,7 +699,7 @@ mod tests {
 
         let mut buffer = [0u8; 2048];
         let mut cursor = Cursor::new(buffer.as_mut());
-        packet1.serialize(&mut cursor, &cipher, None).unwrap();
+        packet1.serialize(&mut cursor, &cipher).unwrap();
         let packet2 =
             NtpPacket::deserialize(&cursor.get_ref()[..cursor.position() as usize], &cipher)
                 .unwrap();
@@ -1340,7 +957,7 @@ mod tests {
             data: vec![].into(),
         });
 
-        let serialized = p.serialize_without_encryption_vec(None).unwrap();
+        let serialized = p.serialize_without_encryption_vec().unwrap();
 
         let mut out = NtpPacket::deserialize(&serialized, &NoCipher).unwrap();
 
@@ -1352,37 +969,5 @@ mod tests {
         *data = vec![].into();
 
         assert_eq!(p, out);
-    }
-
-    #[test]
-    fn ef_with_missing_padding_v5() {
-        let (packet, _) = NtpPacket::poll_message_v5(PollInterval::default());
-        let mut data = packet.serialize_without_encryption_vec(None).unwrap();
-        data.extend([
-            0, 0, // Type = Unknown
-            0, 6, // Length = 5
-            1, 2, // Data
-               // Missing 2 padding bytes
-        ]);
-
-        assert!(matches!(
-            NtpPacket::deserialize(&data, &NoCipher),
-            Err(ParsingError::IncorrectLength)
-        ));
-    }
-
-    #[test]
-    fn padding_v5() {
-        for i in 10..40 {
-            let packet = NtpPacket::poll_message_v5(PollInterval::default()).0;
-
-            let data = packet
-                .serialize_without_encryption_vec(Some(4 * i))
-                .unwrap();
-
-            assert_eq!(data.len(), 76.max(i * 4));
-
-            assert!(NtpPacket::deserialize(&data, &NoCipher).is_ok());
-        }
     }
 }
