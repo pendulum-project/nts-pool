@@ -1,10 +1,9 @@
 use std::{
     collections::{HashSet, VecDeque},
-    sync::{Arc, RwLock, atomic::AtomicBool},
+    sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
 
-use rustls::pki_types::pem::PemObject;
 use serde::{Deserialize, Serialize};
 use tokio::{select, time::sleep_until};
 
@@ -15,6 +14,7 @@ use crate::{
     tls_utils::Certificate,
 };
 
+#[derive(Debug, Clone)]
 pub struct ProbeControlConfig {
     pub management_interface: String,
     pub authorization_key: String,
@@ -25,6 +25,9 @@ pub struct ProbeControlConfig {
 struct ProbeControlCommand {
     timesources: HashSet<String>,
     poolke: String,
+    result_endpoint: String,
+    result_batchsize: usize,
+    result_max_waittime: Duration,
     update_interval: Duration,
     probe_interval: Duration,
     nts_timeout: Duration,
@@ -85,7 +88,10 @@ async fn run_probing_inner<
 >(
     config: ProbeControlConfig,
     mut stop: S,
-) -> tokio::sync::mpsc::Receiver<(String, T::Output)> {
+) -> (
+    tokio::sync::mpsc::Receiver<(String, T::Output)>,
+    Arc<RwLock<Arc<ProbeControlCommand>>>,
+) {
     let command = M::get_command(&config)
         .await
         .expect("Could not get initial command");
@@ -110,6 +116,7 @@ async fn run_probing_inner<
     let mut update_deadline = start_time + command.update_interval;
 
     let command = Arc::new(RwLock::new(Arc::new(command)));
+    let command_extern = command.clone();
     let config = Arc::new(config);
 
     let (new_work_sender, mut new_work) =
@@ -224,7 +231,59 @@ async fn run_probing_inner<
         }
     });
 
-    result_receiver
+    (result_receiver, command_extern)
+}
+
+async fn run_result_reporter<T: Send + Serialize + 'static>(
+    mut results: tokio::sync::mpsc::Receiver<(String, T)>,
+    settings: Arc<RwLock<Arc<ProbeControlCommand>>>,
+    config: ProbeControlConfig,
+) {
+    let mut cache = vec![];
+    let mut send_timeout = std::pin::pin!(tokio::time::sleep_until(Instant::now().into()));
+
+    loop {
+        enum Task<T> {
+            Recv { result: (String, T) },
+            Stop,
+            Send,
+            Continue,
+        }
+        let mut task = tokio::select! {
+            result = results.recv() => { if let Some(result) = result { Task::Recv { result } } else { Task::Stop } }
+            _ = &mut send_timeout => { if cache.is_empty() { Task::Continue } else { Task::Send } }
+        };
+
+        if let Task::Recv { result } = task {
+            if cache.is_empty() {
+                send_timeout
+                    .as_mut()
+                    .reset((Instant::now() + settings.read().unwrap().result_max_waittime).into())
+            }
+            cache.push(result);
+            if cache.len() >= settings.read().unwrap().result_batchsize {
+                task = Task::Send
+            } else {
+                task = Task::Continue;
+            }
+        }
+
+        if matches!(task, Task::Stop | Task::Send) {
+            let send_target = settings.read().unwrap().result_endpoint.clone();
+            let _ = reqwest::Client::new()
+                .post(send_target)
+                .bearer_auth(&config.authorization_key)
+                .json(&cache)
+                .send()
+                .await;
+            // TODO: Report error once we have tracing
+            cache.clear();
+        }
+
+        if matches!(task, Task::Stop) {
+            break;
+        }
+    }
 }
 
 struct ReqwestManagementRequestor;
@@ -243,11 +302,9 @@ impl ManagementRequestor for ReqwestManagementRequestor {
     }
 }
 
-pub async fn run_probing(
-    config: ProbeControlConfig,
-) -> tokio::sync::mpsc::Receiver<(String, ProbeResult)> {
-    run_probing_inner::<Probe, _, ReqwestManagementRequestor>(
-        config,
+pub async fn run_probing(config: ProbeControlConfig) {
+    let (receiver, command) = run_probing_inner::<Probe, _, ReqwestManagementRequestor>(
+        config.clone(),
         Box::pin(async {
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
                 .unwrap()
@@ -255,5 +312,6 @@ pub async fn run_probing(
                 .await
         }),
     )
-    .await
+    .await;
+    run_result_reporter(receiver, command, config).await;
 }
