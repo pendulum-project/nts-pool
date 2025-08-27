@@ -5,8 +5,6 @@ use std::{
 
 use crate::io::NonBlockingWrite;
 
-use crate::packet::v5::extension_fields::{ReferenceIdRequest, ReferenceIdResponse};
-
 use super::{Cipher, CipherProvider, Mac, crypto::EncryptResult, error::ParsingError};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -16,10 +14,6 @@ pub(super) enum ExtensionFieldTypeId {
     NtsCookiePlaceholder,
     NtsEncryptedField,
     Unknown { type_id: u16 },
-    DraftIdentification,
-    Padding,
-    ReferenceIdRequest,
-    ReferenceIdResponse,
 }
 
 impl ExtensionFieldTypeId {
@@ -29,10 +23,6 @@ impl ExtensionFieldTypeId {
             0x204 => Self::NtsCookie,
             0x304 => Self::NtsCookiePlaceholder,
             0x404 => Self::NtsEncryptedField,
-            0xF5FF => Self::DraftIdentification,
-            0xF501 => Self::Padding,
-            0xF503 => Self::ReferenceIdRequest,
-            0xF504 => Self::ReferenceIdResponse,
             _ => Self::Unknown { type_id },
         }
     }
@@ -43,10 +33,6 @@ impl ExtensionFieldTypeId {
             ExtensionFieldTypeId::NtsCookie => 0x204,
             ExtensionFieldTypeId::NtsCookiePlaceholder => 0x304,
             ExtensionFieldTypeId::NtsEncryptedField => 0x404,
-            ExtensionFieldTypeId::DraftIdentification => 0xF5FF,
-            ExtensionFieldTypeId::Padding => 0xF501,
-            ExtensionFieldTypeId::ReferenceIdRequest => 0xF503,
-            ExtensionFieldTypeId::ReferenceIdResponse => 0xF504,
             ExtensionFieldTypeId::Unknown { type_id } => type_id,
         }
     }
@@ -58,10 +44,6 @@ pub enum ExtensionField<'a> {
     NtsCookie(Cow<'a, [u8]>),
     NtsCookiePlaceholder { cookie_length: u16 },
     InvalidNtsEncryptedField,
-    DraftIdentification(Cow<'a, str>),
-    Padding(usize),
-    ReferenceIdRequest(super::v5::extension_fields::ReferenceIdRequest),
-    ReferenceIdResponse(super::v5::extension_fields::ReferenceIdResponse<'a>),
     Unknown { type_id: u16, data: Cow<'a, [u8]> },
 }
 
@@ -77,12 +59,6 @@ impl std::fmt::Debug for ExtensionField<'_> {
                 .field("body_length", body_length)
                 .finish(),
             Self::InvalidNtsEncryptedField => f.debug_struct("InvalidNtsEncryptedField").finish(),
-            Self::DraftIdentification(arg0) => {
-                f.debug_tuple("DraftIdentification").field(arg0).finish()
-            }
-            Self::Padding(len) => f.debug_struct("Padding").field("length", &len).finish(),
-            Self::ReferenceIdRequest(r) => f.debug_tuple("ReferenceIdRequest").field(r).finish(),
-            Self::ReferenceIdResponse(r) => f.debug_tuple("ReferenceIdResponse").field(r).finish(),
             Self::Unknown {
                 type_id: typeid,
                 data,
@@ -118,10 +94,6 @@ impl<'a> ExtensionField<'a> {
                 cookie_length: body_length,
             },
             InvalidNtsEncryptedField => InvalidNtsEncryptedField,
-            DraftIdentification(data) => DraftIdentification(Cow::Owned(data.into_owned())),
-            Padding(len) => Padding(len),
-            ReferenceIdRequest(req) => ReferenceIdRequest(req),
-            ReferenceIdResponse(res) => ReferenceIdResponse(res.into_owned()),
         }
     }
 
@@ -145,12 +117,6 @@ impl<'a> ExtensionField<'a> {
                 cookie_length: body_length,
             } => Self::encode_nts_cookie_placeholder(w, *body_length, minimum_size, version),
             InvalidNtsEncryptedField => Err(std::io::ErrorKind::Other.into()),
-            DraftIdentification(data) => {
-                Self::encode_draft_identification(w, data, minimum_size, version)
-            }
-            Padding(len) => Self::encode_padding_field(w, *len, minimum_size, version),
-            ReferenceIdRequest(req) => req.serialize(w),
-            ReferenceIdResponse(res) => res.serialize(w),
         }
     }
 
@@ -388,47 +354,6 @@ impl<'a> ExtensionField<'a> {
         Ok(())
     }
 
-    fn encode_draft_identification(
-        mut w: impl NonBlockingWrite,
-        data: &str,
-        minimum_size: u16,
-        version: ExtensionHeaderVersion,
-    ) -> std::io::Result<()> {
-        Self::encode_framing(
-            &mut w,
-            ExtensionFieldTypeId::DraftIdentification,
-            data.len(),
-            minimum_size,
-            version,
-        )?;
-
-        w.write_all(data.as_bytes())?;
-
-        Self::encode_padding(w, data.len(), minimum_size)?;
-
-        Ok(())
-    }
-
-    pub fn encode_padding_field(
-        mut w: impl NonBlockingWrite,
-        length: usize,
-        minimum_size: u16,
-        version: ExtensionHeaderVersion,
-    ) -> std::io::Result<()> {
-        Self::encode_framing(
-            &mut w,
-            ExtensionFieldTypeId::Padding,
-            length - Self::HEADER_LENGTH,
-            minimum_size,
-            version,
-        )?;
-
-        Self::write_zeros(&mut w, length - Self::HEADER_LENGTH)?;
-        Self::encode_padding(w, length - Self::HEADER_LENGTH, minimum_size)?;
-
-        Ok(())
-    }
-
     fn decode_unique_identifier(
         message: &'a [u8],
     ) -> Result<Self, ParsingError<std::convert::Infallible>> {
@@ -469,27 +394,7 @@ impl<'a> ExtensionField<'a> {
         })
     }
 
-    fn decode_draft_identification(
-        message: &'a [u8],
-        extension_header_version: ExtensionHeaderVersion,
-    ) -> Result<Self, ParsingError<std::convert::Infallible>> {
-        let di = match core::str::from_utf8(message) {
-            Ok(di) if di.is_ascii() => di,
-            _ => return Err(super::v5::V5Error::InvalidDraftIdentification.into()),
-        };
-
-        let di = match extension_header_version {
-            ExtensionHeaderVersion::V4 => di.trim_end_matches('\0'),
-            ExtensionHeaderVersion::V5 => di,
-        };
-
-        Ok(ExtensionField::DraftIdentification(Cow::Borrowed(di)))
-    }
-
-    fn decode(
-        raw: RawExtensionField<'a>,
-        extension_header_version: ExtensionHeaderVersion,
-    ) -> Result<Self, ParsingError<std::convert::Infallible>> {
+    fn decode(raw: RawExtensionField<'a>) -> Result<Self, ParsingError<std::convert::Infallible>> {
         type EF<'a> = ExtensionField<'a>;
         type TypeId = ExtensionFieldTypeId;
 
@@ -499,21 +404,6 @@ impl<'a> ExtensionField<'a> {
             TypeId::UniqueIdentifier => EF::decode_unique_identifier(message),
             TypeId::NtsCookie => EF::decode_nts_cookie(message),
             TypeId::NtsCookiePlaceholder => EF::decode_nts_cookie_placeholder(message),
-            TypeId::DraftIdentification
-                if extension_header_version == ExtensionHeaderVersion::V5 =>
-            {
-                EF::decode_draft_identification(message, extension_header_version)
-            }
-            TypeId::ReferenceIdRequest
-                if extension_header_version == ExtensionHeaderVersion::V5 =>
-            {
-                Ok(ReferenceIdRequest::decode(message)?.into())
-            }
-            TypeId::ReferenceIdResponse
-                if extension_header_version == ExtensionHeaderVersion::V5 =>
-            {
-                Ok(ReferenceIdResponse::decode(message).into())
-            }
             type_id => EF::decode_unknown(type_id.to_type_id(), message),
         }
     }
@@ -539,17 +429,6 @@ pub(super) struct InvalidNtsExtensionField<'a> {
 }
 
 impl<'a> ExtensionFieldData<'a> {
-    pub(super) fn into_owned(self) -> ExtensionFieldData<'static> {
-        let map_into_owned =
-            |vec: Vec<ExtensionField>| vec.into_iter().map(ExtensionField::into_owned).collect();
-
-        ExtensionFieldData {
-            authenticated: map_into_owned(self.authenticated),
-            encrypted: map_into_owned(self.encrypted),
-            untrusted: map_into_owned(self.untrusted),
-        }
-    }
-
     pub(super) fn serialize(
         &self,
         w: &mut Cursor<&mut [u8]>,
@@ -583,7 +462,6 @@ impl<'a> ExtensionFieldData<'a> {
             let minimum_size = match version {
                 ExtensionHeaderVersion::V4 if is_last => 28,
                 ExtensionHeaderVersion::V4 => 16,
-                ExtensionHeaderVersion::V5 => 4,
             };
             field.serialize(&mut *w, minimum_size, version)?;
         }
@@ -605,7 +483,6 @@ impl<'a> ExtensionFieldData<'a> {
         let mut is_valid_nts = true;
         let mac_size = match version {
             ExtensionHeaderVersion::V4 => Mac::MAXIMUM_SIZE,
-            ExtensionHeaderVersion::V5 => 0,
         };
 
         for field in RawExtensionField::deserialize_sequence(
@@ -656,8 +533,7 @@ impl<'a> ExtensionFieldData<'a> {
                     efdata.authenticated.append(&mut efdata.untrusted);
                 }
                 _ => {
-                    let field =
-                        ExtensionField::decode(field, version).map_err(|e| e.generalize())?;
+                    let field = ExtensionField::decode(field).map_err(|e| e.generalize())?;
                     efdata.untrusted.push(field);
                 }
             }
@@ -740,7 +616,7 @@ impl<'a> RawEncryptedField<'a> {
                 // TODO: Discuss whether we want this check
                 Err(ParsingError::MalformedNtsExtensionFields)
             } else {
-                Ok(ExtensionField::decode(encrypted_field, version)
+                Ok(ExtensionField::decode(encrypted_field)
                     .map_err(|e| e.generalize())?
                     .into_owned())
             }
@@ -752,7 +628,6 @@ impl<'a> RawEncryptedField<'a> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExtensionHeaderVersion {
     V4,
-    V5,
 }
 
 #[cfg(feature = "__internal-fuzz")]
@@ -964,7 +839,7 @@ mod tests {
             type_id: ExtensionFieldTypeId::NtsCookiePlaceholder,
             message_bytes: &[1; COOKIE_LENGTH],
         };
-        let output = ExtensionField::decode(raw, ExtensionHeaderVersion::V4).unwrap_err();
+        let output = ExtensionField::decode(raw).unwrap_err();
 
         assert!(matches!(output, ParsingError::MalformedCookiePlaceholder));
 
@@ -972,7 +847,7 @@ mod tests {
             type_id: ExtensionFieldTypeId::NtsCookiePlaceholder,
             message_bytes: &[0; COOKIE_LENGTH],
         };
-        let output = ExtensionField::decode(raw, ExtensionHeaderVersion::V4).unwrap();
+        let output = ExtensionField::decode(raw).unwrap();
 
         let ExtensionField::NtsCookiePlaceholder { cookie_length } = output else {
             panic!("incorrect variant");
@@ -996,32 +871,6 @@ mod tests {
     }
 
     #[test]
-    fn draft_identification() {
-        let test_id = crate::packet::v5::DRAFT_VERSION;
-        let len = u16::try_from(4 + test_id.len()).unwrap();
-        let mut data = vec![];
-        data.extend(&[0xF5, 0xFF]); // Type
-        data.extend(&len.to_be_bytes()); // Length
-        data.extend(test_id.as_bytes()); // Payload
-        data.extend(&[0]); // Padding
-
-        let raw = RawExtensionField::deserialize(&data, 4, ExtensionHeaderVersion::V5).unwrap();
-        let ef = ExtensionField::decode(raw, ExtensionHeaderVersion::V5).unwrap();
-
-        let ExtensionField::DraftIdentification(ref parsed) = ef else {
-            panic!("Unexpected extension field {ef:?}... expected DraftIdentification");
-        };
-
-        assert_eq!(parsed, test_id);
-
-        let mut out = vec![];
-        ef.serialize(&mut out, 4, ExtensionHeaderVersion::V5)
-            .unwrap();
-
-        assert_eq!(&out, &data);
-    }
-
-    #[test]
     fn extension_field_length() {
         let data: Vec<_> = (0..21).collect();
         let mut w = vec![];
@@ -1034,17 +883,6 @@ mod tests {
         assert_eq!(w.len(), 28);
         assert_eq!(raw.message_bytes.len(), 24);
         assert_eq!(raw.wire_length(ExtensionHeaderVersion::V4), 28);
-
-        let mut w = vec![];
-        ExtensionField::encode_unknown(&mut w, 42, &data, 16, ExtensionHeaderVersion::V5).unwrap();
-        let raw: RawExtensionField<'_> =
-            RawExtensionField::deserialize(&w, 16, ExtensionHeaderVersion::V5).unwrap();
-
-        // v5 extension field header length does not include padding bytes
-        assert_eq!(w[3], 25);
-        assert_eq!(w.len(), 28);
-        assert_eq!(raw.message_bytes.len(), 21);
-        assert_eq!(raw.wire_length(ExtensionHeaderVersion::V5), 28);
     }
 
     #[test]

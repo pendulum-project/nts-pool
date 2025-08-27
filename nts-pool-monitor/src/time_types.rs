@@ -209,12 +209,14 @@ impl NtpDuration {
         .to_be_bytes()
     }
 
+    #[cfg(test)]
     pub(crate) const fn from_bits_time32(bits: [u8; 4]) -> Self {
         NtpDuration {
             duration: (u32::from_be_bytes(bits) as i64) << 4,
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn to_bits_time32(self) -> [u8; 4] {
         // serializing negative durations should never happen
         // and indicates a programming error elsewhere.
@@ -529,11 +531,6 @@ impl std::fmt::Debug for PollInterval {
 impl PollInterval {
     pub const NEVER: PollInterval = PollInterval(i8::MAX);
 
-    #[cfg(test)]
-    pub fn test_new(value: i8) -> Self {
-        Self(value)
-    }
-
     pub fn from_byte(value: u8) -> Self {
         Self(value as i8)
     }
@@ -542,25 +539,19 @@ impl PollInterval {
         self.0 as u8
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn inc(self, limits: PollIntervalLimits) -> Self {
         Self(self.0 + 1).min(limits.max)
     }
 
-    #[must_use]
-    pub fn force_inc(self) -> Self {
-        Self(self.0.saturating_add(1))
-    }
-
+    #[cfg(test)]
     #[must_use]
     pub fn dec(self, limits: PollIntervalLimits) -> Self {
         Self(self.0 - 1).max(limits.min)
     }
 
-    pub const fn as_log(self) -> i8 {
-        self.0
-    }
-
+    #[cfg(test)]
     pub const fn as_duration(self) -> NtpDuration {
         let base_shift = self.0.saturating_add(32);
         let shift = if base_shift < 0 {
@@ -575,6 +566,7 @@ impl PollInterval {
         }
     }
 
+    #[cfg(test)]
     pub const fn as_system_duration(self) -> Duration {
         let shift = if self.0 < 0 {
             0
