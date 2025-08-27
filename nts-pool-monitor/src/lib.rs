@@ -84,7 +84,7 @@ impl std::fmt::Debug for SourceNtsData {
 }
 
 pub async fn monitor_main() {
-    let mut receiver = run_probing(ProbeControlConfig {
+    run_probing(ProbeControlConfig {
         management_interface: "http://localhost:3000/monitoring/get_work".into(),
         authorization_key: "testmonitor".into(),
         certificates: [Certificate::from_pem_slice(include_bytes!(
@@ -94,13 +94,4 @@ pub async fn monitor_main() {
         .into(),
     })
     .await;
-
-    loop {
-        if let Some((uuid, result)) = receiver.recv().await {
-            println!("{}: {:?}", uuid, result);
-        } else {
-            println!("Shutting down");
-            break;
-        }
-    }
 }
