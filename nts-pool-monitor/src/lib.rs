@@ -2,15 +2,11 @@ use std::{fmt::Display, path::PathBuf};
 
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::{
-    cli::MonitorOptions, config::Config, control::run_probing, cookiestash::CookieStash,
-    packet::Cipher, tracing::LogLevel,
-};
+use crate::{cli::MonitorOptions, config::Config, control::run_probing, tracing::LogLevel};
 
 mod cli;
 mod config;
 mod control;
-mod cookiestash;
 mod identifiers;
 mod io;
 mod nts;
@@ -66,23 +62,6 @@ impl From<NtpVersion> for u8 {
             NtpVersion::V4 => 4,
             NtpVersion::V5 => 5,
         }
-    }
-}
-
-pub struct SourceNtsData {
-    pub cookies: CookieStash,
-    // Note: we use Box<dyn Cipher> to support the use
-    // of multiple different ciphers, that might differ
-    // in the key information they need to keep.
-    pub c2s: Box<dyn Cipher>,
-    pub s2c: Box<dyn Cipher>,
-}
-
-impl std::fmt::Debug for SourceNtsData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SourceNtsData")
-            .field("cookies", &self.cookies)
-            .finish()
     }
 }
 
