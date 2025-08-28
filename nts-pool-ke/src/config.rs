@@ -377,6 +377,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_config() {
+        crate::test_init();
         let test: Config = toml::from_str(
             r#"
             [server]

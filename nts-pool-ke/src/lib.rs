@@ -128,9 +128,6 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
 }
 
 #[cfg(test)]
-#[ctor::ctor]
-fn test_init() {
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .expect("Failed to install default crypto provider");
+pub fn test_init() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }

@@ -53,9 +53,6 @@ phf.workspace = true
 maxminddb.workspace = true
 rand.workspace = true
 
-[dev-dependencies]
-ctor.workspace = true
-
 [[bin]]
 name = "nts-pool-ke"
 path = "bin/nts-pool-ke.rs"

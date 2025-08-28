@@ -574,6 +574,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_basic() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -636,6 +637,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_respects_client_prioritization_1() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -702,6 +704,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_respects_client_prioritization_2() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -768,6 +771,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_proxy() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -835,6 +839,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_get_uuid() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -904,6 +909,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_get_uuid_non_existing() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -966,6 +972,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_get_uuid_authfail() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
@@ -1024,6 +1031,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_keyexchange_get_uuid_missing_auth() {
+        crate::test_init();
         let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let pool_addr = pool_listener.local_addr().unwrap();
 
