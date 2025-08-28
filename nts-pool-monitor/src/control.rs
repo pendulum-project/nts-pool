@@ -1,11 +1,14 @@
 use std::{
     collections::{HashSet, VecDeque},
     sync::{Arc, RwLock},
-    time::{Duration},
+    time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
-use tokio::{select, time::{sleep_until, Instant}};
+use tokio::{
+    select,
+    time::{Instant, sleep_until},
+};
 use tracing::{error, warn};
 
 use crate::{
@@ -141,8 +144,8 @@ async fn run_probing_inner<
                 cur
             };
             let task = select! {
-                _ = sleep_until(probe_deadline.into()) => Task::Probe,
-                _ = sleep_until(update_deadline.into()) => Task::Update,
+                _ = sleep_until(probe_deadline) => Task::Probe,
+                _ = sleep_until(update_deadline) => Task::Update,
                 next_new_work = new_work.recv(), if last_new_work.is_none() => {
                     last_new_work = next_new_work;
                     continue;
@@ -241,7 +244,7 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
     config: ProbeControlConfig,
 ) {
     let mut cache = vec![];
-    let mut send_timeout = std::pin::pin!(tokio::time::sleep_until(Instant::now().into()));
+    let mut send_timeout = std::pin::pin!(tokio::time::sleep_until(Instant::now()));
 
     loop {
         enum Task<T> {
@@ -259,7 +262,7 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
             if cache.is_empty() {
                 send_timeout
                     .as_mut()
-                    .reset((Instant::now() + settings.read().unwrap().result_max_waittime).into())
+                    .reset(Instant::now() + settings.read().unwrap().result_max_waittime)
             }
             cache.push(result);
             if cache.len() >= settings.read().unwrap().result_batchsize {
@@ -321,4 +324,271 @@ pub async fn run_probing(config: ProbeControlConfig) {
     )
     .await;
     run_result_reporter(receiver, command, config).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{Arc, RwLock, atomic::AtomicUsize},
+        time::Duration,
+    };
+
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    use crate::{
+        config::ProbeControlConfig,
+        control::{
+            ManagementRequestor, ProbeControlCommand, ProbeExecutor, ReqwestManagementRequestor,
+            run_probing_inner, run_result_reporter,
+        },
+    };
+
+    struct NoopProbe;
+
+    impl ProbeExecutor for NoopProbe {
+        type Output = String;
+
+        fn from_command(_config: &ProbeControlConfig, _command: &ProbeControlCommand) -> Self {
+            NoopProbe
+        }
+
+        async fn run_probe(
+            self: Arc<Self>,
+            timesource: String,
+        ) -> Result<Self::Output, std::io::Error> {
+            Ok(timesource)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reqwest_command_fetcher() {
+        let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let (mut conn, _) = server.accept().await.unwrap();
+            let mut req = [0u8; 4096];
+            let _ = conn.read(&mut req).await.unwrap();
+            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 329\r\n\r\n{\"timesources\":[\"UUID-A\",\"UUID-B\"],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
+            conn.shutdown().await.unwrap();
+        });
+
+        let command = ReqwestManagementRequestor::get_command(&ProbeControlConfig {
+            management_interface: format!("http://{}/", server_addr),
+            authorization_key: "".into(),
+            certificates: [].into(),
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(command.poolke, "localhost");
+        assert_eq!(command.ntp_timeout, Duration::from_secs(1));
+
+        server_task.await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_response_sender() {
+        let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+        let (server_incoming_send, mut server_incoming_recv) = tokio::sync::mpsc::channel(1);
+
+        let server_task = tokio::spawn(async move {
+            loop {
+                let (mut conn, _) = server.accept().await.unwrap();
+                let mut req = [0u8; 4096];
+                let n = conn.read(&mut req).await.unwrap();
+                server_incoming_send.send(req[..n].to_vec()).await.unwrap();
+                conn.write_all(b"HTTP/1.1 204 No Content\r\n\r\n")
+                    .await
+                    .unwrap();
+                conn.shutdown().await.unwrap();
+            }
+        });
+
+        let (channel_send, channel_recv) = tokio::sync::mpsc::channel::<(String, String)>(100);
+        let command = Arc::new(RwLock::new(Arc::new(ProbeControlCommand {
+            timesources: [].into(),
+            poolke: "".into(),
+            result_endpoint: format!("http://{}/", server_addr),
+            result_batchsize: 2,
+            result_max_waittime: Duration::from_secs(1),
+            update_interval: Duration::from_secs(1),
+            probe_interval: Duration::from_secs(1),
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })));
+
+        let response_task = tokio::spawn(run_result_reporter(
+            channel_recv,
+            command,
+            ProbeControlConfig {
+                management_interface: "".into(),
+                authorization_key: "".into(),
+                certificates: [].into(),
+            },
+        ));
+
+        channel_send.send(("a".into(), "b".into())).await.unwrap();
+        assert!(
+            server_incoming_recv
+                .recv()
+                .await
+                .unwrap()
+                .ends_with(br#"[["a","b"]]"#)
+        );
+
+        channel_send.send(("c".into(), "d".into())).await.unwrap();
+        channel_send.send(("e".into(), "f".into())).await.unwrap();
+        channel_send.send(("g".into(), "h".into())).await.unwrap();
+        assert!(
+            server_incoming_recv
+                .recv()
+                .await
+                .unwrap()
+                .ends_with(br#"[["c","d"],["e","f"]]"#)
+        );
+        assert!(
+            server_incoming_recv
+                .recv()
+                .await
+                .unwrap()
+                .ends_with(br#"[["g","h"]]"#)
+        );
+
+        drop(channel_send);
+
+        response_task.await.unwrap();
+        server_task.abort();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_probe_runner_basic() {
+        struct BasicCommandRequestor;
+        impl ManagementRequestor for BasicCommandRequestor {
+            async fn get_command(
+                _config: &ProbeControlConfig,
+            ) -> Result<ProbeControlCommand, std::io::Error> {
+                Ok(ProbeControlCommand {
+                    timesources: ["A".to_string(), "B".to_string()].into(),
+                    poolke: "".into(),
+                    result_endpoint: "".into(),
+                    result_batchsize: 1,
+                    result_max_waittime: Duration::from_secs(1),
+                    update_interval: Duration::from_secs(39),
+                    probe_interval: Duration::from_secs(40),
+                    nts_timeout: Duration::from_secs(1),
+                    ntp_timeout: Duration::from_secs(1),
+                })
+            }
+        }
+
+        let (mut recv, _) = run_probing_inner::<NoopProbe, _, BasicCommandRequestor>(
+            ProbeControlConfig {
+                management_interface: "".into(),
+                authorization_key: "".into(),
+                certificates: [].into(),
+            },
+            Box::pin(tokio::time::sleep(Duration::from_secs(119))),
+        )
+        .await;
+
+        let a = recv.recv().await.unwrap();
+        let b = recv.recv().await.unwrap();
+        assert_ne!(a, b);
+        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
+        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+
+        let a = recv.recv().await.unwrap();
+        let b = recv.recv().await.unwrap();
+        assert_ne!(a, b);
+        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
+        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+
+        let a = recv.recv().await.unwrap();
+        let b = recv.recv().await.unwrap();
+        assert_ne!(a, b);
+        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
+        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+
+        assert!(recv.recv().await.is_none())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_probe_runner_changing_servers() {
+        struct SequencedCommandRequestor;
+        impl ManagementRequestor for SequencedCommandRequestor {
+            async fn get_command(
+                _config: &ProbeControlConfig,
+            ) -> Result<ProbeControlCommand, std::io::Error> {
+                static INDEX: AtomicUsize = AtomicUsize::new(0);
+                Ok(match INDEX.load(std::sync::atomic::Ordering::SeqCst) {
+                    0 => {
+                        INDEX.store(1, std::sync::atomic::Ordering::SeqCst);
+                        ProbeControlCommand {
+                            timesources: ["A".to_string(), "B".to_string()].into(),
+                            poolke: "".into(),
+                            result_endpoint: "".into(),
+                            result_batchsize: 1,
+                            result_max_waittime: Duration::from_secs(1),
+                            update_interval: Duration::from_secs(39),
+                            probe_interval: Duration::from_secs(40),
+                            nts_timeout: Duration::from_secs(1),
+                            ntp_timeout: Duration::from_secs(1),
+                        }
+                    }
+                    1 => {
+                        INDEX.store(2, std::sync::atomic::Ordering::SeqCst);
+                        ProbeControlCommand {
+                            timesources: ["B".to_string()].into(),
+                            poolke: "".into(),
+                            result_endpoint: "".into(),
+                            result_batchsize: 1,
+                            result_max_waittime: Duration::from_secs(1),
+                            update_interval: Duration::from_secs(39),
+                            probe_interval: Duration::from_secs(40),
+                            nts_timeout: Duration::from_secs(1),
+                            ntp_timeout: Duration::from_secs(1),
+                        }
+                    }
+                    _ => ProbeControlCommand {
+                        timesources: ["B".to_string(), "C".to_string()].into(),
+                        poolke: "".into(),
+                        result_endpoint: "".into(),
+                        result_batchsize: 1,
+                        result_max_waittime: Duration::from_secs(1),
+                        update_interval: Duration::from_secs(39),
+                        probe_interval: Duration::from_secs(40),
+                        nts_timeout: Duration::from_secs(1),
+                        ntp_timeout: Duration::from_secs(1),
+                    },
+                })
+            }
+        }
+
+        let (mut recv, _) = run_probing_inner::<NoopProbe, _, SequencedCommandRequestor>(
+            ProbeControlConfig {
+                management_interface: "".into(),
+                authorization_key: "".into(),
+                certificates: [].into(),
+            },
+            Box::pin(tokio::time::sleep(Duration::from_secs(119))),
+        )
+        .await;
+
+        let a = recv.recv().await.unwrap();
+        let b = recv.recv().await.unwrap();
+        assert_ne!(a, b);
+        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
+        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+
+        assert_eq!(recv.recv().await.unwrap(), ("B".into(), "B".into()));
+        assert_eq!(recv.recv().await.unwrap(), ("C".into(), "C".into()));
+        assert_eq!(recv.recv().await.unwrap(), ("B".into(), "B".into()));
+        assert_eq!(recv.recv().await.unwrap(), ("C".into(), "C".into()));
+        assert!(recv.recv().await.is_none())
+    }
 }

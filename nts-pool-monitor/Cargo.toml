@@ -22,7 +22,7 @@ rustls-platform-verifier.workspace = true
 reqwest = { workspace = true, features = ["http2", "json"] }
 serde = { workspace = true, features = ["derive"] }
 timestamped-socket.workspace = true
-tokio = { workspace = true, features = ["io-util", "rt-multi-thread", "macros", "net", "signal", "sync"] }
+tokio = { workspace = true, features = ["io-util", "rt-multi-thread", "macros", "net", "signal", "sync", "fs"] }
 tokio-rustls.workspace = true
 toml = { workspace = true, default-features = false, features = ["parse"] }
 tracing.workspace = true
@@ -32,6 +32,9 @@ tracing-subscriber = { workspace = true, default-features = false, features = [
     "ansi",
 ] }
 zeroize.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 
 [[bin]]
 name = "nts-pool-monitor"

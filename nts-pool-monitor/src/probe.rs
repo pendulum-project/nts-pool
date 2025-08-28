@@ -6,7 +6,11 @@ use std::{
 
 use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
-use tokio::{net::TcpStream, select, time::{timeout, Instant}};
+use tokio::{
+    net::TcpStream,
+    select,
+    time::{Instant, timeout},
+};
 
 use crate::{
     nts::{KeyExchangeClient, NtsClientConfig, NtsError},
