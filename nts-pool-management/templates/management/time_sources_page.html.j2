@@ -7,8 +7,16 @@
 <section>
   <h2>Add a time source server</h2>
   <form action="/management/time-sources" method="POST">
-    <input name="hostname" type="text" placeholder="Hostname or IP address" />
-    <input name="port" type="text" placeholder="Port (optional)" />
+    <div class="hostname-port">
+    <fieldset class="hostname">
+      <label for="hostname">Hostname or IP address</label>
+      <input name="hostname" type="text" />
+    </fieldset>
+    <fieldset class="port">
+      <label for="port">Port (optional)</label>
+      <input name="port" type="text" />
+    </fieldset>
+    </div>
     <button type="submit">Add</button>
   </form>
 </section>
