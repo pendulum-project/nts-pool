@@ -60,11 +60,6 @@ form {
         border: 0;
     }
 
-    input[type="text"],
-    input[type="password"] {
-        min-width: 24rem;
-    }
-
     input[type="checkbox"] {
         margin-right: var(--space-sm);
     }

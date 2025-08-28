@@ -82,4 +82,26 @@ section.register {
   flex-direction: column;
   gap: var(--space-md);
   max-width: 33rem;
+
+  input[type="text"],
+  input[type="password"] {
+    min-width: 24rem;
+  }
+}
+
+.hostname-port {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.hostname {
+  flex: 1 0 auto;
+}
+
+.port {
+  flex: 0 1 auto;
+
+  input {
+    max-width: 8rem;
+  }
 }
