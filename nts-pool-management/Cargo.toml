@@ -54,3 +54,4 @@ derive_more = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 testcontainers = { workspace = true }
+scraper = { workspace = true }

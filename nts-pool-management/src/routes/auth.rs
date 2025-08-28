@@ -595,9 +595,17 @@ pub async fn reset_password_submit(
 
 #[cfg(test)]
 mod tests {
-    use axum::response::IntoResponse;
+    use axum::{Form, extract::State, response::IntoResponse};
+    use axum_extra::extract::CookieJar;
 
-    use crate::context::AppContext;
+    use crate::{
+        context::AppContext,
+        models::{
+            authentication_method::{AuthenticationVariant, PasswordAuthentication},
+            user::{NewUser, UserRole},
+        },
+        test::IntoHtml,
+    };
 
     #[tokio::test]
     async fn test_login_page_success() {
@@ -640,6 +648,123 @@ mod tests {
                 .get(axum::http::header::LOCATION)
                 .unwrap(),
             "/"
+        );
+
+        let manager_user = crate::models::user::User::test_disabled_manager();
+        let response = super::login(
+            Some(manager_user.clone().into()),
+            AppContext::default().with_user(manager_user.clone()),
+        )
+        .await
+        .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .unwrap(),
+            "/logout"
+        );
+
+        let manager_user = crate::models::user::User::test_not_activated_manager();
+        let response = super::login(
+            Some(manager_user.clone().into()),
+            AppContext::default().with_user(manager_user.clone()),
+        )
+        .await
+        .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .unwrap(),
+            "/register/activate"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_login_submit_failed() {
+        let (_db, pool) = crate::test::PostgresContainer::init().await;
+        let encoding_key = State(jsonwebtoken::EncodingKey::from_secret(b"secret"));
+
+        let response = crate::routes::auth::login_submit(
+            None,
+            AppContext::default(),
+            CookieJar::new(),
+            encoding_key.clone(),
+            State(pool.clone()),
+            Form(super::LoginData {
+                email: "does-not-exist@example.com".into(),
+                password: "invalid-password".into(),
+            }),
+        )
+        .await
+        .unwrap()
+        .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        let html = response.into_html().await;
+        html.element("aside.error")
+            .contains_text("Invalid username or password");
+        html.elements("input[name=email]").exists();
+        html.elements("input[name=password]").exists();
+    }
+
+    #[tokio::test]
+    async fn test_login_submit_success() {
+        let (_db, pool) = crate::test::PostgresContainer::init().await;
+        let encoding_key = State(jsonwebtoken::EncodingKey::from_secret(b"secret"));
+
+        let user = crate::models::user::create(
+            &pool,
+            NewUser {
+                email: "my-user@example.com".into(),
+                role: UserRole::Manager,
+                activation_token: "some-token".into(),
+                activation_expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            },
+        )
+        .await
+        .unwrap();
+        crate::models::authentication_method::create(
+            &pool,
+            user.id,
+            AuthenticationVariant::Password(PasswordAuthentication::new("valid-password").unwrap()),
+        )
+        .await
+        .unwrap();
+
+        crate::models::user::activate_user(&pool, user.id)
+            .await
+            .unwrap();
+
+        let response = crate::routes::auth::login_submit(
+            None,
+            AppContext::default(),
+            CookieJar::new(),
+            encoding_key.clone(),
+            State(pool.clone()),
+            Form(super::LoginData {
+                email: "my-user@example.com".into(),
+                password: "valid-password".into(),
+            }),
+        )
+        .await
+        .unwrap()
+        .into_response();
+        assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .unwrap(),
+            "/"
+        );
+        assert!(
+            response
+                .headers()
+                .get(axum::http::header::SET_COOKIE)
+                .is_some()
         );
     }
 }
