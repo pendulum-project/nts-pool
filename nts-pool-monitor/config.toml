@@ -1,0 +1,4 @@
+[monitoring]
+management-interface = "http://localhost:3000/monitoring/get_work"
+authorization-key = "testmonitor"
+certificates = "nts-pool-ke/testdata/testca.pem"
