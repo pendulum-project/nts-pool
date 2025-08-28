@@ -1,7 +1,6 @@
 use std::ops::Deref;
 
 use crate::error::AppError;
-use axum::extract::FromRequestParts;
 use eyre::Context;
 
 #[derive(Debug, Clone)]
@@ -86,23 +85,5 @@ impl Deref for BaseUrl {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<S> FromRequestParts<S> for BaseUrl
-where
-    S: Send + Sync,
-{
-    type Rejection = AppError;
-
-    async fn from_request_parts(
-        parts: &mut axum::http::request::Parts,
-        _state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        parts
-            .extensions
-            .get::<Self>()
-            .cloned()
-            .ok_or_else(|| eyre::eyre!("BaseUrl not found in request extensions").into())
     }
 }
