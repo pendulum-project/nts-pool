@@ -1,12 +1,12 @@
 use std::{
     io::Cursor,
     pin::pin,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 
 use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
-use tokio::{net::TcpStream, select, time::timeout};
+use tokio::{net::TcpStream, select, time::{timeout, Instant}};
 
 use crate::{
     nts::{KeyExchangeClient, NtsClientConfig, NtsError},
