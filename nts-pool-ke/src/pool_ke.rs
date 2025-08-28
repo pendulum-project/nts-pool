@@ -6,6 +6,7 @@ use tokio::{
     select,
     signal::unix::{SignalKind, signal},
 };
+use tokio_util::task::TaskTracker;
 use tracing::{debug, info};
 
 use crate::{
@@ -50,6 +51,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         let connectionpermits = Arc::new(tokio::sync::Semaphore::new(self.config.max_connections));
         let mut shutdown =
             signal(SignalKind::terminate()).expect("Unable to configure termination signal");
+        let tracker = TaskTracker::new();
 
         info!("listening on '{:?}'", listener.local_addr());
 
@@ -66,7 +68,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             };
             let self_clone = self.clone();
 
-            tokio::spawn(async move {
+            tracker.spawn(async move {
                 match tokio::time::timeout(
                     self_clone.config.key_exchange_timeout,
                     self_clone.handle_client(client_stream, source_address),
@@ -81,7 +83,12 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             });
         }
 
-        info!("Shutting down");
+        info!("Shutting down...");
+
+        tracker.close();
+        tracker.wait().await;
+
+        info!("Finished all connections");
 
         Ok(())
     }
