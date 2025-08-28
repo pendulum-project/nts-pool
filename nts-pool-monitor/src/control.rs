@@ -9,17 +9,10 @@ use tokio::{select, time::sleep_until};
 
 use crate::{
     NtpVersion,
+    config::ProbeControlConfig,
     nts::NtsClientConfig,
     probe::{Probe, ProbeConfig, ProbeResult},
-    tls_utils::Certificate,
 };
-
-#[derive(Debug, Clone)]
-pub struct ProbeControlConfig {
-    pub management_interface: String,
-    pub authorization_key: String,
-    pub certificates: Arc<[Certificate]>,
-}
 
 #[derive(Serialize, Deserialize)]
 struct ProbeControlCommand {

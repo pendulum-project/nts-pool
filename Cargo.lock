@@ -2103,7 +2103,9 @@ dependencies = [
  "timestamped-socket",
  "tokio",
  "tokio-rustls",
+ "toml",
  "tracing",
+ "tracing-subscriber",
  "zeroize",
 ]
 
