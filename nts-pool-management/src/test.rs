@@ -66,3 +66,78 @@ impl Image for PostgresContainer {
         &[ContainerPort::Tcp(5432)]
     }
 }
+
+pub trait IntoHtml {
+    fn into_html(self) -> impl Future<Output = HtmlDocument> + Send;
+}
+
+impl IntoHtml for axum::response::Response {
+    async fn into_html(self) -> HtmlDocument {
+        let body = self.into_body();
+        body.into_html().await
+    }
+}
+
+impl IntoHtml for axum::body::Body {
+    async fn into_html(self) -> HtmlDocument {
+        let bytes = axum::body::to_bytes(self, 10_000_000)
+            .await
+            .expect("Failed to read response body");
+        let body_str = std::str::from_utf8(&bytes).expect("Response body is not valid UTF-8");
+        HtmlDocument(scraper::Html::parse_document(body_str))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, derive_more::Deref)]
+pub struct HtmlDocument(scraper::Html);
+
+impl HtmlDocument {
+    /// Get the matching element, or error if not exactly one is found.
+    pub fn element(&self, selector: &str) -> SelectedElements<'_> {
+        let elements = self.elements(selector);
+        assert!(
+            elements.len() == 1,
+            "Expected exactly one element for selector '{selector}', found {}",
+            elements.len()
+        );
+        SelectedElements(vec![elements[0]])
+    }
+
+    /// Get the first element matching the selector, or error if none are found.
+    pub fn first_element(&self, selector: &str) -> SelectedElements<'_> {
+        let elements = self.elements(selector);
+        assert!(
+            !elements.is_empty(),
+            "Expected at least one element for selector '{selector}', found none"
+        );
+        SelectedElements(vec![elements[0]])
+    }
+
+    /// Get all elements matching the selector.
+    pub fn elements(&self, selector: &str) -> SelectedElements<'_> {
+        let sel = scraper::Selector::parse(selector)
+            .unwrap_or_else(|_| panic!("Failed to parse selector: {selector}"));
+        let elements = self.select(&sel).collect::<Vec<_>>();
+        SelectedElements(elements)
+    }
+
+    pub fn body(&self) -> SelectedElements<'_> {
+        self.element("body")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, derive_more::Deref)]
+pub struct SelectedElements<'a>(Vec<scraper::ElementRef<'a>>);
+
+impl<'a> SelectedElements<'a> {
+    pub fn contains_text(&self, text: &str) {
+        assert!(
+            self.iter().any(|el| el.text().any(|t| t.contains(text))),
+            "None of the selected elements contains the text '{text}'"
+        );
+    }
+
+    pub fn exists(&self) {
+        assert!(!self.is_empty(), "No elements found");
+    }
+}
