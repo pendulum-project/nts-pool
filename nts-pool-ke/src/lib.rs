@@ -39,6 +39,10 @@ pub(crate) mod exitcode {
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub async fn nts_pool_ke_main() -> Result<(), Box<dyn std::error::Error>> {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to init default crypto provider");
+
     let options = NtsPoolKeOptions::try_parse_from(std::env::args())?;
 
     match options.action {
