@@ -49,6 +49,7 @@ rustls-platform-verifier = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 tokio-rustls = { workspace = true, features = ["logging"] }
+tokio-util = { workspace = true, features = ["rt"] }
 phf.workspace = true
 maxminddb.workspace = true
 rand.workspace = true
