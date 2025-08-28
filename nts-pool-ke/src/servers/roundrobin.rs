@@ -171,6 +171,7 @@ mod tests {
 
     #[test]
     fn test_load_is_distributed() {
+        crate::test_init();
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {
@@ -203,6 +204,7 @@ mod tests {
 
     #[test]
     fn test_lookup_by_uuid() {
+        crate::test_init();
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {
@@ -237,6 +239,7 @@ mod tests {
 
     #[test]
     fn test_respect_denied_if_possible() {
+        crate::test_init();
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {
@@ -271,6 +274,7 @@ mod tests {
 
     #[test]
     fn test_ignore_denied_if_impossible() {
+        crate::test_init();
         let manager = RoundRobinServerManager {
             servers: [
                 KeyExchangeServer {

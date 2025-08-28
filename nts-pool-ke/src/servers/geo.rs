@@ -243,6 +243,7 @@ mod tests {
 
     #[test]
     fn test_load_is_distributed() {
+        crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
@@ -290,6 +291,7 @@ mod tests {
 
     #[test]
     fn test_respect_denied_if_possible() {
+        crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
@@ -330,6 +332,7 @@ mod tests {
 
     #[test]
     fn test_ignore_denied_if_impossible() {
+        crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
@@ -370,6 +373,7 @@ mod tests {
 
     #[test]
     fn test_region_handling() {
+        crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
                 servers: [
@@ -429,6 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_server_list_parsing() {
+        crate::test_init();
         let manager = GeographicServerManager::new(BackendConfig {
             upstream_tls: upstream_tls_config(),
             key_exchange_servers: "testdata/testservers.json".into(),
