@@ -22,6 +22,9 @@
             <li>
                 <a {% block nav_overview %}{% endblock %} href="/admin">Overview</a>
             </li>
+            <li>
+                <a {% block nav_users %}{% endblock %} href="/admin/users">Users</a>
+            </li>
           {% endif %}
           {% if app.user|is_manager %}
             <li>

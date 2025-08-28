@@ -35,6 +35,9 @@ pub fn create_router() -> Router<AppState> {
         )
         .route("/logout", get(auth::logout))
         .route("/admin", get(admin::overview))
+        .route("/admin/users", get(admin::users))
+        .route("/admin/users/{id}/block", post(admin::user_block))
+        .route("/admin/users/{id}/unblock", post(admin::user_unblock))
         .route(
             "/management/time-sources",
             get(management::time_sources).post(management::create_time_source),
