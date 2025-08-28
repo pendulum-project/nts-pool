@@ -85,8 +85,6 @@ pub trait Cipher: Sync + Send + ZeroizeOnDrop + 'static {
         ciphertext: &[u8],
         associated_data: &[u8],
     ) -> Result<Vec<u8>, DecryptError>;
-
-    fn key_bytes(&self) -> &[u8];
 }
 
 pub enum CipherHolder<'a> {
@@ -200,10 +198,6 @@ impl Cipher for AesSivCmac256 {
         siv.decrypt([associated_data, nonce], ciphertext)
             .map_err(|_| DecryptError)
     }
-
-    fn key_bytes(&self) -> &[u8] {
-        &self.key
-    }
 }
 
 // Ensure siv is not shown in debug output
@@ -274,10 +268,6 @@ impl Cipher for AesSivCmac512 {
         siv.decrypt([associated_data, nonce], ciphertext)
             .map_err(|_| DecryptError)
     }
-
-    fn key_bytes(&self) -> &[u8] {
-        &self.key
-    }
 }
 
 // Ensure siv is not shown in debug output
@@ -340,10 +330,6 @@ impl Cipher for IdentityCipher {
         debug_assert_eq!(nonce.len(), self.nonce_length);
 
         Ok(ciphertext.to_vec())
-    }
-
-    fn key_bytes(&self) -> &[u8] {
-        unimplemented!()
     }
 }
 
