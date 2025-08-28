@@ -6,6 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use tokio::{select, time::sleep_until};
+use tracing::{error, warn};
 
 use crate::{
     NtpVersion,
@@ -85,9 +86,13 @@ async fn run_probing_inner<
     tokio::sync::mpsc::Receiver<(String, T::Output)>,
     Arc<RwLock<Arc<ProbeControlCommand>>>,
 ) {
-    let command = M::get_command(&config)
-        .await
-        .expect("Could not get initial command");
+    let command = match M::get_command(&config).await {
+        Ok(command) => command,
+        Err(e) => {
+            error!("Could not fetch initial command: {}", e);
+            std::process::exit(crate::exitcode::SOFTWARE);
+        }
+    };
     let probe = Arc::new(RwLock::new(Arc::new(T::from_command(&config, &command))));
 
     // Generate the initial work order, spread out over the work interval.
@@ -165,12 +170,15 @@ async fn run_probing_inner<
                                     Ok(result) => {
                                         let _ = result_sender.send((uuid, result)).await;
                                     }
-                                    Err(_) => { /* log error once we have logging here */ }
+                                    Err(e) => {
+                                        warn!("Probe failed: {}", e)
+                                    }
                                 }
                                 drop(permit);
                             });
                         } else {
                             // Just skip the probe to reduce load
+                            warn!("Overloaded, skipping probe");
                         }
                         work.push_back((Instant::now() + command.probe_interval, work_item.1));
                     }
@@ -263,13 +271,19 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
 
         if matches!(task, Task::Stop | Task::Send) {
             let send_target = settings.read().unwrap().result_endpoint.clone();
-            let _ = reqwest::Client::new()
+            match reqwest::Client::new()
                 .post(send_target)
                 .bearer_auth(&config.authorization_key)
                 .json(&cache)
                 .send()
-                .await;
-            // TODO: Report error once we have tracing
+                .await
+                .and_then(|response| response.error_for_status())
+            {
+                Ok(_) => { /* nothing to do on success */ }
+                Err(e) => {
+                    warn!("Failed to submit monitoring results: {}", e);
+                }
+            }
             cache.clear();
         }
 
