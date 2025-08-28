@@ -1,11 +1,11 @@
 use std::{
     collections::{HashSet, VecDeque},
     sync::{Arc, RwLock},
-    time::{Duration, Instant},
+    time::{Duration},
 };
 
 use serde::{Deserialize, Serialize};
-use tokio::{select, time::sleep_until};
+use tokio::{select, time::{sleep_until, Instant}};
 use tracing::{error, warn};
 
 use crate::{
