@@ -26,6 +26,14 @@ a.btn:hover,
     cursor: pointer;
 }
 
+.action-btn {
+    padding: var(--space-xs) var(--space-sm);
+}
+
+.btn-alt {
+    background-color: color-mix(in lab, var(--primary), var(--white) 90%);
+}
+
 input[type="text"],
 input[type="password"] {
     padding: var(--space-sm);
@@ -142,4 +150,33 @@ aside.error {
     border: var(--border-width) solid var(--error);
     border-radius: var(--border-radius);
     background-color: color-mix(in lab, var(--error), var(--white) 70%);
+}
+
+table {
+    table-layout: auto;
+    border-collapse: collapse;
+    width: 100%;
+    th {
+        text-align: left;
+    }
+
+    th,
+    td {
+        padding: var(--space-sm);
+    }
+
+    tbody {
+        tr {
+        }
+
+        tr:nth-child(odd) {
+            background-color: var(--white);
+        }
+    }
+
+    .actions {
+        text-align: right;
+        display: flex;
+        gap: var(--space-xs);
+    }
 }

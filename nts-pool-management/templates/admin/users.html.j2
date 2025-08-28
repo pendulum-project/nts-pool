@@ -1,0 +1,46 @@
+
+{% extends "../layout.html.j2" %}
+
+{% block nav_users %}aria-current="page"{% endblock %}
+
+{% block header %}<h1>Users</h1>{% endblock %}
+
+{% block content %}
+  <table>
+    <thead>
+      <th>Email</th>
+      <th>Role</th>
+      <th>Last login</th>
+      <th>Disabled since</th>
+      <td><!-- Actions --></td>
+      <td><!-- Actions --></td>
+    </thead>
+    <tbody>
+  {%- for user in users %}
+    <tr>
+      <td>{{ user.email }}</td>
+      <td>{{ user.role }}</td>
+      <td>{{ user.last_login_at.format("%Y-%m-%d %H:%M") }}</td>
+      <td>
+        {% if let Some(disabled_since) = user.disabled_since %}
+          {{ disabled_since.format("%Y-%m-%d %H:%M") }}
+        {% endif %}
+      </td>
+      <td class="action">
+        {% if !(app.user|is_me(user)) %}
+          {% if user.is_disabled() %}
+            <form action="/admin/users/{{ user.id }}/unblock" method="POST">
+              <button class="action-btn btn-alt" type="submit">Unblock</button>
+            </form>
+          {% else %}
+            <form action="/admin/users/{{ user.id }}/block" method="POST">
+              <button class="action-btn" type="submit">Block</button>
+            </form>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

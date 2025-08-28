@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
 use crate::{DbConnLike, models::util::uuid};
 
 uuid!(UserId);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, sqlx::Type)]
 #[serde(rename_all = "kebab-case")]
 #[sqlx(type_name = "user_role")]
 #[sqlx(rename_all = "kebab-case")]
