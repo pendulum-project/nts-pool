@@ -7,7 +7,7 @@ use axum::{
 
 use crate::{
     AppState,
-    auth::Manager,
+    auth::AuthorizedUser,
     context::AppContext,
     error::AppError,
     models::time_source::{self, NewTimeSourceForm, TimeSource, TimeSourceId},
@@ -20,7 +20,7 @@ struct DashboardTemplate {
     app: AppContext,
 }
 
-pub async fn dashboard(_user: Manager, app: AppContext) -> impl IntoResponse {
+pub async fn dashboard(_user: AuthorizedUser, app: AppContext) -> impl IntoResponse {
     HtmlTemplate(DashboardTemplate { app })
 }
 
@@ -32,7 +32,7 @@ struct TimeSourcesPageTemplate {
 }
 
 pub async fn time_sources(
-    user: Manager,
+    user: AuthorizedUser,
     app: AppContext,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -41,7 +41,7 @@ pub async fn time_sources(
 }
 
 pub async fn create_time_source(
-    user: Manager,
+    user: AuthorizedUser,
     app: AppContext,
     State(state): State<AppState>,
     Form(new_time_source): Form<NewTimeSourceForm>,
@@ -54,7 +54,7 @@ pub async fn create_time_source(
 }
 
 pub async fn delete_time_source(
-    user: Manager,
+    user: AuthorizedUser,
     app: AppContext,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
@@ -70,6 +70,6 @@ struct DnsZonesPageTemplate {
     app: AppContext,
 }
 
-pub async fn dns_zones(_user: Manager, app: AppContext) -> impl IntoResponse {
+pub async fn dns_zones(_user: AuthorizedUser, app: AppContext) -> impl IntoResponse {
     HtmlTemplate(DnsZonesPageTemplate { app })
 }

@@ -218,40 +218,6 @@ impl TryFrom<User> for Administrator {
     }
 }
 
-/// Can be extracted from a request, but only if there is a logged in user with the server manager role.
-#[derive(Debug, Clone, derive_more::Deref, derive_more::Into)]
-pub struct Manager(AuthorizedUser);
-
-impl IntoUserOption for Manager {
-    fn into_user_option(self) -> Option<User> {
-        Some(self.into())
-    }
-}
-
-impl IntoUserOption for Option<Manager> {
-    fn into_user_option(self) -> Option<User> {
-        self.map(|manager| manager.into())
-    }
-}
-
-impl From<Manager> for User {
-    fn from(server_manager: Manager) -> Self {
-        AuthorizedUser::from(server_manager).into()
-    }
-}
-
-impl TryFrom<User> for Manager {
-    type Error = AppError;
-
-    fn try_from(user: User) -> Result<Self, Self::Error> {
-        if user.role == UserRole::Manager {
-            Ok(Manager(AuthorizedUser(user)))
-        } else {
-            Err(eyre::eyre!("User is not a server manager").into())
-        }
-    }
-}
-
 /// Middleware that retrieves the user session from the request.
 pub async fn auth_middleware(
     State(state): State<AppState>,
@@ -401,21 +367,6 @@ where
         match parts.extract_with_state::<AuthorizedUser, S>(state).await {
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
-        }
-    }
-}
-
-impl<S> FromRequestParts<S> for Manager
-where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
-{
-    type Rejection = AppError;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts.extract_with_state::<AuthorizedUser, S>(state).await {
-            Ok(session) if session.role == UserRole::Manager => Ok(Manager(session)),
-            _ => Err(eyre::eyre!("No server manager user available"))?,
         }
     }
 }
