@@ -145,6 +145,7 @@ pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<User>, sqlx::Error> {
         r#"
             SELECT id, email, role AS "role: _", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at
             FROM users
+            ORDER BY created_at DESC
         "#
     )
     .fetch_all(conn)
