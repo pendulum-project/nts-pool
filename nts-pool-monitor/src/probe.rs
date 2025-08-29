@@ -14,7 +14,7 @@ use tokio::{
 
 use crate::{
     nts::{KeyExchangeClient, NtsClientConfig, NtsError},
-    packet::{Cipher, NtpPacket},
+    packet::{Cipher, NtpLeapIndicator, NtpPacket},
     time_types::{NtpTimestamp, PollInterval},
 };
 
@@ -72,6 +72,8 @@ pub struct SecuredNtpProbeResult {
     pub roundtrip_duration: Option<f64>,
     pub remote_residence_time: Option<f64>,
     pub offset: Option<f64>,
+    pub stratum: Option<u8>,
+    pub leap_indicates_synchronized: bool,
     pub requested_cookies: usize,
     pub received_cookies: usize,
 }
@@ -221,6 +223,8 @@ impl Probe {
                     roundtrip_duration: None,
                     remote_residence_time: None,
                     offset: None,
+                    stratum: None,
+                    leap_indicates_synchronized: false,
                 },
                 None,
             ));
@@ -257,6 +261,8 @@ impl Probe {
                             roundtrip_duration: None,
                             remote_residence_time: None,
                             offset: None,
+                            stratum: None,
+                            leap_indicates_synchronized: false,
                         },
                         None,
                     ));
@@ -286,6 +292,8 @@ impl Probe {
                                 roundtrip_duration: None,
                                 remote_residence_time: None,
                                 offset: None,
+                                stratum: None,
+                                leap_indicates_synchronized: false,
                             },
                             None,
                         ));
@@ -325,6 +333,8 @@ impl Probe {
                 roundtrip_duration: Some((t4 - t1).to_seconds()),
                 remote_residence_time: Some((t3 - t2).to_seconds()),
                 offset: Some((((t2 - t1) + (t3 - t4)) / 2i32).to_seconds()),
+                stratum: Some(msg.stratum()),
+                leap_indicates_synchronized: !matches!(msg.leap(), NtpLeapIndicator::Unknown),
             },
             msg.new_cookies().next().map(|cookie| NtpInputs {
                 host: inputs.host,
