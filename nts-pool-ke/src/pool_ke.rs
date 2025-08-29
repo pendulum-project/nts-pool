@@ -346,6 +346,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 }
 
 #[cfg(test)]
+#[allow(clippy::await_holding_lock)]
 mod tests {
     use std::{
         borrow::Cow,
@@ -652,7 +653,6 @@ mod tests {
         conn.shutdown().await.unwrap();
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
-        #[allow(clippy::await_holding_lock)]
         let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
             manager.inner.written.lock().unwrap().as_slice(),
             &mut buf,
@@ -732,7 +732,6 @@ mod tests {
         pool_handle.abort();
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
-        #[allow(clippy::await_holding_lock)]
         let request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
             manager.inner.written.lock().unwrap().as_slice(),
             &mut buf,
@@ -807,7 +806,6 @@ mod tests {
         pool_handle.abort();
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
-        #[allow(clippy::await_holding_lock)]
         let request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
             manager.inner.written.lock().unwrap().as_slice(),
             &mut buf,
@@ -872,7 +870,6 @@ mod tests {
                 .unwrap();
         conn.shutdown().await.unwrap();
 
-        #[allow(clippy::await_holding_lock)]
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
             manager.inner.written.lock().unwrap().as_slice(),
@@ -950,7 +947,6 @@ mod tests {
         conn.shutdown().await.unwrap();
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
-        #[allow(clippy::await_holding_lock)]
         let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
             manager.inner.written.lock().unwrap().as_slice(),
             &mut buf,
