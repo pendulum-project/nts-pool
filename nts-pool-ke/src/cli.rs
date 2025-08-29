@@ -7,10 +7,10 @@ usage: nts-pool-ke [-c PATH] [-l LOG_LEVEL]
        nts-pool-ke -h
        nts-pool-ke -v";
 
-const DESCRIPTOR: &str = "ntp-daemon - synchronize system time";
+const DESCRIPTOR: &str = "ntp-pool-ke - A key exchange server for nts pools";
 
 const HELP_MSG: &str = "Options:
-  -c, --config=PATH             change the config .toml file
+  -c, --config=PATH             set the config .toml file
   -l, --log-level=LOG_LEVEL     change the log level
   -h, --help                    display this help text
   -v, --version                 display version information";
