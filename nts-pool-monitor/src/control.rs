@@ -1,3 +1,28 @@
+// This file contains the main run loops for the monitor, controlling the
+// probing and sending of probe results.
+//
+// The running of the probing is divided into two parts, the
+// `run_probing_inner` function handles the fetching of work and starting the
+// probe. The results of these probes are then collected in the
+// `run_result_reporter` function, where they are aggregated and periodically
+// sent out. Communication to the reporting function is done through an mpsc
+// channel, and it automatically terminates once all senders are gone.
+//
+// To manage the work to be done, the `run_probing_inner` functions maintains
+// two queues. One is local to the task and is contains the work that has been
+// going on for longer. The other is a channel filled with new work by the
+// update task. This allows us to efficiently merge in new work without having
+// to stop the world.
+//
+// Information on the current instructions on the work from the pool are
+// shared between the tasks in an `Arc<Rwlock<Arc<>>>`, which allows us to keep
+// locking time short at the cost of using somewhat older information in still
+// running actions.
+//
+// The probe starting time is spread out for servers added at the same time.
+// To ensure servers received from updates are also spread out among the
+// existing list, it is advisable to have an update interval that is not an
+// integer multiple of the probing interval.
 use std::{
     collections::{HashSet, VecDeque},
     sync::{Arc, RwLock},
