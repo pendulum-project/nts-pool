@@ -100,10 +100,10 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         mut source_address: SocketAddr,
     ) -> Result<(), PoolError> {
         // Handle the proxy message if needed
-        if self.config.use_proxy_protocol {
-            if let Some(addr) = parse_haproxy_header(&mut client_stream).await? {
-                source_address = addr;
-            }
+        if self.config.use_proxy_protocol
+            && let Some(addr) = parse_haproxy_header(&mut client_stream).await?
+        {
+            source_address = addr;
         }
 
         // handle the initial client to pool
