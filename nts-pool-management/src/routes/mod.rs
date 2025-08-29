@@ -47,7 +47,6 @@ pub fn create_router() -> Router<AppState> {
             // HTML form only supports GET and POST
             post(management::delete_time_source),
         )
-        .route("/management/dns-zones", get(management::dns_zones))
         .route("/management", get(management::dashboard))
         .route("/monitoring/get_work", get(monitoring::get_work))
         .route("/monitoring/submit", post(monitoring::post_results))

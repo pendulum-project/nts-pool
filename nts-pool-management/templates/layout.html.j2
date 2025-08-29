@@ -22,9 +22,6 @@
             <a {% block nav_dashboard %}{% endblock %} href="/management">Dashboard</a>
           </li>
           <li>
-            <a {% block nav_dns_zones %}{% endblock %} href="/management/dns-zones">DNS zones</a>
-          </li>
-          <li>
             <a {% block nav_time_sources %}{% endblock %} href="/management/time-sources">Time sources</a>
           </li>
           {% if app.user|is_administrator %}
