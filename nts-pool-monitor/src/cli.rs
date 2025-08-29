@@ -3,14 +3,14 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 const USAGE_MSG: &str = "\
-usage: nts-pool-ke [-c PATH] [-l LOG_LEVEL]
-       nts-pool-ke -h
-       nts-pool-ke -v";
+usage: nts-pool-monitor [-c PATH] [-l LOG_LEVEL]
+       nts-pool-monitor -h
+       nts-pool-monitor -v";
 
-const DESCRIPTOR: &str = "ntp-daemon - synchronize system time";
+const DESCRIPTOR: &str = "nts-pool-monitor - Monitor sources in the pool for proper behavior";
 
 const HELP_MSG: &str = "Options:
-  -c, --config=PATH             change the config .toml file
+  -c, --config=PATH             set the config .toml file
   -l, --log-level=LOG_LEVEL     change the log level
   -h, --help                    display this help text
   -v, --version                 display version information";
