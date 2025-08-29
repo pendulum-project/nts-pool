@@ -298,10 +298,8 @@ impl Cipher for IdentityCipher {
         &self,
         buffer: &mut [u8],
         plaintext_length: usize,
-        associated_data: &[u8],
+        _associated_data: &[u8],
     ) -> std::io::Result<EncryptResult> {
-        debug_assert!(associated_data.is_empty());
-
         let nonce: Vec<u8> = (0..self.nonce_length as u8).collect();
 
         // Prepare the buffer for in place encryption by moving the plaintext
@@ -323,10 +321,8 @@ impl Cipher for IdentityCipher {
         &self,
         nonce: &[u8],
         ciphertext: &[u8],
-        associated_data: &[u8],
+        _associated_data: &[u8],
     ) -> Result<Vec<u8>, DecryptError> {
-        debug_assert!(associated_data.is_empty());
-
         debug_assert_eq!(nonce.len(), self.nonce_length);
 
         Ok(ciphertext.to_vec())

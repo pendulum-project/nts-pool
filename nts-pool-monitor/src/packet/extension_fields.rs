@@ -338,8 +338,9 @@ impl<'a> ExtensionField<'a> {
             [..ciphertext_padding]
             .copy_from_slice(&padding[..ciphertext_padding]);
 
-        // go back and fill in the header
-        let signature_length = header_size + padded_nonce_length + padded_ciphertext_length;
+        // go back and fill in the header, padding to 28 bytes if needed
+        let signature_length =
+            (header_size + padded_nonce_length + padded_ciphertext_length).max(28);
         w.set_position(header_start);
 
         let type_id: u16 = ExtensionFieldTypeId::NtsEncryptedField.to_type_id();

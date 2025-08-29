@@ -144,3 +144,8 @@ async fn run(options: MonitorOptions) {
 
     run_probing(config.monitoring).await
 }
+
+#[cfg(test)]
+pub fn test_init() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}

@@ -199,8 +199,15 @@ impl Probe {
         let msg = &buf[..size];
 
         let Some(addr) = tokio::net::lookup_host((inputs.host.as_str(), inputs.port))
-            .await?
-            .next()
+            .await
+            .map(|mut v| v.next())
+            .or_else(|e| {
+                if e.raw_os_error().is_none() {
+                    Ok(None)
+                } else {
+                    Err(e)
+                }
+            })?
         else {
             return Ok((
                 SecuredNtpProbeResult {
@@ -269,6 +276,20 @@ impl Probe {
             if incoming.is_kiss() && incoming.valid_server_response(request_id, false) {
                 if incoming.is_kiss_deny() || incoming.is_kiss_rstr() {
                     have_deny = true;
+                    if incoming.valid_server_response(request_id, true) {
+                        return Ok((
+                            SecuredNtpProbeResult {
+                                status: SecuredNtpProbeStatus::Deny,
+                                requested_cookies: cookies_requested.into(),
+                                received_cookies: 0,
+                                request_sent: send.seconds as u64,
+                                roundtrip_duration: None,
+                                remote_residence_time: None,
+                                offset: None,
+                            },
+                            None,
+                        ));
+                    }
                 }
 
                 if incoming.is_kiss_ntsn() {
@@ -313,5 +334,226 @@ impl Probe {
                 s2c: inputs.s2c,
             }),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::net::UdpSocket;
+
+    use crate::{packet::IdentityCipher, test_init};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_ntp_dns_failed() {
+        test_init();
+        let probe = Probe::new(ProbeConfig {
+            poolke: "".into(),
+            nts_config: NtsClientConfig {
+                certificates: [].into(),
+                protocol_version: crate::NtpVersion::V4,
+                authorization_key: "".into(),
+            },
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        let findings = probe
+            .probe_ntp(NtpInputs {
+                host: "doesnotexist".into(),
+                port: 123,
+                cookie: b"1234".into(),
+                c2s: Box::new(IdentityCipher::new(16)),
+                s2c: Box::new(IdentityCipher::new(16)),
+            })
+            .await
+            .unwrap();
+        assert!(findings.1.is_none());
+        assert_eq!(findings.0.status, SecuredNtpProbeStatus::DnsLookupFailed);
+    }
+
+    #[tokio::test]
+    async fn test_ntp_noresponse() {
+        test_init();
+        let probe = Probe::new(ProbeConfig {
+            poolke: "".into(),
+            nts_config: NtsClientConfig {
+                certificates: [].into(),
+                protocol_version: crate::NtpVersion::V4,
+                authorization_key: "".into(),
+            },
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let mut packet = [0u8; 4096];
+            server.recv(&mut packet).await.unwrap();
+        });
+
+        let finding = probe
+            .probe_ntp(NtpInputs {
+                host: server_addr.ip().to_string(),
+                port: server_addr.port(),
+                cookie: b"1234".into(),
+                c2s: Box::new(IdentityCipher::new(16)),
+                s2c: Box::new(IdentityCipher::new(16)),
+            })
+            .await
+            .unwrap();
+
+        assert!(finding.1.is_none());
+        assert_eq!(finding.0.status, SecuredNtpProbeStatus::Timeout);
+
+        server_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_ntp_deny_response() {
+        test_init();
+        let probe = Probe::new(ProbeConfig {
+            poolke: "".into(),
+            nts_config: NtsClientConfig {
+                certificates: [].into(),
+                protocol_version: crate::NtpVersion::V4,
+                authorization_key: "".into(),
+            },
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let mut packet = [0u8; 4096];
+            let (l, a) = server.recv_from(&mut packet).await.unwrap();
+            let req = NtpPacket::deserialize(&packet[..l], &IdentityCipher::new(16)).unwrap();
+            let response = NtpPacket::nts_deny_response(req);
+            let out = response.serialize_vec(&IdentityCipher::new(16)).unwrap();
+            server.send_to(&out, a).await.unwrap();
+        });
+
+        let finding = probe
+            .probe_ntp(NtpInputs {
+                host: server_addr.ip().to_string(),
+                port: server_addr.port(),
+                cookie: b"1234".into(),
+                c2s: Box::new(IdentityCipher::new(16)),
+                s2c: Box::new(IdentityCipher::new(16)),
+            })
+            .await
+            .unwrap();
+
+        assert!(finding.1.is_none());
+        assert_eq!(finding.0.status, SecuredNtpProbeStatus::Deny);
+
+        server_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_ntp_ntsn_response() {
+        test_init();
+        let probe = Probe::new(ProbeConfig {
+            poolke: "".into(),
+            nts_config: NtsClientConfig {
+                certificates: [].into(),
+                protocol_version: crate::NtpVersion::V4,
+                authorization_key: "".into(),
+            },
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let mut packet = [0u8; 4096];
+            let (l, a) = server.recv_from(&mut packet).await.unwrap();
+            let req = NtpPacket::deserialize(&packet[..l], &IdentityCipher::new(16)).unwrap();
+            let response = NtpPacket::nts_nak_response(req);
+            let out = response.serialize_without_encryption_vec().unwrap();
+            server.send_to(&out, a).await.unwrap();
+        });
+
+        let finding = probe
+            .probe_ntp(NtpInputs {
+                host: server_addr.ip().to_string(),
+                port: server_addr.port(),
+                cookie: b"1234".into(),
+                c2s: Box::new(IdentityCipher::new(16)),
+                s2c: Box::new(IdentityCipher::new(16)),
+            })
+            .await
+            .unwrap();
+
+        assert!(finding.1.is_none());
+        assert_eq!(finding.0.status, SecuredNtpProbeStatus::NtsNak);
+
+        server_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_ntp_timestamp_response_valid() {
+        test_init();
+        let probe = Probe::new(ProbeConfig {
+            poolke: "".into(),
+            nts_config: NtsClientConfig {
+                certificates: [].into(),
+                protocol_version: crate::NtpVersion::V4,
+                authorization_key: "".into(),
+            },
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let server_addr = server.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let mut packet = [0u8; 4096];
+            let (l, a) = server.recv_from(&mut packet).await.unwrap();
+            let req = NtpPacket::deserialize(&packet[..l], &IdentityCipher::new(16)).unwrap();
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap();
+            let ts = NtpTimestamp::from_seconds_nanos_since_ntp_era(
+                ((70 * 365 + 17) * 86400 + now.as_secs()) as u32,
+                now.subsec_nanos(),
+            );
+            let response = NtpPacket::nts_timestamp_response(req, ts, ts, 1);
+            let out = response.serialize_vec(&IdentityCipher::new(16)).unwrap();
+            server.send_to(&out, a).await.unwrap();
+        });
+
+        let finding = probe
+            .probe_ntp(NtpInputs {
+                host: server_addr.ip().to_string(),
+                port: server_addr.port(),
+                cookie: b"1234".into(),
+                c2s: Box::new(IdentityCipher::new(16)),
+                s2c: Box::new(IdentityCipher::new(16)),
+            })
+            .await
+            .unwrap();
+
+        assert!(finding.1.is_some());
+        assert_eq!(finding.0.status, SecuredNtpProbeStatus::Success);
+        assert!(finding.0.offset.is_some());
+        assert_eq!(finding.0.received_cookies, finding.0.requested_cookies);
+        assert!(finding.0.remote_residence_time.is_some());
+        assert!(finding.0.roundtrip_duration.is_some());
+
+        server_task.await.unwrap();
     }
 }
