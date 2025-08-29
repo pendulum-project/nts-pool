@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, email, role AS \"role: _\", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n            FROM users\n        ",
+  "query": "\n            SELECT id, email, role AS \"role: _\", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n            FROM users\n            ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -80,5 +80,5 @@
       false
     ]
   },
-  "hash": "9c36bfeb125e425df497ea1e47fb8a6403732b99954b3982f3d640101f4c1567"
+  "hash": "e86ed4ce05071854b0cf650e1e8c36c299550b1fc58b0bc07a5860d082ad70ff"
 }
