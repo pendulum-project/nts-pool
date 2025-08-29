@@ -569,6 +569,18 @@ impl<'a> NtpPacket<'a> {
         }
     }
 
+    pub fn stratum(&self) -> u8 {
+        match self.header {
+            NtpHeader::V3(h) | NtpHeader::V4(h) => h.stratum,
+        }
+    }
+
+    pub fn leap(&self) -> NtpLeapIndicator {
+        match self.header {
+            NtpHeader::V3(h) | NtpHeader::V4(h) => h.leap,
+        }
+    }
+
     pub fn receive_timestamp(&self) -> NtpTimestamp {
         match self.header {
             NtpHeader::V3(header) => header.receive_timestamp,
