@@ -63,13 +63,3 @@ pub async fn delete_time_source(
     let time_sources = time_source::by_user(&state.db, user.id).await?;
     Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
 }
-
-#[derive(Template)]
-#[template(path = "management/dns_zones_page.html.j2")]
-struct DnsZonesPageTemplate {
-    app: AppContext,
-}
-
-pub async fn dns_zones(_user: AuthorizedUser, app: AppContext) -> impl IntoResponse {
-    HtmlTemplate(DnsZonesPageTemplate { app })
-}
