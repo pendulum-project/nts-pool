@@ -4,11 +4,11 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::CookieJar;
-use eyre::{Context, OptionExt};
+use eyre::{Context, OptionExt, eyre};
 
 use crate::{
     AppState,
-    auth::{Administrator, login_into},
+    auth::{Administrator, JwtClaims, login_into},
     context::AppContext,
     error::AppError,
     models::user::{self, User, UserId},
@@ -68,11 +68,17 @@ pub async fn user_unblock(
 }
 
 pub async fn login_as(
+    claims: JwtClaims,
     admin: Administrator,
     cookie_jar: CookieJar,
     Path(user_id): Path<UserId>,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
+    if claims.parent.is_some() {
+        return Err(
+            eyre!("Cannot login as another user when already logged in as another user").into(),
+        );
+    }
     let user = user::get_by_id(&state.db, user_id)
         .await?
         .ok_or_eyre("User not found")?;
