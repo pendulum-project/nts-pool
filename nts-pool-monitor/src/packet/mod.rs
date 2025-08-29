@@ -20,6 +20,9 @@ pub use crypto::{AesSivCmac256, AesSivCmac512, Cipher, CipherProvider};
 pub use error::PacketParsingError;
 pub use extension_fields::{ExtensionField, ExtensionHeaderVersion};
 
+#[cfg(test)]
+pub use crypto::IdentityCipher;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NtpLeapIndicator {
     NoWarning,
@@ -219,6 +222,52 @@ impl NtpHeaderV3V4 {
             },
         )
     }
+
+    #[cfg(test)]
+    fn timestamp_response(
+        input: Self,
+        recv_timestamp: NtpTimestamp,
+        send_timestamp: NtpTimestamp,
+        stratum: u8,
+    ) -> Self {
+        Self {
+            mode: NtpAssociationMode::Server,
+            stratum,
+            origin_timestamp: input.transmit_timestamp,
+            receive_timestamp: recv_timestamp,
+            reference_id: ReferenceId::NONE,
+            poll: input.poll,
+            precision: 0,
+            root_delay: NtpDuration::ZERO,
+            root_dispersion: NtpDuration::ZERO,
+            // Timestamp must be last to make it as accurate as possible.
+            transmit_timestamp: send_timestamp,
+            leap: NtpLeapIndicator::NoWarning,
+            reference_timestamp: recv_timestamp.truncated_second_bits(7),
+        }
+    }
+
+    #[cfg(test)]
+    fn deny_response(packet_from_client: Self) -> Self {
+        Self {
+            mode: NtpAssociationMode::Server,
+            stratum: 0, // indicates a kiss code
+            reference_id: ReferenceId::KISS_DENY,
+            origin_timestamp: packet_from_client.transmit_timestamp,
+            ..Self::new()
+        }
+    }
+
+    #[cfg(test)]
+    fn nts_nak_response(packet_from_client: Self) -> Self {
+        Self {
+            mode: NtpAssociationMode::Server,
+            stratum: 0,
+            reference_id: ReferenceId::KISS_NTSN,
+            origin_timestamp: packet_from_client.transmit_timestamp,
+            ..Self::new()
+        }
+    }
 }
 
 impl<'a> NtpPacket<'a> {
@@ -310,6 +359,22 @@ impl<'a> NtpPacket<'a> {
         Ok(buffer)
     }
 
+    #[cfg(test)]
+    pub fn serialize_vec(
+        &self,
+        cipher: &(impl CipherProvider + ?Sized),
+    ) -> std::io::Result<Vec<u8>> {
+        let mut buffer = vec![0u8; 1024];
+        let mut cursor = Cursor::new(buffer.as_mut_slice());
+
+        self.serialize(&mut cursor, cipher)?;
+
+        let length = cursor.position() as usize;
+        let buffer = cursor.into_inner()[..length].to_vec();
+
+        Ok(buffer)
+    }
+
     pub fn serialize(
         &self,
         w: &mut Cursor<&mut [u8]>,
@@ -383,6 +448,109 @@ impl<'a> NtpPacket<'a> {
             },
             id,
         )
+    }
+
+    #[cfg(test)]
+    pub fn nts_deny_response(packet_from_client: Self) -> Self {
+        match packet_from_client.header {
+            NtpHeader::V3(_) => unreachable!("NTS shouldn't work with NTPv3"),
+            NtpHeader::V4(header) => NtpPacket {
+                header: NtpHeader::V4(NtpHeaderV3V4::deny_response(header)),
+                efdata: ExtensionFieldData {
+                    authenticated: packet_from_client
+                        .efdata
+                        .authenticated
+                        .into_iter()
+                        .filter(|ef| matches!(ef, ExtensionField::UniqueIdentifier(_)))
+                        .collect(),
+                    encrypted: vec![],
+                    untrusted: vec![],
+                },
+                mac: None,
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub fn nts_nak_response(packet_from_client: Self) -> Self {
+        match packet_from_client.header {
+            NtpHeader::V3(_) => unreachable!("NTS shouldn't work with NTPv3"),
+            NtpHeader::V4(header) => NtpPacket {
+                header: NtpHeader::V4(NtpHeaderV3V4::nts_nak_response(header)),
+                efdata: ExtensionFieldData {
+                    authenticated: vec![],
+                    encrypted: vec![],
+                    untrusted: packet_from_client
+                        .efdata
+                        .untrusted
+                        .into_iter()
+                        .chain(packet_from_client.efdata.authenticated)
+                        .filter(|ef| matches!(ef, ExtensionField::UniqueIdentifier(_)))
+                        .collect(),
+                },
+                mac: None,
+            },
+        }
+    }
+
+    #[cfg(test)]
+    pub fn nts_timestamp_response(
+        input: Self,
+        recv_timestamp: NtpTimestamp,
+        send_timestamp: NtpTimestamp,
+        stratum: u8,
+    ) -> Self {
+        match input.header {
+            NtpHeader::V3(_) => unreachable!("NTS shouldn't work with NTPv3"),
+            NtpHeader::V4(header) => NtpPacket {
+                header: NtpHeader::V4(NtpHeaderV3V4::timestamp_response(
+                    header,
+                    recv_timestamp,
+                    send_timestamp,
+                    stratum,
+                )),
+                efdata: ExtensionFieldData {
+                    encrypted: input
+                        .efdata
+                        .authenticated
+                        .iter()
+                        .chain(input.efdata.encrypted.iter())
+                        .filter_map(|f| match f {
+                            ExtensionField::NtsCookiePlaceholder { cookie_length } => {
+                                let new_cookie = vec![1, 2, 3, 4];
+                                if new_cookie.len() > *cookie_length as usize {
+                                    None
+                                } else {
+                                    use std::borrow::Cow;
+
+                                    Some(ExtensionField::NtsCookie(Cow::Owned(new_cookie)))
+                                }
+                            }
+                            ExtensionField::NtsCookie(old_cookie) => {
+                                let new_cookie = vec![5, 6, 7, 8];
+                                if new_cookie.len() > old_cookie.len() {
+                                    None
+                                } else {
+                                    use std::borrow::Cow;
+
+                                    Some(ExtensionField::NtsCookie(Cow::Owned(new_cookie)))
+                                }
+                            }
+                            _ => None,
+                        })
+                        .collect(),
+                    authenticated: input
+                        .efdata
+                        .authenticated
+                        .into_iter()
+                        .filter(|ef| matches!(ef, ExtensionField::UniqueIdentifier(_)))
+                        .collect(),
+                    // Ignore encrypted so as not to accidentally leak anything
+                    untrusted: vec![],
+                },
+                mac: None,
+            },
+        }
     }
 }
 
