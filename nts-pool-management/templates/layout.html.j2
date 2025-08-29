@@ -36,12 +36,16 @@
         </menu>
         <div>
           {% if let Some(u) = app.user %}
-              <span class="username">{{ u.email }}</span> <a href="/logout">Logout</a>
+            {% if let Some(parent) = app.parent_user %}
+              <span class="username" title="Logged in via {{ parent.email }}">{{ u.email }}</span> <a href="/logout">Exit login as</a>
             {% else %}
-              <a href="/login">Login</a>
+              <span class="username">{{ u.email }}</span> <a href="/logout">Logout</a>
             {% endif %}
-          </div>
-        </nav>
+          {% else %}
+            <a href="/login">Login</a>
+          {% endif %}
+        </div>
+      </nav>
       <header>
         {% block header %}{% endblock %}
       </header>

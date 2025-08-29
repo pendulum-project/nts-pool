@@ -6,12 +6,18 @@ use axum::{
 };
 use eyre::{Context, OptionExt};
 
-use crate::{AppState, auth::IntoUserOption, config::BaseUrl, error::AppError, models::user::User};
+use crate::{
+    AppState,
+    auth::{IntoUserOption, LoggedInFrom, UnsafeLoggedInUser},
+    config::BaseUrl,
+    error::AppError,
+};
 
 #[derive(Clone, Debug)]
 pub struct AppContext {
     pub path: String,
-    pub user: Option<User>,
+    pub user: Option<UnsafeLoggedInUser>,
+    pub parent_user: Option<LoggedInFrom>,
     pub base_url: BaseUrl,
 }
 
@@ -20,6 +26,7 @@ impl Default for AppContext {
         Self {
             path: "/".to_string(),
             user: Default::default(),
+            parent_user: Default::default(),
             base_url: "http://localhost:3000".into(),
         }
     }
@@ -27,7 +34,7 @@ impl Default for AppContext {
 
 impl AppContext {
     pub fn with_user(mut self, user: impl IntoUserOption) -> Self {
-        self.user = user.into_user_option();
+        self.user = user.into_user_option().map(UnsafeLoggedInUser);
         self
     }
 
@@ -63,11 +70,22 @@ async fn extract_context(parts: &mut Parts, state: &AppState) -> Result<AppConte
         .wrap_err("Cannot extract original URI")?;
     let path = uri.path().to_string();
 
-    let user = parts.extensions.get::<Option<User>>().cloned().flatten();
+    let user = parts
+        .extensions
+        .get::<Option<UnsafeLoggedInUser>>()
+        .cloned()
+        .flatten();
+
+    let parent_user = parts
+        .extensions
+        .get::<Option<LoggedInFrom>>()
+        .cloned()
+        .flatten();
 
     Ok(AppContext {
         path,
         user,
+        parent_user,
         base_url: state.config.base_url.clone(),
     })
 }

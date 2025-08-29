@@ -150,7 +150,7 @@ impl IntoUserOption for Option<User> {
 
 /// Represents a user that is logged in but possibly blocked or not activated.
 #[derive(Debug, Clone, derive_more::Deref, derive_more::Into, derive_more::From)]
-pub struct UnsafeLoggedInUser(User);
+pub struct UnsafeLoggedInUser(pub User);
 
 impl IntoUserOption for UnsafeLoggedInUser {
     fn into_user_option(self) -> Option<User> {
@@ -228,6 +228,17 @@ impl TryFrom<User> for Administrator {
     }
 }
 
+impl TryFrom<AuthorizedUser> for Administrator {
+    type Error = AppError;
+
+    fn try_from(user: AuthorizedUser) -> Result<Self, Self::Error> {
+        user.0.try_into()
+    }
+}
+
+#[derive(Debug, Clone, derive_more::Deref, derive_more::Into, derive_more::From)]
+pub struct LoggedInFrom(Administrator);
+
 /// Middleware that retrieves the user session from the request.
 pub async fn auth_middleware(
     State(state): State<AppState>,
@@ -277,9 +288,38 @@ pub async fn auth_middleware(
         (None, None)
     };
 
-    request.extensions_mut().insert(current_user);
+    let logged_in_from = if let Some(claims) = &claims
+        && let Some(parent_user_id) = claims.parent
+    {
+        match get_parent_user(&state, parent_user_id).await {
+            Ok(admin) => Some(admin),
+            Err(e) => return e.into_response(),
+        }
+    } else {
+        None
+    };
+
+    request.extensions_mut().insert(logged_in_from);
+    request
+        .extensions_mut()
+        .insert(current_user.map(UnsafeLoggedInUser));
     request.extensions_mut().insert(claims);
     next.run(request).await
+}
+
+async fn get_parent_user(
+    state: &AppState,
+    parent_user_id: UserId,
+) -> Result<LoggedInFrom, AppError> {
+    let parent_user = crate::models::user::get_by_id(&state.db, parent_user_id)
+        .await
+        .wrap_err("Failed to retrieve parent user from database")?
+        .ok_or_eyre("Parent user not found")?;
+    let admin = Administrator::try_from(
+        AuthorizedUser::try_from(parent_user).wrap_err("Parent user is blocked or disabled")?,
+    )
+    .wrap_err("Parent user is not an administrator")?;
+    Ok(LoggedInFrom(admin))
 }
 
 impl<S: Send + Sync> OptionalFromRequestParts<S> for JwtClaims {
@@ -323,10 +363,10 @@ where
     ) -> Result<Option<Self>, Self::Rejection> {
         let user = parts
             .extensions
-            .get::<Option<User>>()
+            .get::<Option<UnsafeLoggedInUser>>()
             .ok_or_eyre("No user in request extensions")?
             .clone();
-        Ok(user.map(UnsafeLoggedInUser))
+        Ok(user)
     }
 }
 

@@ -36,9 +36,11 @@
             <form action="/admin/users/{{ user.id }}/block" method="POST">
               <button class="action-btn" type="submit">Block</button>
             </form>
-            <form action="/admin/users/{{ user.id }}/login-as" method="POST">
-              <button class="action-btn" type="submit">Login as</button>
-            </form>
+            {% if app.parent_user.is_none() %}
+              <form action="/admin/users/{{ user.id }}/login-as" method="POST">
+                <button class="action-btn" type="submit">Login as</button>
+              </form>
+            {% endif %}
           {% endif %}
         {% endif %}
       </td>
