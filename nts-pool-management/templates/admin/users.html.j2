@@ -19,7 +19,7 @@
   {%- for user in users %}
     <tr>
       <td>{{ user.email }}</td>
-      <td>{{ user.role }}</td>
+      <td>{{ user.role }} {% if !user.is_activated() %}(unconfirmed){%endif%}</td>
       <td>{{ user.last_login_at.format("%Y-%m-%d %H:%M") }}</td>
       <td>
         {% if let Some(disabled_since) = user.disabled_since %}
@@ -35,6 +35,9 @@
           {% else %}
             <form action="/admin/users/{{ user.id }}/block" method="POST">
               <button class="action-btn" type="submit">Block</button>
+            </form>
+            <form action="/admin/users/{{ user.id }}/login-as" method="POST">
+              <button class="action-btn" type="submit">Login as</button>
             </form>
           {% endif %}
         {% endif %}

@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use axum::{
     RequestExt, RequestPartsExt,
     extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Request, State},
@@ -58,12 +60,14 @@ pub fn is_too_large_password(password: &str) -> bool {
     password.len() > 256
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct JwtClaims {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JwtClaims {
     exp: usize, // Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
     iat: usize, // Issued at (as UTC timestamp)
     nbf: usize, // Not Before (as UTC timestamp)
-    sub: UserId, // Subject (whom token refers to)
+    pub sub: UserId, // Subject (whom token refers to)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub parent: Option<UserId>, // Optional parent user id, for "login as" functionality
 }
 
 #[derive(Debug, derive_more::Display, derive_more::Error)]
@@ -73,6 +77,7 @@ pub struct NotLoggedInError;
 fn create_jwt(
     encoding_key: &EncodingKey,
     user_id: UserId,
+    parent_user_id: Option<UserId>,
     valid_for: std::time::Duration,
 ) -> Result<String, AppError> {
     let claims = JwtClaims {
@@ -80,42 +85,47 @@ fn create_jwt(
         iat: chrono::Utc::now().timestamp() as usize,
         nbf: chrono::Utc::now().timestamp() as usize,
         sub: user_id,
+        parent: parent_user_id,
     };
     Ok(encode(&Header::default(), &claims, encoding_key).wrap_err("Failed to encode JWT")?)
 }
 
-fn validate_jwt(token: &str, decoding_key: &DecodingKey) -> Result<UserId, AppError> {
+fn validate_jwt(token: &str, decoding_key: &DecodingKey) -> Result<JwtClaims, AppError> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = true;
     validation.validate_nbf = true;
 
     let token_data = decode::<JwtClaims>(token, decoding_key, &validation)
         .wrap_err("Failed to decode or validate JWT")?;
-    Ok(token_data.claims.sub)
+    Ok(token_data.claims)
 }
 
 fn create_session_cookie(
     user: &User,
+    parent: Option<&Administrator>,
     valid_for: std::time::Duration,
     encoding_key: &EncodingKey,
 ) -> Result<Cookie<'static>, AppError> {
-    let token = create_jwt(encoding_key, user.id, valid_for)?;
+    let token = create_jwt(encoding_key, user.id, parent.map(|a| a.id), valid_for)?;
     let mut cookie = Cookie::new(AUTH_COOKIE_NAME, token);
     cookie.set_secure(true);
     cookie.set_http_only(true);
     cookie.set_same_site(SameSite::Strict);
+    cookie.set_path("/");
 
     Ok(cookie)
 }
 
 pub fn login_into(
     user: &User,
+    parent: Option<&Administrator>,
     valid_for: Option<std::time::Duration>,
     encoding_key: &EncodingKey,
     cookie_jar: CookieJar,
 ) -> Result<CookieJar, AppError> {
     let cookie = create_session_cookie(
         user,
+        parent,
         valid_for.unwrap_or_else(|| std::time::Duration::from_secs(3600 * 24 * 14)),
         encoding_key,
     )?;
@@ -263,15 +273,15 @@ pub async fn auth_middleware(
         .await
         .infallible_unwrap();
 
-    let current_user = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
+    let (current_user, claims) = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
         let decoding_key = DecodingKey::from_ref(&state);
         match validate_jwt(cookie.value(), &decoding_key) {
             // get_by_id returns None if no user is found, which means the JWT will be ignored
-            Ok(user_id) => match crate::models::user::get_by_id(&state.db, user_id)
+            Ok(claims) => match crate::models::user::get_by_id(&state.db, claims.sub)
                 .await
                 .wrap_err("Failed to retrieve user from database")
             {
-                Ok(user) => user,
+                Ok(user) => (user, Some(claims)),
                 Err(e) => {
                     return AppError::from(e).into_response();
                 }
@@ -279,12 +289,12 @@ pub async fn auth_middleware(
             Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
                 Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
                     // expected failure, ignore and no longer allow session for logged in user
-                    None
+                    (None, None)
                 }
                 Some(e) => {
                     // we ignore other kinds of jwt errors as well, but log them for debugging purposes
                     debug!("JWT validation error: {e}");
-                    None
+                    (None, None)
                 }
                 _ => {
                     // other errors are weird, they result in a server error
@@ -298,11 +308,40 @@ pub async fn auth_middleware(
         }
     } else {
         // There is no session cookie, so user is not logged in
-        None
+        (None, None)
     };
 
     request.extensions_mut().insert(current_user);
+    request.extensions_mut().insert(claims);
     next.run(request).await
+}
+
+impl<S: Send + Sync> OptionalFromRequestParts<S> for JwtClaims {
+    type Rejection = Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let claims = parts
+            .extensions
+            .get::<Option<JwtClaims>>()
+            .cloned()
+            .flatten();
+        Ok(claims)
+    }
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for JwtClaims {
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let claims = parts
+            .extract_with_state::<Option<JwtClaims>, S>(state)
+            .await
+            .infallible_unwrap();
+        Ok(claims.ok_or_eyre(NotLoggedInError)?)
+    }
 }
 
 impl<S> OptionalFromRequestParts<S> for UnsafeLoggedInUser

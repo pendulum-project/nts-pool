@@ -3,10 +3,12 @@ use axum::{
     extract::{Path, State},
     response::{IntoResponse, Redirect},
 };
+use axum_extra::extract::CookieJar;
+use eyre::{Context, OptionExt};
 
 use crate::{
     AppState,
-    auth::Administrator,
+    auth::{Administrator, login_into},
     context::AppContext,
     error::AppError,
     models::user::{self, User, UserId},
@@ -63,4 +65,24 @@ pub async fn user_unblock(
     user::unblock_user(&state.db, user_id).await?;
 
     Ok(Redirect::to("/admin/users"))
+}
+
+pub async fn login_as(
+    admin: Administrator,
+    cookie_jar: CookieJar,
+    Path(user_id): Path<UserId>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = user::get_by_id(&state.db, user_id)
+        .await?
+        .ok_or_eyre("User not found")?;
+    let cookie_jar = login_into(
+        &user,
+        Some(&admin),
+        None,
+        &state.jwt_encoding_key,
+        cookie_jar,
+    )
+    .wrap_err("Failed to switch to user")?;
+    Ok((cookie_jar, Redirect::to("/")))
 }

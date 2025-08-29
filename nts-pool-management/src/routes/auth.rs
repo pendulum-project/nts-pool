@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::{
+    AppState,
     auth::{
-        AUTH_COOKIE_NAME, UnsafeLoggedInUser, is_too_large_password, is_valid_password, login_into,
+        AUTH_COOKIE_NAME, JwtClaims, UnsafeLoggedInUser, is_too_large_password, is_valid_password,
+        login_into,
     },
     context::AppContext,
     email::Mailer,
@@ -116,7 +118,7 @@ async fn login_submit_internal(
             return Err(eyre::eyre!("User is disabled").into());
         }
 
-        cookie_jar = login_into(&user, None, &encoding_key, cookie_jar)?;
+        cookie_jar = login_into(&user, None, None, &encoding_key, cookie_jar)?;
         crate::models::user::update_last_login(&db, user.id)
             .await
             .wrap_err("Failed to update last login time")?;
@@ -137,9 +139,26 @@ async fn login_submit_internal(
         .into_response())
 }
 
-pub async fn logout(cookie_jar: CookieJar) -> Result<impl IntoResponse, AppError> {
-    let cookie_jar = cookie_jar.remove(AUTH_COOKIE_NAME);
-    Ok((cookie_jar, Redirect::to("/")))
+pub async fn logout(
+    cookie_jar: CookieJar,
+    claims: JwtClaims,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    if let Some(parent_id) = claims.parent {
+        let cookie_jar = login_into(
+            &crate::models::user::get_by_id(&state.db, parent_id)
+                .await?
+                .ok_or_eyre("Parent user not found")?,
+            None,
+            None,
+            &state.jwt_encoding_key,
+            cookie_jar,
+        )?;
+        Ok((cookie_jar, Redirect::to("/admin/users")))
+    } else {
+        let cookie_jar = cookie_jar.remove(AUTH_COOKIE_NAME);
+        Ok((cookie_jar, Redirect::to("/")))
+    }
 }
 
 #[derive(Template)]
@@ -254,7 +273,7 @@ pub async fn register_submit(
         crate::email::send_activation_email(&mailer, &user).await?;
 
         // we log the user in and send them to the confirmation page, waiting for them entering the activation token
-        let cookie_jar = crate::auth::login_into(&user, None, &encoding_key, cookie_jar)?;
+        let cookie_jar = crate::auth::login_into(&user, None, None, &encoding_key, cookie_jar)?;
 
         Ok((cookie_jar, Redirect::to("/register/activate")).into_response())
     }
