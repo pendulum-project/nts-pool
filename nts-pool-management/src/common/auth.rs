@@ -1,11 +1,7 @@
-use std::convert::Infallible;
-
 use axum::{
-    RequestExt, RequestPartsExt,
-    extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Request, State},
+    RequestPartsExt,
+    extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
     http::request::Parts,
-    middleware::Next,
-    response::{IntoResponse, Response},
 };
 use axum_extra::extract::{
     CookieJar,
@@ -325,75 +321,6 @@ impl Session {
     }
 }
 
-/// Middleware that retrieves the user session from the request.
-pub async fn auth_middleware(
-    State(state): State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Response {
-    let cookie_jar = request
-        .extract_parts::<CookieJar>()
-        .await
-        .infallible_unwrap();
-
-    let mut session = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
-        let decoding_key = DecodingKey::from_ref(&state);
-        match validate_jwt(cookie.value(), &decoding_key) {
-            // get_by_id returns None if no user is found, which means the JWT will be ignored
-            Ok(claims) => match crate::models::user::get_by_id(&state.db, claims.sub)
-                .await
-                .wrap_err("Failed to retrieve user from database")
-            {
-                Ok(Some(user)) => Some(RawSession {
-                    claims,
-                    user: UnsafeLoggedInUser(user),
-                    parent: None,
-                }),
-                Ok(None) => None,
-                Err(e) => {
-                    return AppError::from(e).into_response();
-                }
-            },
-            Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
-                Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                    // expected failure, ignore and no longer allow session for logged in user
-                    None
-                }
-                Some(e) => {
-                    // we ignore other kinds of jwt errors as well, but log them for debugging purposes
-                    debug!("JWT validation error: {e}");
-                    None
-                }
-                _ => {
-                    // other errors are weird, they result in a server error
-                    return AppError::from(
-                        e.into_inner()
-                            .wrap_err("Session state has unexpected invalid data"),
-                    )
-                    .into_response();
-                }
-            },
-        }
-    } else {
-        // There is no session cookie, so user is not logged in
-        None
-    };
-
-    if let Some(session) = &mut session
-        && let Some(parent_user_id) = session.claims.parent
-    {
-        session.parent = match get_parent_user(&state, parent_user_id).await {
-            Ok(admin) => Some(admin),
-            Err(e) => return e.into_response(),
-        }
-    }
-
-    request
-        .extensions_mut()
-        .insert(session.map(Session::try_from_raw));
-    next.run(request).await
-}
-
 async fn get_parent_user(
     state: &AppState,
     parent_user_id: UserId,
@@ -409,64 +336,120 @@ async fn get_parent_user(
     Ok(admin)
 }
 
-impl<S: Send + Sync> OptionalFromRequestParts<S> for JwtClaims {
-    type Rejection = Infallible;
+impl OptionalFromRequestParts<AppState> for Session {
+    type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &S,
+        state: &AppState,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let claims = parts
-            .extensions
-            .get::<Option<Session>>()
-            .and_then(|session| session.as_ref().map(|session| session.claims.clone()));
-        Ok(claims)
+        // Ensure we do the parsing only once
+        if let Some(previous) = parts.extensions.get::<Option<Session>>() {
+            return Ok(previous.clone());
+        }
+
+        let cookie_jar = parts.extract::<CookieJar>().await.infallible_unwrap();
+
+        let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) else {
+            parts.extensions.insert(None::<Option<Session>>);
+            return Ok(None);
+        };
+
+        let Some(claims) = validate_jwt(cookie.value(), &state.jwt_decoding_key)
+            .map(Some)
+            .or_else(|e| match e.downcast_ref::<jsonwebtoken::errors::Error>() {
+                Some(e) => {
+                    if *e.kind() != jsonwebtoken::errors::ErrorKind::ExpiredSignature {
+                        debug!("JWT validation error: {e}");
+                    }
+                    Ok(None)
+                }
+                _ => Err(e),
+            })?
+        else {
+            parts.extensions.insert(None::<Option<Session>>);
+            return Ok(None);
+        };
+
+        let db = sqlx::PgPool::from_ref(state);
+
+        let Some(user) = crate::models::user::get_by_id(&db, claims.sub)
+            .await
+            .wrap_err("Failed to retrieve user from database")?
+        else {
+            parts.extensions.insert(None::<Option<Session>>);
+            return Ok(None);
+        };
+
+        let parent = if let Some(parent_user_id) = claims.parent {
+            Some(get_parent_user(state, parent_user_id).await?)
+        } else {
+            None
+        };
+
+        let session = Session::try_from_raw(RawSession {
+            claims,
+            user: UnsafeLoggedInUser(user),
+            parent,
+        });
+
+        parts.extensions.insert(session.clone());
+
+        Ok(session)
     }
 }
 
-impl<S: Send + Sync> FromRequestParts<S> for JwtClaims {
+impl OptionalFromRequestParts<AppState> for JwtClaims {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let session = parts
+            .extract_with_state::<Option<Session>, _>(state)
+            .await?;
+        Ok(session.map(|session| session.claims().clone()))
+    }
+}
+
+impl FromRequestParts<AppState> for JwtClaims {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let claims = parts
-            .extract_with_state::<Option<JwtClaims>, S>(state)
-            .await
-            .infallible_unwrap();
+            .extract_with_state::<Option<JwtClaims>, _>(state)
+            .await?;
         Ok(claims.ok_or_eyre(NotLoggedInError)?)
     }
 }
 
-impl<S> OptionalFromRequestParts<S> for UnsafeLoggedInUser
-where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
-{
+impl OptionalFromRequestParts<AppState> for UnsafeLoggedInUser {
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &S,
+        state: &AppState,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let user = parts
-            .extensions
-            .get::<Option<Session>>()
-            .ok_or_eyre("No user in request extensions")?
-            .as_ref()
-            .map(|session| session.user.clone());
-        Ok(user)
+        let session = parts
+            .extract_with_state::<Option<Session>, _>(state)
+            .await?;
+        Ok(session.map(|session| session.user().clone()))
     }
 }
 
-impl<S> FromRequestParts<S> for UnsafeLoggedInUser
-where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
-{
+impl FromRequestParts<AppState> for UnsafeLoggedInUser {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<UnsafeLoggedInUser>, S>(state)
+            .extract_with_state::<Option<UnsafeLoggedInUser>, _>(state)
             .await
         {
             Ok(Some(session)) => Ok(session),
@@ -476,19 +459,15 @@ where
     }
 }
 
-impl<S> OptionalFromRequestParts<S> for AuthorizedUser
-where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
-{
+impl OptionalFromRequestParts<AppState> for AuthorizedUser {
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &S,
+        state: &AppState,
     ) -> Result<Option<Self>, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<UnsafeLoggedInUser>, S>(state)
+            .extract_with_state::<Option<UnsafeLoggedInUser>, AppState>(state)
             .await
         {
             Ok(Some(session)) => Ok(Some(
@@ -503,16 +482,15 @@ where
     }
 }
 
-impl<S> FromRequestParts<S> for AuthorizedUser
-where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
-{
+impl FromRequestParts<AppState> for AuthorizedUser {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<AuthorizedUser>, S>(state)
+            .extract_with_state::<Option<AuthorizedUser>, _>(state)
             .await
         {
             Ok(Some(session)) => Ok(session),
@@ -522,15 +500,14 @@ where
     }
 }
 
-impl<S> FromRequestParts<S> for Administrator
-where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
-{
+impl FromRequestParts<AppState> for Administrator {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts.extract_with_state::<AuthorizedUser, S>(state).await {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        match parts.extract_with_state::<AuthorizedUser, _>(state).await {
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
         }

@@ -125,10 +125,6 @@ async fn main() {
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            auth::auth_middleware,
-        ))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
             error::error_middleware,
         ))
         .nest_service("/assets", serve_dir_service);
