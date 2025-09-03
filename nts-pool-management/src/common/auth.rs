@@ -17,12 +17,12 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::{
-    AppState, InfallibleUnwrap,
+    AppState, DbConnLike, InfallibleUnwrap,
     error::AppError,
     models::user::{User, UserId, UserRole},
 };
 
-pub const AUTH_COOKIE_NAME: &str = "auth";
+const AUTH_COOKIE_NAME: &str = "auth";
 
 /// Generate a random activation token that the user can enter to activate their account.
 pub fn generate_activation_token() -> (String, chrono::DateTime<chrono::Utc>) {
@@ -49,6 +49,16 @@ pub fn generate_password_reset_token() -> (String, chrono::DateTime<chrono::Utc>
     (token, expires)
 }
 
+pub fn generate_session_revoke_token() -> String {
+    use rand::{Rng, distr::Alphanumeric};
+
+    rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(22)
+        .map(char::from)
+        .collect()
+}
+
 /// Checks if a password is valid for use in our system.
 pub fn is_valid_password(password: &str) -> bool {
     password.len() >= 8 && !is_too_large_password(password)
@@ -66,6 +76,8 @@ pub struct JwtClaims {
     iat: usize, // Issued at (as UTC timestamp)
     nbf: usize, // Not Before (as UTC timestamp)
     pub sub: UserId, // Subject (whom token refers to)
+    #[serde(rename = "sesrev")]
+    pub session_revoke_token: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub parent: Option<UserId>, // Optional parent user id, for "login as" functionality
 }
@@ -77,6 +89,7 @@ pub struct NotLoggedInError;
 fn create_jwt(
     encoding_key: &EncodingKey,
     user_id: UserId,
+    session_revoke_token: String,
     parent_user_id: Option<UserId>,
     valid_for: std::time::Duration,
 ) -> Result<String, AppError> {
@@ -85,6 +98,7 @@ fn create_jwt(
         iat: chrono::Utc::now().timestamp() as usize,
         nbf: chrono::Utc::now().timestamp() as usize,
         sub: user_id,
+        session_revoke_token,
         parent: parent_user_id,
     };
     Ok(encode(&Header::default(), &claims, encoding_key).wrap_err("Failed to encode JWT")?)
@@ -106,7 +120,15 @@ fn create_session_cookie(
     valid_for: std::time::Duration,
     encoding_key: &EncodingKey,
 ) -> Result<Cookie<'static>, AppError> {
-    let token = create_jwt(encoding_key, user.id, parent.map(|a| a.id), valid_for)?;
+    let token = create_jwt(
+        encoding_key,
+        user.id,
+        parent
+            .map(|parent| parent.session_revoke_token.clone())
+            .unwrap_or_else(|| user.session_revoke_token.clone()),
+        parent.map(|a| a.id),
+        valid_for,
+    )?;
     let mut cookie = Cookie::new(AUTH_COOKIE_NAME, token);
     cookie.set_secure(true);
     cookie.set_http_only(true);
@@ -130,6 +152,21 @@ pub fn login_into(
         encoding_key,
     )?;
     Ok(cookie_jar.add(cookie))
+}
+
+pub async fn logout<'a>(
+    user_id: UserId,
+    conn: impl DbConnLike<'a>,
+    cookie_jar: CookieJar,
+) -> Result<CookieJar, AppError> {
+    let cookie_jar = cookie_jar.remove(AUTH_COOKIE_NAME);
+    crate::models::user::update_session_revoke_token(
+        conn,
+        user_id,
+        generate_session_revoke_token(),
+    )
+    .await?;
+    Ok(cookie_jar)
 }
 
 pub trait IntoUserOption {
@@ -299,11 +336,30 @@ pub async fn auth_middleware(
         None
     };
 
-    request.extensions_mut().insert(logged_in_from);
-    request
-        .extensions_mut()
-        .insert(current_user.map(UnsafeLoggedInUser));
-    request.extensions_mut().insert(claims);
+    if let Some(claims_data) = &claims
+        && let Some(logged_in_from_data) = &logged_in_from
+        && claims_data.session_revoke_token == logged_in_from_data.0.session_revoke_token
+    {
+        request.extensions_mut().insert(logged_in_from);
+        request
+            .extensions_mut()
+            .insert(current_user.map(UnsafeLoggedInUser));
+        request.extensions_mut().insert(claims);
+    } else if let Some(claims_data) = &claims
+        && let Some(current_user_data) = &current_user
+        && logged_in_from.is_none()
+        && claims_data.session_revoke_token == current_user_data.session_revoke_token
+    {
+        request.extensions_mut().insert(logged_in_from);
+        request
+            .extensions_mut()
+            .insert(current_user.map(UnsafeLoggedInUser));
+        request.extensions_mut().insert(claims);
+    } else {
+        request.extensions_mut().insert(None::<LoggedInFrom>);
+        request.extensions_mut().insert(None::<UnsafeLoggedInUser>);
+        request.extensions_mut().insert(None::<JwtClaims>);
+    }
     next.run(request).await
 }
 

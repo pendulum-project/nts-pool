@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE users\n            SET activation_token = $1, activation_expires_at = $2\n            WHERE id = $3\n            RETURNING id, email, role AS \"role: _\", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n        ",
+  "query": "\n            UPDATE users\n            SET disabled_since = NOW()\n            WHERE id = $1\n            RETURNING id, email, role AS \"role: _\", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n        ",
   "describe": {
     "columns": [
       {
@@ -30,48 +30,52 @@
       },
       {
         "ordinal": 3,
-        "name": "activation_token",
+        "name": "session_revoke_token",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "activation_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "activation_expires_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "activated_since",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "last_login_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "disabled_since",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Timestamptz",
         "Uuid"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -84,5 +88,5 @@
       false
     ]
   },
-  "hash": "8c358033e0976b85a54a910aa634dda9d60c4e093712483c97e15d4ff11dda41"
+  "hash": "219310a5eb5581288630e5c198c987532f15289f387221d38d11be551123fbcc"
 }

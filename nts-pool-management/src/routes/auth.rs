@@ -15,8 +15,8 @@ use sqlx::PgPool;
 use crate::{
     AppState,
     auth::{
-        AUTH_COOKIE_NAME, JwtClaims, UnsafeLoggedInUser, is_too_large_password, is_valid_password,
-        login_into,
+        JwtClaims, UnsafeLoggedInUser, generate_session_revoke_token, is_too_large_password,
+        is_valid_password, login_into,
     },
     context::AppContext,
     email::Mailer,
@@ -156,7 +156,7 @@ pub async fn logout(
         )?;
         Ok((cookie_jar, Redirect::to("/admin/users")))
     } else {
-        let cookie_jar = cookie_jar.remove(AUTH_COOKIE_NAME);
+        let cookie_jar = crate::common::auth::logout(claims.sub, &state.db, cookie_jar).await?;
         Ok((cookie_jar, Redirect::to("/")))
     }
 }
@@ -244,12 +244,14 @@ pub async fn register_submit(
     } else {
         // we start by storing the new user in the database
         let (activation_token, activation_expires_at) = crate::auth::generate_activation_token();
+        let session_revoke_token = crate::auth::generate_session_revoke_token();
         let mut tx = pool.begin().await?;
         let user = crate::models::user::create(
             &mut *tx,
             NewUser {
                 email: data.email,
                 role: UserRole::Manager,
+                session_revoke_token,
                 activation_token,
                 activation_expires_at,
             },
@@ -609,6 +611,14 @@ pub async fn reset_password_submit(
         .await
         .wrap_err("Failed to update authentication method variant")?;
 
+    crate::models::user::update_session_revoke_token(
+        &pool,
+        user.id,
+        generate_session_revoke_token(),
+    )
+    .await
+    .wrap_err("Failed to reset session revocation token")?;
+
     Ok(Redirect::to("/login").into_response())
 }
 
@@ -739,6 +749,7 @@ mod tests {
             NewUser {
                 email: "my-user@example.com".into(),
                 role: UserRole::Manager,
+                session_revoke_token: "".into(),
                 activation_token: "some-token".into(),
                 activation_expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             },
