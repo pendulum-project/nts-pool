@@ -273,8 +273,57 @@ impl TryFrom<AuthorizedUser> for Administrator {
     }
 }
 
-#[derive(Debug, Clone, derive_more::Deref, derive_more::Into, derive_more::From)]
-pub struct LoggedInFrom(Administrator);
+struct RawSession {
+    claims: JwtClaims,
+    user: UnsafeLoggedInUser,
+    parent: Option<Administrator>,
+}
+
+/// A valid user session
+///
+/// This guarantees
+///  - That the claims correspond to the user
+///  - That the parent is filled in if present in the claims
+///  - That the session revocation token is consistent between claims and user/parent.
+#[derive(Debug, Clone)]
+pub struct Session {
+    claims: JwtClaims,
+    user: UnsafeLoggedInUser,
+    parent: Option<Administrator>,
+}
+
+impl Session {
+    fn try_from_raw(raw: RawSession) -> Option<Session> {
+        if raw
+            .parent
+            .as_ref()
+            .map(|admin| &admin.session_revoke_token)
+            .unwrap_or(&raw.user.session_revoke_token)
+            == &raw.claims.session_revoke_token
+            && (raw.claims.parent.is_some() == raw.parent.is_some())
+        {
+            Some(Session {
+                claims: raw.claims,
+                user: raw.user,
+                parent: raw.parent,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn claims(&self) -> &JwtClaims {
+        &self.claims
+    }
+
+    pub fn user(&self) -> &UnsafeLoggedInUser {
+        &self.user
+    }
+
+    pub fn parent(&self) -> Option<&Administrator> {
+        self.parent.as_ref()
+    }
+}
 
 /// Middleware that retrieves the user session from the request.
 pub async fn auth_middleware(
@@ -287,7 +336,7 @@ pub async fn auth_middleware(
         .await
         .infallible_unwrap();
 
-    let (current_user, claims) = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
+    let mut session = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
         let decoding_key = DecodingKey::from_ref(&state);
         match validate_jwt(cookie.value(), &decoding_key) {
             // get_by_id returns None if no user is found, which means the JWT will be ignored
@@ -295,7 +344,12 @@ pub async fn auth_middleware(
                 .await
                 .wrap_err("Failed to retrieve user from database")
             {
-                Ok(user) => (user, Some(claims)),
+                Ok(Some(user)) => Some(RawSession {
+                    claims,
+                    user: UnsafeLoggedInUser(user),
+                    parent: None,
+                }),
+                Ok(None) => None,
                 Err(e) => {
                     return AppError::from(e).into_response();
                 }
@@ -303,12 +357,12 @@ pub async fn auth_middleware(
             Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
                 Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
                     // expected failure, ignore and no longer allow session for logged in user
-                    (None, None)
+                    None
                 }
                 Some(e) => {
                     // we ignore other kinds of jwt errors as well, but log them for debugging purposes
                     debug!("JWT validation error: {e}");
-                    (None, None)
+                    None
                 }
                 _ => {
                     // other errors are weird, they result in a server error
@@ -322,51 +376,28 @@ pub async fn auth_middleware(
         }
     } else {
         // There is no session cookie, so user is not logged in
-        (None, None)
-    };
-
-    let logged_in_from = if let Some(claims) = &claims
-        && let Some(parent_user_id) = claims.parent
-    {
-        match get_parent_user(&state, parent_user_id).await {
-            Ok(admin) => Some(admin),
-            Err(e) => return e.into_response(),
-        }
-    } else {
         None
     };
 
-    if let Some(claims_data) = &claims
-        && let Some(logged_in_from_data) = &logged_in_from
-        && claims_data.session_revoke_token == logged_in_from_data.0.session_revoke_token
+    if let Some(session) = &mut session
+        && let Some(parent_user_id) = session.claims.parent
     {
-        request.extensions_mut().insert(logged_in_from);
-        request
-            .extensions_mut()
-            .insert(current_user.map(UnsafeLoggedInUser));
-        request.extensions_mut().insert(claims);
-    } else if let Some(claims_data) = &claims
-        && let Some(current_user_data) = &current_user
-        && logged_in_from.is_none()
-        && claims_data.session_revoke_token == current_user_data.session_revoke_token
-    {
-        request.extensions_mut().insert(logged_in_from);
-        request
-            .extensions_mut()
-            .insert(current_user.map(UnsafeLoggedInUser));
-        request.extensions_mut().insert(claims);
-    } else {
-        request.extensions_mut().insert(None::<LoggedInFrom>);
-        request.extensions_mut().insert(None::<UnsafeLoggedInUser>);
-        request.extensions_mut().insert(None::<JwtClaims>);
+        session.parent = match get_parent_user(&state, parent_user_id).await {
+            Ok(admin) => Some(admin),
+            Err(e) => return e.into_response(),
+        }
     }
+
+    request
+        .extensions_mut()
+        .insert(session.map(Session::try_from_raw));
     next.run(request).await
 }
 
 async fn get_parent_user(
     state: &AppState,
     parent_user_id: UserId,
-) -> Result<LoggedInFrom, AppError> {
+) -> Result<Administrator, AppError> {
     let parent_user = crate::models::user::get_by_id(&state.db, parent_user_id)
         .await
         .wrap_err("Failed to retrieve parent user from database")?
@@ -375,7 +406,7 @@ async fn get_parent_user(
         AuthorizedUser::try_from(parent_user).wrap_err("Parent user is blocked or disabled")?,
     )
     .wrap_err("Parent user is not an administrator")?;
-    Ok(LoggedInFrom(admin))
+    Ok(admin)
 }
 
 impl<S: Send + Sync> OptionalFromRequestParts<S> for JwtClaims {
@@ -387,9 +418,8 @@ impl<S: Send + Sync> OptionalFromRequestParts<S> for JwtClaims {
     ) -> Result<Option<Self>, Self::Rejection> {
         let claims = parts
             .extensions
-            .get::<Option<JwtClaims>>()
-            .cloned()
-            .flatten();
+            .get::<Option<Session>>()
+            .and_then(|session| session.as_ref().map(|session| session.claims.clone()));
         Ok(claims)
     }
 }
@@ -419,9 +449,10 @@ where
     ) -> Result<Option<Self>, Self::Rejection> {
         let user = parts
             .extensions
-            .get::<Option<UnsafeLoggedInUser>>()
+            .get::<Option<Session>>()
             .ok_or_eyre("No user in request extensions")?
-            .clone();
+            .as_ref()
+            .map(|session| session.user.clone());
         Ok(user)
     }
 }
