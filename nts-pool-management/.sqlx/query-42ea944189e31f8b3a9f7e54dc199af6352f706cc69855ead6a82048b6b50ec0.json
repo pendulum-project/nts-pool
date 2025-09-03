@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, email, role AS \"role: _\", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n            FROM users\n            WHERE id = $1\n        ",
+  "query": "\n            UPDATE users\n            SET activation_token = $1, activation_expires_at = $2\n            WHERE id = $3\n            RETURNING id, email, role AS \"role: _\", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n        ",
   "describe": {
     "columns": [
       {
@@ -30,46 +30,54 @@
       },
       {
         "ordinal": 3,
-        "name": "activation_token",
+        "name": "session_revoke_token",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "activation_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "activation_expires_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "activated_since",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "last_login_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "disabled_since",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
+        "Text",
+        "Timestamptz",
         "Uuid"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -82,5 +90,5 @@
       false
     ]
   },
-  "hash": "512bb1fb6e20810fdfb0875b88ffedce7a9ba68a8bc8e03e2edc877aa12fb0e1"
+  "hash": "42ea944189e31f8b3a9f7e54dc199af6352f706cc69855ead6a82048b6b50ec0"
 }

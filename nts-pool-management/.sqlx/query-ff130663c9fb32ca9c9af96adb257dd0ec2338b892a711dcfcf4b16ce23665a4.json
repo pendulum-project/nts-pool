@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE users\n            SET disabled_since = NULL\n            WHERE id = $1\n            RETURNING id, email, role AS \"role: _\", activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n        ",
+  "query": "\n            INSERT INTO users (email, role, session_revoke_token, activation_token, activation_expires_at)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, email, role AS \"role: _\", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n        ",
   "describe": {
     "columns": [
       {
@@ -30,46 +30,66 @@
       },
       {
         "ordinal": 3,
-        "name": "activation_token",
+        "name": "session_revoke_token",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "activation_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "activation_expires_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "activated_since",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "last_login_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "disabled_since",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text",
+        {
+          "Custom": {
+            "name": "user_role",
+            "kind": {
+              "Enum": [
+                "administrator",
+                "manager"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Timestamptz"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -82,5 +102,5 @@
       false
     ]
   },
-  "hash": "a8d12f5b1649c440c3742b220666bcf37f75fb75fab0adff4f41b28d5e4a6d64"
+  "hash": "ff130663c9fb32ca9c9af96adb257dd0ec2338b892a711dcfcf4b16ce23665a4"
 }
