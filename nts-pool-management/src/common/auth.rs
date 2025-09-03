@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::{
-    AppState, DbConnLike, InfallibleUnwrap,
+    DbConnLike, InfallibleUnwrap,
     error::AppError,
     models::user::{User, UserId, UserRole},
 };
@@ -321,14 +321,16 @@ impl Session {
     }
 }
 
-async fn get_parent_user(
-    state: &AppState,
-    parent_user_id: UserId,
-) -> Result<Administrator, AppError> {
-    let parent_user = crate::models::user::get_by_id(&state.db, parent_user_id)
-        .await
-        .wrap_err("Failed to retrieve parent user from database")?
-        .ok_or_eyre("Parent user not found")?;
+async fn get_parent_user<S>(state: &S, parent_user_id: UserId) -> Result<Administrator, AppError>
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+{
+    let parent_user =
+        crate::models::user::get_by_id(&sqlx::PgPool::from_ref(state), parent_user_id)
+            .await
+            .wrap_err("Failed to retrieve parent user from database")?
+            .ok_or_eyre("Parent user not found")?;
     let admin = Administrator::try_from(
         AuthorizedUser::try_from(parent_user).wrap_err("Parent user is blocked or disabled")?,
     )
@@ -336,12 +338,17 @@ async fn get_parent_user(
     Ok(admin)
 }
 
-impl OptionalFromRequestParts<AppState> for Session {
+impl<S> OptionalFromRequestParts<S> for Session
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &AppState,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
         // Ensure we do the parsing only once
         if let Some(previous) = parts.extensions.get::<Option<Session>>() {
@@ -355,7 +362,7 @@ impl OptionalFromRequestParts<AppState> for Session {
             return Ok(None);
         };
 
-        let Some(claims) = validate_jwt(cookie.value(), &state.jwt_decoding_key)
+        let Some(claims) = validate_jwt(cookie.value(), &DecodingKey::from_ref(state))
             .map(Some)
             .or_else(|e| match e.downcast_ref::<jsonwebtoken::errors::Error>() {
                 Some(e) => {
@@ -399,12 +406,17 @@ impl OptionalFromRequestParts<AppState> for Session {
     }
 }
 
-impl OptionalFromRequestParts<AppState> for JwtClaims {
+impl<S> OptionalFromRequestParts<S> for JwtClaims
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &AppState,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
         let session = parts
             .extract_with_state::<Option<Session>, _>(state)
@@ -413,13 +425,15 @@ impl OptionalFromRequestParts<AppState> for JwtClaims {
     }
 }
 
-impl FromRequestParts<AppState> for JwtClaims {
+impl<S> FromRequestParts<S> for JwtClaims
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let claims = parts
             .extract_with_state::<Option<JwtClaims>, _>(state)
             .await?;
@@ -427,12 +441,17 @@ impl FromRequestParts<AppState> for JwtClaims {
     }
 }
 
-impl OptionalFromRequestParts<AppState> for UnsafeLoggedInUser {
+impl<S> OptionalFromRequestParts<S> for UnsafeLoggedInUser
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &AppState,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
         let session = parts
             .extract_with_state::<Option<Session>, _>(state)
@@ -441,13 +460,15 @@ impl OptionalFromRequestParts<AppState> for UnsafeLoggedInUser {
     }
 }
 
-impl FromRequestParts<AppState> for UnsafeLoggedInUser {
+impl<S> FromRequestParts<S> for UnsafeLoggedInUser
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts
             .extract_with_state::<Option<UnsafeLoggedInUser>, _>(state)
             .await
@@ -459,15 +480,20 @@ impl FromRequestParts<AppState> for UnsafeLoggedInUser {
     }
 }
 
-impl OptionalFromRequestParts<AppState> for AuthorizedUser {
+impl<S> OptionalFromRequestParts<S> for AuthorizedUser
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &AppState,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<UnsafeLoggedInUser>, AppState>(state)
+            .extract_with_state::<Option<UnsafeLoggedInUser>, _>(state)
             .await
         {
             Ok(Some(session)) => Ok(Some(
@@ -482,13 +508,15 @@ impl OptionalFromRequestParts<AppState> for AuthorizedUser {
     }
 }
 
-impl FromRequestParts<AppState> for AuthorizedUser {
+impl<S> FromRequestParts<S> for AuthorizedUser
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts
             .extract_with_state::<Option<AuthorizedUser>, _>(state)
             .await
@@ -500,13 +528,15 @@ impl FromRequestParts<AppState> for AuthorizedUser {
     }
 }
 
-impl FromRequestParts<AppState> for Administrator {
+impl<S> FromRequestParts<S> for Administrator
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &AppState,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts.extract_with_state::<AuthorizedUser, _>(state).await {
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
