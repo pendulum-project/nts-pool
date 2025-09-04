@@ -1,11 +1,17 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
+use notify::{RecursiveMode, Watcher};
+use rustls::{pki_types::pem::PemObject, version::TLS13};
 use tokio::{
     io::AsyncWriteExt,
     net::TcpListener,
     select,
     signal::unix::{SignalKind, signal},
 };
+use tokio_rustls::TlsAcceptor;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, info};
 
@@ -18,7 +24,7 @@ use crate::{
         KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError, ProtocolId,
     },
     servers::{Server, ServerConnection, ServerManager},
-    util::BufferBorrowingReader,
+    util::{BufferBorrowingReader, load_certificates},
 };
 
 pub async fn run_nts_pool_ke(
@@ -32,13 +38,19 @@ pub async fn run_nts_pool_ke(
 
 struct NtsPoolKe<S> {
     config: NtsPoolKeConfig,
+    server_tls: RwLock<TlsAcceptor>,
     server_manager: S,
 }
 
 impl<S: ServerManager + 'static> NtsPoolKe<S> {
     fn new(config: NtsPoolKeConfig, server_manager: S) -> std::io::Result<Self> {
+        let server_config = load_tls_config(&config)?;
+
+        let server_tls = RwLock::new(server_config);
+
         Ok(NtsPoolKe {
             config,
+            server_tls,
             server_manager,
         })
     }
@@ -55,6 +67,8 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         let tracker = TaskTracker::new();
 
         info!("listening on '{:?}'", listener.local_addr());
+
+        let tls_updater = self.clone().tls_config_updater().await?;
 
         loop {
             let permit = connectionpermits
@@ -87,11 +101,53 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         info!("Shutting down...");
 
         tracker.close();
+        tls_updater.abort();
         tracker.wait().await;
 
         info!("Finished all connections");
 
         Ok(())
+    }
+
+    async fn tls_config_updater(
+        self: Arc<Self>,
+    ) -> Result<tokio::task::JoinHandle<()>, std::io::Error> {
+        let (change_sender, mut change_receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
+        // Use a poll watcher here as INotify can be unreliable in many ways and I don't want to deal with that.
+        let mut watcher = notify::poll::PollWatcher::new(
+            move |event: notify::Result<notify::Event>| {
+                if event.is_ok() {
+                    let _ = change_sender.send(());
+                }
+            },
+            notify::Config::default()
+                .with_poll_interval(std::time::Duration::from_secs(60))
+                .with_compare_contents(true),
+        )
+        .map_err(std::io::Error::other)?;
+
+        watcher
+            .watch(&self.config.certificate_chain, RecursiveMode::NonRecursive)
+            .map_err(std::io::Error::other)?;
+        watcher
+            .watch(&self.config.private_key, RecursiveMode::NonRecursive)
+            .map_err(std::io::Error::other)?;
+
+        Ok(tokio::spawn(async move {
+            // keep the watcher alive
+            let _w = watcher;
+            loop {
+                change_receiver.recv().await;
+                match load_tls_config(&self.config) {
+                    Ok(server_tls) => {
+                        *self.server_tls.write().unwrap() = server_tls;
+                    }
+                    Err(e) => {
+                        tracing::error!("Could not reload tls configuration: {}", e);
+                    }
+                }
+            }
+        }))
     }
 
     async fn handle_client(
@@ -107,7 +163,8 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         }
 
         // handle the initial client to pool
-        let mut client_stream = self.config.server_tls.accept(client_stream).await?;
+        let server_tls = self.server_tls.read().unwrap().clone();
+        let mut client_stream = server_tls.accept(client_stream).await?;
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let client_request = match ClientRequest::parse(&mut BufferBorrowingReader::new(
@@ -345,12 +402,26 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
     }
 }
 
+fn load_tls_config(config: &NtsPoolKeConfig) -> Result<TlsAcceptor, std::io::Error> {
+    let certificate_chain =
+        load_certificates(&config.certificate_chain).map_err(std::io::Error::other)?;
+    let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(&config.private_key)
+        .map_err(std::io::Error::other)?;
+    let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&TLS13])
+        .with_no_client_auth()
+        .with_single_cert(certificate_chain.clone(), private_key.clone_key())
+        .map_err(std::io::Error::other)?;
+    server_config.alpn_protocols = vec!["ntske/1".into()];
+    Ok(TlsAcceptor::from(Arc::new(server_config)))
+}
+
 #[cfg(test)]
 #[allow(clippy::await_holding_lock)]
 mod tests {
     use std::{
         borrow::Cow,
         net::SocketAddr,
+        path::PathBuf,
         sync::{Arc, Mutex},
         time::Duration,
     };
@@ -364,7 +435,7 @@ mod tests {
         io::{AsyncRead, AsyncWrite, AsyncWriteExt},
         net::{TcpListener, TcpStream},
     };
-    use tokio_rustls::{TlsAcceptor, TlsConnector};
+    use tokio_rustls::TlsConnector;
 
     use crate::{
         config::NtsPoolKeConfig,
@@ -376,33 +447,6 @@ mod tests {
         servers::{Server, ServerConnection, ServerManager},
         util::BufferBorrowingReader,
     };
-
-    fn listen_tls_config(name: &str) -> TlsAcceptor {
-        let certificate_chain = rustls::pki_types::CertificateDer::pem_file_iter(format!(
-            "{}/testdata/{}.fullchain.pem",
-            env!("CARGO_MANIFEST_DIR"),
-            name
-        ))
-        .unwrap()
-        .collect::<Result<Vec<rustls::pki_types::CertificateDer>, _>>()
-        .unwrap();
-
-        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(format!(
-            "{}/testdata/{}.key",
-            env!("CARGO_MANIFEST_DIR"),
-            name
-        ))
-        .unwrap();
-
-        let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&TLS13])
-            .with_no_client_auth()
-            .with_single_cert(certificate_chain.clone(), private_key.clone_key())
-            .unwrap();
-        server_config.alpn_protocols.clear();
-        server_config.alpn_protocols.push(b"ntske/1".to_vec());
-
-        TlsAcceptor::from(Arc::new(server_config))
-    }
 
     fn upstream_tls_config() -> TlsConnector {
         let upstream_cas = rustls::pki_types::CertificateDer::pem_file_iter(format!(
@@ -622,7 +666,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -694,7 +745,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -768,7 +826,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -839,7 +904,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -913,7 +985,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -989,7 +1068,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -1054,7 +1140,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),
@@ -1115,7 +1208,14 @@ mod tests {
 
         let pool_handle = tokio::spawn(async move {
             let pool_config = NtsPoolKeConfig {
-                server_tls: listen_tls_config("pool.test"),
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
                 listen: pool_addr,
                 key_exchange_timeout: Duration::from_millis(1000),
                 timesource_timeout: Duration::from_millis(500),

@@ -1,5 +1,6 @@
 use std::{mem::take, pin::Pin};
 
+use rustls::pki_types::pem::PemObject;
 use tokio::io::{AsyncRead, AsyncReadExt, ReadBuf};
 
 pub struct BufferBorrowingReader<'a, T> {
@@ -64,4 +65,10 @@ impl<'a, T: AsyncRead + Unpin> AsyncRead for BufferBorrowingReader<'a, T> {
         this.fill -= len;
         std::task::Poll::Ready(Ok(()))
     }
+}
+
+pub fn load_certificates(
+    path: impl AsRef<std::path::Path>,
+) -> Result<Vec<rustls::pki_types::CertificateDer<'static>>, rustls::pki_types::pem::Error> {
+    rustls::pki_types::CertificateDer::pem_file_iter(path)?.collect()
 }
