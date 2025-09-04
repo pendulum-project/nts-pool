@@ -30,15 +30,15 @@
         {% if !(app.user|is_me(user)) %}
           {% if user.is_disabled() %}
             <form action="/admin/users/{{ user.id }}/unblock" method="POST">
-              <button class="action-btn btn-alt" type="submit">Unblock</button>
+              <button class="btn-sm btn-alt" type="submit">Unblock</button>
             </form>
           {% else %}
             <form action="/admin/users/{{ user.id }}/block" method="POST">
-              <button class="action-btn" type="submit">Block</button>
+              <button class="btn-sm" type="submit">Block</button>
             </form>
             {% if app.parent_user.is_none() %}
               <form action="/admin/users/{{ user.id }}/login-as" method="POST">
-                <button class="action-btn" type="submit">Login as</button>
+                <button class="btn-sm" type="submit">Login as</button>
               </form>
             {% endif %}
           {% endif %}
