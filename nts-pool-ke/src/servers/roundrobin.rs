@@ -189,6 +189,8 @@ mod tests {
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
                 KeyExchangeServer {
                     uuid: "UUID-b".into(),
@@ -196,6 +198,8 @@ mod tests {
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
             ]
             .into(),
@@ -222,6 +226,8 @@ mod tests {
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
                 KeyExchangeServer {
                     uuid: "UUID-b".into(),
@@ -229,6 +235,8 @@ mod tests {
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
             ]
             .into(),
@@ -257,6 +265,8 @@ mod tests {
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
                 KeyExchangeServer {
                     uuid: "UUID-b".into(),
@@ -264,6 +274,8 @@ mod tests {
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
             ]
             .into(),
@@ -292,6 +304,8 @@ mod tests {
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
                 KeyExchangeServer {
                     uuid: "UUID-b".into(),
@@ -299,6 +313,8 @@ mod tests {
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
             ]
             .into(),
