@@ -16,7 +16,7 @@ use tracing::debug;
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
     nts::ProtocolId,
-    servers::{Server, ServerManager, fetch_support_data},
+    servers::{ConnectionType, Server, ServerManager, fetch_support_data, resolve_with_type},
 };
 
 static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
@@ -204,12 +204,24 @@ impl Server for GeographicServer {
         ),
         crate::error::PoolError,
     > {
-        fetch_support_data(self.connect().await?, &self.allowed_protocols, self.timeout).await
+        fetch_support_data(
+            self.connect(ConnectionType::Either).await?,
+            &self.allowed_protocols,
+            self.timeout,
+        )
+        .await
     }
 
-    async fn connect<'a>(&'a self) -> Result<Self::Connection<'a>, crate::error::PoolError> {
-        let io =
-            TcpStream::connect(self.inner.servers[self.index].connection_address.clone()).await?;
+    async fn connect<'a>(
+        &'a self,
+        connection_type: ConnectionType,
+    ) -> Result<Self::Connection<'a>, crate::error::PoolError> {
+        let addr = resolve_with_type(
+            &self.inner.servers[self.index].connection_address,
+            connection_type,
+        )
+        .await?;
+        let io = TcpStream::connect(addr).await?;
         Ok(self
             .upstream_tls
             .connect(self.inner.servers[self.index].server_name.clone(), io)
