@@ -536,3 +536,351 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use axum::{body::Body, extract::FromRequest, http::Request};
+    use testcontainers::ContainerAsync;
+
+    use crate::{models::user::NewUser, test::PostgresContainer};
+
+    use super::*;
+
+    #[derive(Clone, FromRef)]
+    struct TestState {
+        db: sqlx::PgPool,
+        decoding_key: jsonwebtoken::DecodingKey,
+    }
+
+    struct TestEnv {
+        // Needed to keep container alive
+        #[allow(unused)]
+        db: ContainerAsync<PostgresContainer>,
+        pool: sqlx::PgPool,
+        user: User,
+        admin: User,
+    }
+
+    async fn init_env() -> TestEnv {
+        let (db, pool) = crate::test::PostgresContainer::init().await;
+
+        let user = crate::models::user::create(
+            &pool,
+            NewUser {
+                email: "my-user@example.com".into(),
+                role: UserRole::Manager,
+                session_revoke_token: "usersession".into(),
+                activation_token: "some-token".into(),
+                activation_expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            },
+        )
+        .await
+        .unwrap();
+
+        crate::models::user::activate_user(&pool, user.id)
+            .await
+            .unwrap();
+
+        let admin = crate::models::user::create(
+            &pool,
+            NewUser {
+                email: "my-admin@example.com".into(),
+                role: UserRole::Administrator,
+                session_revoke_token: "adminsession".into(),
+                activation_token: "some-token".into(),
+                activation_expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            },
+        )
+        .await
+        .unwrap();
+
+        crate::models::user::activate_user(&pool, admin.id)
+            .await
+            .unwrap();
+
+        TestEnv {
+            db,
+            pool,
+            user,
+            admin,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_auth_extract_basic() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool,
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.user.id,
+            env.user.session_revoke_token,
+            None,
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+
+        let session = Option::<Session>::from_request(request, &state)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.user.id, env.user.id)
+    }
+
+    #[tokio::test]
+    async fn test_auth_extract_logged_in_as() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool,
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.user.id,
+            env.admin.session_revoke_token,
+            Some(env.admin.id),
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+
+        let session = Option::<Session>::from_request(request, &state)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.user.id, env.user.id)
+    }
+
+    #[tokio::test]
+    async fn test_logout_invalidates_session() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool.clone(),
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.user.id,
+            env.user.session_revoke_token.clone(),
+            None,
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+        let session = Option::<Session>::from_request(request, &state)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.user.id, env.user.id);
+
+        logout(env.user.id, &env.pool, CookieJar::new())
+            .await
+            .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+        assert!(
+            Option::<Session>::from_request(request, &state)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_parent_logout_invalidates_session() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool.clone(),
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.user.id,
+            env.admin.session_revoke_token.clone(),
+            Some(env.admin.id),
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+        let session = Option::<Session>::from_request(request, &state)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.user.id, env.user.id);
+
+        logout(env.admin.id, &env.pool, CookieJar::new())
+            .await
+            .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+        assert!(
+            Option::<Session>::from_request(request, &state)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_parent_session_requires_parent_session_token() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool.clone(),
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.user.id,
+            env.user.session_revoke_token,
+            Some(env.admin.id),
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+
+        assert!(
+            Option::<Session>::from_request(request, &state)
+                .await
+                .unwrap()
+                .is_none()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_user_must_exist() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool.clone(),
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            UserId::new_test(),
+            env.user.session_revoke_token,
+            None,
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+
+        assert!(
+            Option::<Session>::from_request(request, &state)
+                .await
+                .unwrap()
+                .is_none()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_parent_must_exist() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool.clone(),
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.user.id,
+            env.admin.session_revoke_token,
+            Some(UserId::new_test()),
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+
+        assert!(
+            Option::<Session>::from_request(request, &state)
+                .await
+                .is_err()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_parent_must_be_admin() {
+        let encoding_key = jsonwebtoken::EncodingKey::from_secret(b"secret");
+        let decoding_key = jsonwebtoken::DecodingKey::from_secret(b"secret");
+        let env = init_env().await;
+        let state = TestState {
+            db: env.pool.clone(),
+            decoding_key,
+        };
+
+        let jwt = create_jwt(
+            &encoding_key,
+            env.admin.id,
+            env.user.session_revoke_token.clone(),
+            Some(env.user.id),
+            std::time::Duration::from_secs(1800),
+        )
+        .unwrap();
+
+        let request = Request::builder()
+            .header("Cookie", format!("{}={}", AUTH_COOKIE_NAME, jwt))
+            .body(Body::empty())
+            .unwrap();
+
+        assert!(
+            Option::<Session>::from_request(request, &state)
+                .await
+                .is_err()
+        )
+    }
+}

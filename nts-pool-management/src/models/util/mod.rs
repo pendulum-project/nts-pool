@@ -49,6 +49,14 @@ macro_rules! uuid {
                 write!(f, "{}", self.0)
             }
         }
+
+        #[cfg(test)]
+        #[allow(unused)]
+        impl $name {
+            pub(crate) fn new_test() -> Self {
+                Self(uuid::Uuid::new_v4())
+            }
+        }
     };
 }
 
