@@ -27,6 +27,8 @@
       <dl>
         <dd>Hostname</dd>
         <dt>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</dt>
+        <dd>Weight</dd>
+        <dt>{{ ts.weight }}</dt>
       </dl>
       <form action="/management/time-sources/{{ ts.id }}/delete" method="POST">
         <details class="confirmation-btn">
