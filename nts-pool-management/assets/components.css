@@ -21,13 +21,17 @@ a.btn:hover,
 [type="button"]:hover,
 [type="submit"]:hover,
 [type="reset"]:hover {
-    color: var(--white);
+    color: color-mix(in lab, var(--primary), var(--white) 90%);
     border: var(--border-width) solid var(--primary);
     cursor: pointer;
 }
 
 .btn-alt {
     background-color: color-mix(in lab, var(--primary), var(--white) 90%);
+}
+
+.btn-alt:hover {
+    color: color-mix(in lab, var(--primary), var(--black) 30%);
 }
 
 .btn-link,
