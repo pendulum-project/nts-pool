@@ -17,7 +17,7 @@ use crate::{
         AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
         KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError, ProtocolId,
     },
-    servers::{Server, ServerConnection, ServerManager},
+    servers::{ConnectionType, Server, ServerConnection, ServerManager},
     util::BufferBorrowingReader,
 };
 
@@ -206,6 +206,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     algorithm: algorithm.id,
                 },
                 &pick,
+                source_address.into(),
             )
             .await
         {
@@ -314,6 +315,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         buffer: &'c mut [u8],
         request: FixedKeyRequest<'_>,
         server: &S::Server<'_>,
+        connection_type: ConnectionType,
     ) -> Result<KeyExchangeResponse<'c>, PoolError> {
         // This function is needed to teach rust that the lifetimes actually do work.
         #[allow(clippy::manual_async_fn)]
@@ -334,7 +336,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         // TODO: Implement connection reuse
         match tokio::time::timeout(self.config.timesource_timeout, async {
-            let server_stream = server.connect().await?;
+            let server_stream = server.connect(connection_type).await?;
             workaround_lifetime_bug(buffer, request, server_stream).await
         })
         .await
@@ -373,7 +375,7 @@ mod tests {
             MAX_MESSAGE_SIZE, NtsError, ProtocolId,
         },
         pool_ke::NtsPoolKe,
-        servers::{Server, ServerConnection, ServerManager},
+        servers::{ConnectionType, Server, ServerConnection, ServerManager},
         util::BufferBorrowingReader,
     };
 
@@ -540,7 +542,10 @@ mod tests {
             Ok(self.supports.clone())
         }
 
-        async fn connect<'a>(&'a self) -> Result<Self::Connection<'a>, crate::error::PoolError> {
+        async fn connect<'a>(
+            &'a self,
+            _connection_type: ConnectionType,
+        ) -> Result<Self::Connection<'a>, crate::error::PoolError> {
             Ok(TestConnection {
                 written: self.written,
                 read_data: self.read_data,

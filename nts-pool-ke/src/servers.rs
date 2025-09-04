@@ -25,6 +25,37 @@ pub use geo::GeographicServerManager;
 mod roundrobin;
 pub use roundrobin::RoundRobinServerManager;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum ConnectionType {
+    IpV4,
+    IpV6,
+    #[default]
+    Either,
+}
+
+impl From<SocketAddr> for ConnectionType {
+    fn from(value: SocketAddr) -> Self {
+        match value {
+            SocketAddr::V4(_) => ConnectionType::IpV4,
+            SocketAddr::V6(_) => ConnectionType::IpV6,
+        }
+    }
+}
+
+impl ConnectionType {
+    #[must_use]
+    fn is_of_type(&self, a: SocketAddr) -> bool {
+        match (self, a) {
+            (ConnectionType::IpV4, SocketAddr::V4(_))
+            | (ConnectionType::IpV6, SocketAddr::V6(_))
+            | (ConnectionType::Either, SocketAddr::V4(_))
+            | (ConnectionType::Either, SocketAddr::V6(_)) => true,
+            (ConnectionType::IpV4, SocketAddr::V6(_))
+            | (ConnectionType::IpV6, SocketAddr::V4(_)) => false,
+        }
+    }
+}
+
 pub trait ServerManager: Sync + Send {
     type Server<'a>: Server + 'a
     where
@@ -70,6 +101,7 @@ pub trait Server: Sync + Send {
     /// Open a connection to the server.
     fn connect<'a>(
         &'a self,
+        connection_type: ConnectionType,
     ) -> impl Future<Output = Result<Self::Connection<'a>, PoolError>> + Send;
 }
 
@@ -84,6 +116,21 @@ impl ServerConnection for TlsStream<TcpStream> {
         // no reuse, just shutdown the connection
         let _ = self.shutdown().await;
     }
+}
+
+async fn resolve_with_type<T: tokio::net::ToSocketAddrs>(
+    addr: T,
+    connection_type: ConnectionType,
+) -> std::io::Result<SocketAddr> {
+    let resolved = tokio::net::lookup_host(addr).await?;
+
+    for candidate in resolved {
+        if connection_type.is_of_type(candidate) {
+            return Ok(candidate);
+        }
+    }
+
+    Err(std::io::ErrorKind::NotFound.into())
 }
 
 async fn fetch_support_data(

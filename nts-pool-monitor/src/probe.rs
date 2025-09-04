@@ -13,8 +13,10 @@ use tokio::{
 };
 
 use crate::{
+    IpVersion,
     nts::{KeyExchangeClient, NtsClientConfig, NtsError},
     packet::{Cipher, NtpLeapIndicator, NtpPacket},
+    resolve_as_version,
     time_types::{NtpTimestamp, PollInterval},
 };
 
@@ -79,6 +81,7 @@ pub struct SecuredNtpProbeResult {
 }
 
 struct NtpInputs {
+    ipprot: IpVersion,
     host: String,
     port: u16,
     cookie: Vec<u8>,
@@ -96,8 +99,12 @@ impl Probe {
         })
     }
 
-    pub async fn probe(&self, uuid: impl AsRef<str>) -> Result<ProbeResult, std::io::Error> {
-        let (keyexchange, next) = self.probe_keyexchange(uuid).await?;
+    pub async fn probe(
+        &self,
+        uuid: impl AsRef<str>,
+        ipprot: IpVersion,
+    ) -> Result<ProbeResult, std::io::Error> {
+        let (keyexchange, next) = self.probe_keyexchange(uuid, ipprot).await?;
 
         let (ntp_with_ke_cookie, next) = match next {
             None => (Default::default(), None),
@@ -119,8 +126,10 @@ impl Probe {
     async fn probe_keyexchange(
         &self,
         uuid: impl AsRef<str>,
+        ipprot: IpVersion,
     ) -> Result<(KeyExchangeProbeResult, Option<NtpInputs>), std::io::Error> {
-        let io = TcpStream::connect((self.poolke.as_str(), 4460)).await?;
+        let addr = resolve_as_version((self.poolke.as_str(), 4460), ipprot).await?;
+        let io = TcpStream::connect(addr).await?;
 
         let exchange_start = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -176,6 +185,7 @@ impl Probe {
                 num_cookies: ke_result.cookies.len(),
             },
             Some(NtpInputs {
+                ipprot,
                 host: ke_result.remote,
                 port: ke_result.port,
                 cookie: ke_result.cookies.into_iter().next().unwrap(),
@@ -200,35 +210,30 @@ impl Probe {
         let size = cursor.position() as usize;
         let msg = &buf[..size];
 
-        let Some(addr) = tokio::net::lookup_host((inputs.host.as_str(), inputs.port))
-            .await
-            .map(|mut v| v.next())
-            .or_else(|e| {
-                if e.raw_os_error().is_none() {
-                    Ok(None)
-                } else {
-                    Err(e)
+        let addr =
+            match resolve_as_version((inputs.host.as_str(), inputs.port), inputs.ipprot).await {
+                Ok(addr) => addr,
+                Err(e) if e.raw_os_error().is_none() => {
+                    return Ok((
+                        SecuredNtpProbeResult {
+                            status: SecuredNtpProbeStatus::DnsLookupFailed,
+                            request_sent: SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(),
+                            requested_cookies: 0,
+                            received_cookies: 0,
+                            roundtrip_duration: None,
+                            remote_residence_time: None,
+                            offset: None,
+                            stratum: None,
+                            leap_indicates_synchronized: false,
+                        },
+                        None,
+                    ));
                 }
-            })?
-        else {
-            return Ok((
-                SecuredNtpProbeResult {
-                    status: SecuredNtpProbeStatus::DnsLookupFailed,
-                    request_sent: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    requested_cookies: 0,
-                    received_cookies: 0,
-                    roundtrip_duration: None,
-                    remote_residence_time: None,
-                    offset: None,
-                    stratum: None,
-                    leap_indicates_synchronized: false,
-                },
-                None,
-            ));
-        };
+                Err(e) => return Err(e),
+            };
         let mut socket = timestamped_socket::socket::connect_address(
             addr,
             timestamped_socket::socket::GeneralTimestampMode::SoftwareAll,
@@ -337,6 +342,7 @@ impl Probe {
                 leap_indicates_synchronized: !matches!(msg.leap(), NtpLeapIndicator::Unknown),
             },
             msg.new_cookies().next().map(|cookie| NtpInputs {
+                ipprot: inputs.ipprot,
                 host: inputs.host,
                 port: inputs.port,
                 cookie,
@@ -372,6 +378,7 @@ mod tests {
 
         let findings = probe
             .probe_ntp(NtpInputs {
+                ipprot: IpVersion::IpV4,
                 host: "doesnotexist".into(),
                 port: 123,
                 cookie: b"1234".into(),
@@ -409,6 +416,11 @@ mod tests {
 
         let finding = probe
             .probe_ntp(NtpInputs {
+                ipprot: if server_addr.is_ipv4() {
+                    IpVersion::IpV4
+                } else {
+                    IpVersion::IpV6
+                },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
                 cookie: b"1234".into(),
@@ -453,6 +465,11 @@ mod tests {
 
         let finding = probe
             .probe_ntp(NtpInputs {
+                ipprot: if server_addr.is_ipv4() {
+                    IpVersion::IpV4
+                } else {
+                    IpVersion::IpV6
+                },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
                 cookie: b"1234".into(),
@@ -497,6 +514,11 @@ mod tests {
 
         let finding = probe
             .probe_ntp(NtpInputs {
+                ipprot: if server_addr.is_ipv4() {
+                    IpVersion::IpV4
+                } else {
+                    IpVersion::IpV6
+                },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
                 cookie: b"1234".into(),
@@ -548,6 +570,11 @@ mod tests {
 
         let finding = probe
             .probe_ntp(NtpInputs {
+                ipprot: if server_addr.is_ipv4() {
+                    IpVersion::IpV4
+                } else {
+                    IpVersion::IpV6
+                },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
                 cookie: b"1234".into(),

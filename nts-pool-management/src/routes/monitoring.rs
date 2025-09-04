@@ -7,9 +7,15 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+enum IpVersion {
+    IpV4,
+    IpV6,
+}
+
 #[derive(Serialize, Deserialize)]
 struct ProbeControlCommand {
-    timesources: Vec<String>,
+    timesources: Vec<(IpVersion, String)>,
     poolke: String,
     result_endpoint: String,
     result_batchsize: usize,
@@ -22,7 +28,10 @@ struct ProbeControlCommand {
 
 pub async fn get_work() -> impl IntoResponse {
     Json(ProbeControlCommand {
-        timesources: vec!["UUID-A".into(), "UUID-B".into()],
+        timesources: vec![
+            (IpVersion::IpV4, "UUID-A".into()),
+            (IpVersion::IpV4, "UUID-B".into()),
+        ],
         poolke: "localhost".into(),
         result_endpoint: "http://localhost:3000/monitoring/submit".into(),
         result_batchsize: 4,

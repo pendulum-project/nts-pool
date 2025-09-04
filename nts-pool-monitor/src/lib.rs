@@ -1,5 +1,6 @@
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt::Display, net::SocketAddr, path::PathBuf};
 
+use serde::{Deserialize, Serialize};
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::{cli::MonitorOptions, config::Config, control::run_probing, tracing::LogLevel};
@@ -17,6 +18,30 @@ mod tls_utils;
 mod tracing;
 
 use self::tracing as daemon_tracing;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+enum IpVersion {
+    IpV4,
+    IpV6,
+}
+
+async fn resolve_as_version<T: tokio::net::ToSocketAddrs>(
+    addr: T,
+    ipprot: IpVersion,
+) -> std::io::Result<SocketAddr> {
+    let resolved = tokio::net::lookup_host(addr).await?;
+
+    for candidate in resolved {
+        match (ipprot, candidate) {
+            (IpVersion::IpV4, SocketAddr::V4(_)) | (IpVersion::IpV6, SocketAddr::V6(_)) => {
+                return Ok(candidate);
+            }
+            _ => {}
+        }
+    }
+
+    Err(std::io::ErrorKind::NotFound.into())
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum NtpVersion {
