@@ -3,20 +3,20 @@
 {% block header %}<h1>Login</h1>{% endblock %}
 
 {% block content %}
-  <section class="login">
-    {% if login_error %}
-      <aside class="error">
-        <p>Invalid username or password, please try again.</p>
-      </aside>
-    {% endif %}
+  <section class="form">
     <form method="post">
+      {% if login_error %}
+        <aside class="error">
+          <p>Invalid username or password. Please try again.</p>
+        </aside>
+      {% endif %}
       <fieldset>
         <label for="email">E-mail</label>
         <input id="email" name="email" type="text" autocomplete="email username" required autofocus />
       </fieldset>
       <fieldset>
         <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
       </fieldset>
       <a href="/login/forgot-password">Forgot Password?</a>
       <button type="submit">Login</button>

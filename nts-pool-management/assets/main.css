@@ -82,8 +82,7 @@ footer {
   background-color: var(--background-alt);
 }
 
-section.login,
-section.register {
+section.form form {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -91,7 +90,22 @@ section.register {
 
   input[type="text"],
   input[type="password"] {
-    min-width: 24rem;
+  }
+
+  input[type="checkbox"] {
+    margin-right: var(--space-sm);
+  }
+
+  fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: 0;
+    border: 0;
+
+    label {
+      font-weight: bold;
+    }
   }
 }
 
