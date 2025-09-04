@@ -51,6 +51,10 @@ input[type="password"].error {
     border: var(--border-width) solid var(--error);
 }
 
+h1 {
+  font-size: 2.25rem;
+}
+
 h2 {
     margin-bottom: var(--space-sm);
 }
