@@ -3,21 +3,26 @@
 {% block header %}<h1>Activate registration</h1>{% endblock %}
 
 {% block content %}
-<section class="centered">
-  {% if let Some(reason) = resend_reason %}
-    <p>A new code was sent: {{reason|fmt("{:?}")}}</p>
-  {% endif %}
-</section>
-<section class="centered">
+  <section class="form">
+    <form class="login" method="post">
+      {% if let Some(reason) = resend_reason %}
+        <aside class="success">
+          <p>A new code is sent. Please check you email.</p>
+        </aside>
+      {% endif %}
+      {% if has_code_error %}
+        <aside class="error">
+          <p>Invalid activation code. Try again, or resend the activation code</p>
+        </aside>
+      {% endif %}
+      <fieldset>
+        <label for="activation_token">Activation Code</label>
+        <input id="activation_token" name="activation_token" type="text" autocomplete="one-time-code" required {% if has_code_error %}class="error"{% endif %} />
+      </fieldset>
+      <button type="submit" name="action" value="activate">Activate account</button>
+    </form>
+  </section>
   <form class="login" method="post">
-    <label for="activation_token">Activation Code</label>
-    <input id="activation_token" name="activation_token" type="text" placeholder="Activation Code" autocomplete="one-time-code" required {% if has_code_error %}class="error"{% endif %} />
-    <button type="submit" name="action" value="activate">Activate account</button>
+    <button type="submit" name="action" value="resend" class="btn-link">Resend activation code</button>
   </form>
-</section>
-<section class="centered">
-  <form class="login" method="post">
-    <button type="submit" name="action" value="resend" class="secondary">Resend activation code</button>
-  </form>
-</section>
 {% endblock %}

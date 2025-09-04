@@ -3,7 +3,7 @@
 {% block header %}<h1>Register</h1>{% endblock %}
 
 {% block content %}
-  <section class="register">
+  <section class="form">
   {% if !fields_with_errors.is_empty() %}
     <aside class="error">
       <p>There were some errors in the register form, please fix the invalid fields.</p>
@@ -12,11 +12,12 @@
     <form method="post">
       <fieldset>
         <label for="email">E-mail</label>
-        <input id="email" name="email" type="text" autocomplete="email username" value="{{ data_email.as_deref().unwrap_or_default() }}"required {% if fields_with_errors.contains(&"email") %}class="error"{% endif %} />
+        <input id="email" name="email" type="email" autocomplete="email username" value="{{ data_email.as_deref().unwrap_or_default() }}"required {% if fields_with_errors.contains(&"email") %}class="error"{% endif %} />
       </fieldset>
       <fieldset>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="new-password" required {% if fields_with_errors.contains(&"password") %}class="error"{% endif %} />
+        <p>The password needs to be at least 8 characters</p>
       </fieldset>
       <fieldset>
         <label for="confirm-password">Confirm Password</label>
@@ -24,8 +25,16 @@
       </fieldset>
       <fieldset>
         <label for="accept-terms">
-          <input id="accept-terms" name="accept_terms" type="checkbox" value="true" required {% if fields_with_errors.contains(&"accept_terms") %}class="error"{% endif %} />Agree to Terms</label>
-
+          <input
+            id="accept-terms"
+            name="accept_terms"
+            type="checkbox"
+            value="true"
+            required
+            {% if fields_with_errors.contains(&"accept_terms") %}class="error"{% endif %}
+          />
+          <span>Agree to Terms</span>
+        </label>
       </fieldset>
       <button type="submit">Register</button>
     </form>

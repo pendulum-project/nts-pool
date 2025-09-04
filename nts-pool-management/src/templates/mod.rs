@@ -50,3 +50,20 @@ pub fn unauthorized_page(context: AppContext) -> impl IntoResponse {
         HtmlTemplate(UnauthorizedTemplate { app: context }),
     )
 }
+
+#[derive(Template)]
+#[template(path = "error_page.html.j2")]
+struct ErrorTemplate {
+    app: AppContext,
+    message: String,
+}
+
+pub fn error_page(context: AppContext, message: String) -> impl IntoResponse {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        HtmlTemplate(ErrorTemplate {
+            app: context,
+            message,
+        }),
+    )
+}
