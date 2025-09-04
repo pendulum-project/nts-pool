@@ -17,6 +17,7 @@ allow = [
     "CDLA-Permissive-2.0",
     "Zlib",
     "0BSD",
+    "CC0-1.0",
 ]
 
 [[licenses.clarify]]
