@@ -11,7 +11,7 @@ use crate::{
     AppState,
     auth::NotLoggedInError,
     context::AppContext,
-    templates::{not_found_page, unauthorized_page},
+    templates::{error_page, not_found_page, unauthorized_page},
 };
 
 #[derive(Debug, derive_more::Display, derive_more::Error)]
@@ -48,11 +48,7 @@ pub async fn error_middleware(
         } else if error.downcast_ref::<NotLoggedInError>().is_some() {
             unauthorized_page(context).into_response()
         } else {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Something went wrong: {}", error),
-            )
-                .into_response()
+            error_page(context, error.to_string()).into_response()
         }
     } else {
         response

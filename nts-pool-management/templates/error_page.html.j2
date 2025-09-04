@@ -1,11 +1,12 @@
-
 {% extends "layout.html.j2" %}
 
 {% block header %}<h1>Something went wrong</h1>{% endblock %}
 
 {% block content %}
-<article>
-  <p>{{ message }}</p>
+<section>
+  <article>{{ message }}</article>
+</section>
+<section>
   <a href="/">Back to the home page</a>
-</article>
+</section>
 {% endblock %}
