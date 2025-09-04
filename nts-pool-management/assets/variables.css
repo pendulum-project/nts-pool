@@ -12,6 +12,8 @@
   --white: #ffffff;
   --black: #000000;
   --error: #ce4242;
+  --success: #74ce42;
+  --link: #0a57f0;
 
   /* spacing */
   --space-xs: 0.5rem;
