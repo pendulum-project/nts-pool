@@ -37,7 +37,7 @@ use tokio::{
 use tracing::{error, warn};
 
 use crate::{
-    NtpVersion,
+    IpVersion, NtpVersion,
     config::ProbeControlConfig,
     nts::NtsClientConfig,
     probe::{Probe, ProbeConfig, ProbeResult},
@@ -45,7 +45,7 @@ use crate::{
 
 #[derive(Serialize, Deserialize)]
 struct ProbeControlCommand {
-    timesources: HashSet<String>,
+    timesources: HashSet<(IpVersion, String)>,
     poolke: String,
     result_endpoint: String,
     result_batchsize: usize,
@@ -67,7 +67,7 @@ trait ProbeExecutor {
 
     fn run_probe(
         self: Arc<Self>,
-        timesource: String,
+        timesource: (IpVersion, String),
     ) -> impl Future<Output = Result<Self::Output, std::io::Error>> + Send;
 }
 
@@ -90,9 +90,9 @@ impl ProbeExecutor for Probe {
 
     async fn run_probe(
         self: Arc<Self>,
-        timesource: String,
+        timesource: (IpVersion, String),
     ) -> Result<Self::Output, std::io::Error> {
-        self.probe(timesource).await
+        self.probe(timesource.1, timesource.0).await
     }
 }
 
@@ -111,7 +111,7 @@ async fn run_probing_inner<
     config: ProbeControlConfig,
     mut stop: S,
 ) -> (
-    tokio::sync::mpsc::Receiver<(String, T::Output)>,
+    tokio::sync::mpsc::Receiver<((IpVersion, String), T::Output)>,
     Arc<RwLock<Arc<ProbeControlCommand>>>,
 ) {
     let command = match M::get_command(&config).await {
@@ -146,9 +146,9 @@ async fn run_probing_inner<
     let config = Arc::new(config);
 
     let (new_work_sender, mut new_work) =
-        tokio::sync::mpsc::unbounded_channel::<(Instant, String)>();
+        tokio::sync::mpsc::unbounded_channel::<(Instant, (IpVersion, String))>();
     let (result_sender, result_receiver) =
-        tokio::sync::mpsc::channel::<(String, T::Output)>(MAX_RESULT_QUEUE_SIZE);
+        tokio::sync::mpsc::channel::<((IpVersion, String), T::Output)>(MAX_RESULT_QUEUE_SIZE);
     let permitter = Arc::new(tokio::sync::Semaphore::new(MAX_PARALLEL_PROBES));
 
     let mut last_new_work = None;
@@ -264,7 +264,7 @@ async fn run_probing_inner<
 }
 
 async fn run_result_reporter<T: Send + Serialize + 'static>(
-    mut results: tokio::sync::mpsc::Receiver<(String, T)>,
+    mut results: tokio::sync::mpsc::Receiver<((IpVersion, String), T)>,
     settings: Arc<RwLock<Arc<ProbeControlCommand>>>,
     config: ProbeControlConfig,
 ) {
@@ -273,7 +273,7 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
 
     loop {
         enum Task<T> {
-            Recv { result: (String, T) },
+            Recv { result: ((IpVersion, String), T) },
             Stop,
             Send,
             Continue,
@@ -364,6 +364,7 @@ mod tests {
     };
 
     use crate::{
+        IpVersion,
         config::ProbeControlConfig,
         control::{
             ManagementRequestor, ProbeControlCommand, ProbeExecutor, ReqwestManagementRequestor,
@@ -374,7 +375,7 @@ mod tests {
     struct NoopProbe;
 
     impl ProbeExecutor for NoopProbe {
-        type Output = String;
+        type Output = (IpVersion, String);
 
         fn from_command(_config: &ProbeControlConfig, _command: &ProbeControlCommand) -> Self {
             NoopProbe
@@ -382,7 +383,7 @@ mod tests {
 
         async fn run_probe(
             self: Arc<Self>,
-            timesource: String,
+            timesource: (IpVersion, String),
         ) -> Result<Self::Output, std::io::Error> {
             Ok(timesource)
         }
@@ -397,7 +398,7 @@ mod tests {
             let (mut conn, _) = server.accept().await.unwrap();
             let mut req = [0u8; 4096];
             let _ = conn.read(&mut req).await.unwrap();
-            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 329\r\n\r\n{\"timesources\":[\"UUID-A\",\"UUID-B\"],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
+            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 347\r\n\r\n{\"timesources\":[[\"IpV4\",\"UUID-A\"],[\"IpV6\",\"UUID-B\"]],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
             conn.shutdown().await.unwrap();
         });
 
@@ -434,7 +435,8 @@ mod tests {
             }
         });
 
-        let (channel_send, channel_recv) = tokio::sync::mpsc::channel::<(String, String)>(100);
+        let (channel_send, channel_recv) =
+            tokio::sync::mpsc::channel::<((IpVersion, String), String)>(100);
         let command = Arc::new(RwLock::new(Arc::new(ProbeControlCommand {
             timesources: [].into(),
             poolke: "".into(),
@@ -457,31 +459,43 @@ mod tests {
             },
         ));
 
-        channel_send.send(("a".into(), "b".into())).await.unwrap();
+        channel_send
+            .send(((IpVersion::IpV4, "a".into()), "b".into()))
+            .await
+            .unwrap();
         assert!(
             server_incoming_recv
                 .recv()
                 .await
                 .unwrap()
-                .ends_with(br#"[["a","b"]]"#)
+                .ends_with(br#"[[["IpV4","a"],"b"]]"#)
         );
 
-        channel_send.send(("c".into(), "d".into())).await.unwrap();
-        channel_send.send(("e".into(), "f".into())).await.unwrap();
-        channel_send.send(("g".into(), "h".into())).await.unwrap();
+        channel_send
+            .send(((IpVersion::IpV4, "c".into()), "d".into()))
+            .await
+            .unwrap();
+        channel_send
+            .send(((IpVersion::IpV6, "e".into()), "f".into()))
+            .await
+            .unwrap();
+        channel_send
+            .send(((IpVersion::IpV6, "g".into()), "h".into()))
+            .await
+            .unwrap();
         assert!(
             server_incoming_recv
                 .recv()
                 .await
                 .unwrap()
-                .ends_with(br#"[["c","d"],["e","f"]]"#)
+                .ends_with(br#"[[["IpV4","c"],"d"],[["IpV6","e"],"f"]]"#)
         );
         assert!(
             server_incoming_recv
                 .recv()
                 .await
                 .unwrap()
-                .ends_with(br#"[["g","h"]]"#)
+                .ends_with(br#"[[["IpV6","g"],"h"]]"#)
         );
 
         drop(channel_send);
@@ -498,7 +512,11 @@ mod tests {
                 _config: &ProbeControlConfig,
             ) -> Result<ProbeControlCommand, std::io::Error> {
                 Ok(ProbeControlCommand {
-                    timesources: ["A".to_string(), "B".to_string()].into(),
+                    timesources: [
+                        (IpVersion::IpV4, "A".to_string()),
+                        (IpVersion::IpV4, "B".to_string()),
+                    ]
+                    .into(),
                     poolke: "".into(),
                     result_endpoint: "".into(),
                     result_batchsize: 1,
@@ -524,20 +542,38 @@ mod tests {
         let a = recv.recv().await.unwrap();
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
-        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
-        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+        assert!(
+            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+        );
+        assert!(
+            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+        );
 
         let a = recv.recv().await.unwrap();
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
-        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
-        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+        assert!(
+            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+        );
+        assert!(
+            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+        );
 
         let a = recv.recv().await.unwrap();
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
-        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
-        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+        assert!(
+            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+        );
+        assert!(
+            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+        );
 
         assert!(recv.recv().await.is_none())
     }
@@ -554,7 +590,11 @@ mod tests {
                     0 => {
                         INDEX.store(1, std::sync::atomic::Ordering::SeqCst);
                         ProbeControlCommand {
-                            timesources: ["A".to_string(), "B".to_string()].into(),
+                            timesources: [
+                                (IpVersion::IpV4, "A".to_string()),
+                                (IpVersion::IpV4, "B".to_string()),
+                            ]
+                            .into(),
                             poolke: "".into(),
                             result_endpoint: "".into(),
                             result_batchsize: 1,
@@ -568,7 +608,7 @@ mod tests {
                     1 => {
                         INDEX.store(2, std::sync::atomic::Ordering::SeqCst);
                         ProbeControlCommand {
-                            timesources: ["B".to_string()].into(),
+                            timesources: [(IpVersion::IpV4, "B".to_string())].into(),
                             poolke: "".into(),
                             result_endpoint: "".into(),
                             result_batchsize: 1,
@@ -580,7 +620,11 @@ mod tests {
                         }
                     }
                     _ => ProbeControlCommand {
-                        timesources: ["B".to_string(), "C".to_string()].into(),
+                        timesources: [
+                            (IpVersion::IpV4, "B".to_string()),
+                            (IpVersion::IpV4, "C".to_string()),
+                        ]
+                        .into(),
                         poolke: "".into(),
                         result_endpoint: "".into(),
                         result_batchsize: 1,
@@ -607,13 +651,31 @@ mod tests {
         let a = recv.recv().await.unwrap();
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
-        assert!(a == ("A".into(), "A".into()) || b == ("A".into(), "A".into()));
-        assert!(a == ("B".into(), "B".into()) || b == ("B".into(), "B".into()));
+        assert!(
+            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+        );
+        assert!(
+            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+        );
 
-        assert_eq!(recv.recv().await.unwrap(), ("B".into(), "B".into()));
-        assert_eq!(recv.recv().await.unwrap(), ("C".into(), "C".into()));
-        assert_eq!(recv.recv().await.unwrap(), ("B".into(), "B".into()));
-        assert_eq!(recv.recv().await.unwrap(), ("C".into(), "C".into()));
+        assert_eq!(
+            recv.recv().await.unwrap(),
+            ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+        );
+        assert_eq!(
+            recv.recv().await.unwrap(),
+            ((IpVersion::IpV4, "C".into()), (IpVersion::IpV4, "C".into()))
+        );
+        assert_eq!(
+            recv.recv().await.unwrap(),
+            ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+        );
+        assert_eq!(
+            recv.recv().await.unwrap(),
+            ((IpVersion::IpV4, "C".into()), (IpVersion::IpV4, "C".into()))
+        );
         assert!(recv.recv().await.is_none())
     }
 }
