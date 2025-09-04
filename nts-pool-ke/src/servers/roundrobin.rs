@@ -14,7 +14,7 @@ use crate::{
     config::{BackendConfig, KeyExchangeServer},
     error::PoolError,
     nts::{AlgorithmDescription, AlgorithmId, ProtocolId},
-    servers::{Server, ServerManager, fetch_support_data},
+    servers::{ConnectionType, Server, ServerManager, fetch_support_data, resolve_with_type},
 };
 
 pub struct RoundRobinServerManager {
@@ -120,15 +120,19 @@ impl Server for RoundRobinServer<'_> {
         PoolError,
     > {
         fetch_support_data(
-            self.connect().await?,
+            self.connect(ConnectionType::Either).await?,
             &self.owner.allowed_protocols,
             self.owner.timeout,
         )
         .await
     }
 
-    async fn connect(&self) -> Result<Self::Connection<'_>, PoolError> {
-        let io = TcpStream::connect(self.server.connection_address.clone()).await?;
+    async fn connect(
+        &self,
+        connection_type: ConnectionType,
+    ) -> Result<Self::Connection<'_>, PoolError> {
+        let addr = resolve_with_type(&self.server.connection_address, connection_type).await?;
+        let io = TcpStream::connect(addr).await?;
         Ok(self
             .owner
             .upstream_tls
