@@ -26,7 +26,7 @@
           {{ disabled_since.format("%Y-%m-%d %H:%M") }}
         {% endif %}
       </td>
-      <td class="action">
+      <td class="actions">
         {% if !(app.user|is_me(user)) %}
           {% if user.is_disabled() %}
             <form action="/admin/users/{{ user.id }}/unblock" method="POST">
@@ -38,7 +38,7 @@
             </form>
             {% if app.parent_user.is_none() %}
               <form action="/admin/users/{{ user.id }}/login-as" method="POST">
-                <button class="btn-sm" type="submit">Login as</button>
+                <button class="btn-sm btn-alt" type="submit">Login as</button>
               </form>
             {% endif %}
           {% endif %}
