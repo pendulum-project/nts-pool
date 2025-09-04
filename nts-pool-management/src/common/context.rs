@@ -8,7 +8,7 @@ use eyre::{Context, OptionExt};
 
 use crate::{
     AppState,
-    auth::{IntoUserOption, LoggedInFrom, UnsafeLoggedInUser},
+    auth::{Administrator, IntoUserOption, Session, UnsafeLoggedInUser},
     config::BaseUrl,
     error::AppError,
 };
@@ -17,7 +17,7 @@ use crate::{
 pub struct AppContext {
     pub path: String,
     pub user: Option<UnsafeLoggedInUser>,
-    pub parent_user: Option<LoggedInFrom>,
+    pub parent_user: Option<Administrator>,
     pub base_url: BaseUrl,
 }
 
@@ -70,17 +70,16 @@ async fn extract_context(parts: &mut Parts, state: &AppState) -> Result<AppConte
         .wrap_err("Cannot extract original URI")?;
     let path = uri.path().to_string();
 
-    let user = parts
+    let (user, parent_user) = parts
         .extensions
-        .get::<Option<UnsafeLoggedInUser>>()
-        .cloned()
-        .flatten();
-
-    let parent_user = parts
-        .extensions
-        .get::<Option<LoggedInFrom>>()
-        .cloned()
-        .flatten();
+        .get::<Option<Session>>()
+        .and_then(|outer| {
+            outer
+                .as_ref()
+                .map(|session| (session.user().clone(), session.parent().cloned()))
+        })
+        .unzip();
+    let parent_user = parent_user.flatten();
 
     Ok(AppContext {
         path,

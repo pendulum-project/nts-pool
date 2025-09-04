@@ -1,11 +1,7 @@
-use std::convert::Infallible;
-
 use axum::{
-    RequestExt, RequestPartsExt,
-    extract::{FromRef, FromRequestParts, OptionalFromRequestParts, Request, State},
+    RequestPartsExt,
+    extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
     http::request::Parts,
-    middleware::Next,
-    response::{IntoResponse, Response},
 };
 use axum_extra::extract::{
     CookieJar,
@@ -17,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::{
-    AppState, DbConnLike, InfallibleUnwrap,
+    DbConnLike, InfallibleUnwrap,
     error::AppError,
     models::user::{User, UserId, UserRole},
 };
@@ -273,169 +269,208 @@ impl TryFrom<AuthorizedUser> for Administrator {
     }
 }
 
-#[derive(Debug, Clone, derive_more::Deref, derive_more::Into, derive_more::From)]
-pub struct LoggedInFrom(Administrator);
-
-/// Middleware that retrieves the user session from the request.
-pub async fn auth_middleware(
-    State(state): State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Response {
-    let cookie_jar = request
-        .extract_parts::<CookieJar>()
-        .await
-        .infallible_unwrap();
-
-    let (current_user, claims) = if let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) {
-        let decoding_key = DecodingKey::from_ref(&state);
-        match validate_jwt(cookie.value(), &decoding_key) {
-            // get_by_id returns None if no user is found, which means the JWT will be ignored
-            Ok(claims) => match crate::models::user::get_by_id(&state.db, claims.sub)
-                .await
-                .wrap_err("Failed to retrieve user from database")
-            {
-                Ok(user) => (user, Some(claims)),
-                Err(e) => {
-                    return AppError::from(e).into_response();
-                }
-            },
-            Err(e) => match e.downcast_ref::<jsonwebtoken::errors::Error>() {
-                Some(e) if *e.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                    // expected failure, ignore and no longer allow session for logged in user
-                    (None, None)
-                }
-                Some(e) => {
-                    // we ignore other kinds of jwt errors as well, but log them for debugging purposes
-                    debug!("JWT validation error: {e}");
-                    (None, None)
-                }
-                _ => {
-                    // other errors are weird, they result in a server error
-                    return AppError::from(
-                        e.into_inner()
-                            .wrap_err("Session state has unexpected invalid data"),
-                    )
-                    .into_response();
-                }
-            },
-        }
-    } else {
-        // There is no session cookie, so user is not logged in
-        (None, None)
-    };
-
-    let logged_in_from = if let Some(claims) = &claims
-        && let Some(parent_user_id) = claims.parent
-    {
-        match get_parent_user(&state, parent_user_id).await {
-            Ok(admin) => Some(admin),
-            Err(e) => return e.into_response(),
-        }
-    } else {
-        None
-    };
-
-    if let Some(claims_data) = &claims
-        && let Some(logged_in_from_data) = &logged_in_from
-        && claims_data.session_revoke_token == logged_in_from_data.0.session_revoke_token
-    {
-        request.extensions_mut().insert(logged_in_from);
-        request
-            .extensions_mut()
-            .insert(current_user.map(UnsafeLoggedInUser));
-        request.extensions_mut().insert(claims);
-    } else if let Some(claims_data) = &claims
-        && let Some(current_user_data) = &current_user
-        && logged_in_from.is_none()
-        && claims_data.session_revoke_token == current_user_data.session_revoke_token
-    {
-        request.extensions_mut().insert(logged_in_from);
-        request
-            .extensions_mut()
-            .insert(current_user.map(UnsafeLoggedInUser));
-        request.extensions_mut().insert(claims);
-    } else {
-        request.extensions_mut().insert(None::<LoggedInFrom>);
-        request.extensions_mut().insert(None::<UnsafeLoggedInUser>);
-        request.extensions_mut().insert(None::<JwtClaims>);
-    }
-    next.run(request).await
+struct RawSession {
+    claims: JwtClaims,
+    user: UnsafeLoggedInUser,
+    parent: Option<Administrator>,
 }
 
-async fn get_parent_user(
-    state: &AppState,
-    parent_user_id: UserId,
-) -> Result<LoggedInFrom, AppError> {
-    let parent_user = crate::models::user::get_by_id(&state.db, parent_user_id)
-        .await
-        .wrap_err("Failed to retrieve parent user from database")?
-        .ok_or_eyre("Parent user not found")?;
+/// A valid user session
+///
+/// This guarantees
+///  - That the claims correspond to the user
+///  - That the parent is filled in if present in the claims
+///  - That the session revocation token is consistent between claims and user/parent.
+#[derive(Debug, Clone)]
+pub struct Session {
+    claims: JwtClaims,
+    user: UnsafeLoggedInUser,
+    parent: Option<Administrator>,
+}
+
+impl Session {
+    fn try_from_raw(raw: RawSession) -> Option<Session> {
+        if raw
+            .parent
+            .as_ref()
+            .map(|admin| &admin.session_revoke_token)
+            .unwrap_or(&raw.user.session_revoke_token)
+            == &raw.claims.session_revoke_token
+            && (raw.claims.parent.is_some() == raw.parent.is_some())
+        {
+            Some(Session {
+                claims: raw.claims,
+                user: raw.user,
+                parent: raw.parent,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn claims(&self) -> &JwtClaims {
+        &self.claims
+    }
+
+    pub fn user(&self) -> &UnsafeLoggedInUser {
+        &self.user
+    }
+
+    pub fn parent(&self) -> Option<&Administrator> {
+        self.parent.as_ref()
+    }
+}
+
+async fn get_parent_user<S>(state: &S, parent_user_id: UserId) -> Result<Administrator, AppError>
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+{
+    let parent_user =
+        crate::models::user::get_by_id(&sqlx::PgPool::from_ref(state), parent_user_id)
+            .await
+            .wrap_err("Failed to retrieve parent user from database")?
+            .ok_or_eyre("Parent user not found")?;
     let admin = Administrator::try_from(
         AuthorizedUser::try_from(parent_user).wrap_err("Parent user is blocked or disabled")?,
     )
     .wrap_err("Parent user is not an administrator")?;
-    Ok(LoggedInFrom(admin))
+    Ok(admin)
 }
 
-impl<S: Send + Sync> OptionalFromRequestParts<S> for JwtClaims {
-    type Rejection = Infallible;
+impl<S> OptionalFromRequestParts<S> for Session
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
+    type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &S,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let claims = parts
-            .extensions
-            .get::<Option<JwtClaims>>()
-            .cloned()
-            .flatten();
-        Ok(claims)
+        // Ensure we do the parsing only once
+        if let Some(previous) = parts.extensions.get::<Option<Session>>() {
+            return Ok(previous.clone());
+        }
+
+        let cookie_jar = parts.extract::<CookieJar>().await.infallible_unwrap();
+
+        let Some(cookie) = cookie_jar.get(AUTH_COOKIE_NAME) else {
+            parts.extensions.insert(None::<Option<Session>>);
+            return Ok(None);
+        };
+
+        let Some(claims) = validate_jwt(cookie.value(), &DecodingKey::from_ref(state))
+            .map(Some)
+            .or_else(|e| match e.downcast_ref::<jsonwebtoken::errors::Error>() {
+                Some(e) => {
+                    if *e.kind() != jsonwebtoken::errors::ErrorKind::ExpiredSignature {
+                        debug!("JWT validation error: {e}");
+                    }
+                    Ok(None)
+                }
+                _ => Err(e),
+            })?
+        else {
+            parts.extensions.insert(None::<Option<Session>>);
+            return Ok(None);
+        };
+
+        let db = sqlx::PgPool::from_ref(state);
+
+        let Some(user) = crate::models::user::get_by_id(&db, claims.sub)
+            .await
+            .wrap_err("Failed to retrieve user from database")?
+        else {
+            parts.extensions.insert(None::<Option<Session>>);
+            return Ok(None);
+        };
+
+        let parent = if let Some(parent_user_id) = claims.parent {
+            Some(get_parent_user(state, parent_user_id).await?)
+        } else {
+            None
+        };
+
+        let session = Session::try_from_raw(RawSession {
+            claims,
+            user: UnsafeLoggedInUser(user),
+            parent,
+        });
+
+        parts.extensions.insert(session.clone());
+
+        Ok(session)
     }
 }
 
-impl<S: Send + Sync> FromRequestParts<S> for JwtClaims {
+impl<S> OptionalFromRequestParts<S> for JwtClaims
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        let session = parts
+            .extract_with_state::<Option<Session>, _>(state)
+            .await?;
+        Ok(session.map(|session| session.claims().clone()))
+    }
+}
+
+impl<S> FromRequestParts<S> for JwtClaims
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
+{
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let claims = parts
-            .extract_with_state::<Option<JwtClaims>, S>(state)
-            .await
-            .infallible_unwrap();
+            .extract_with_state::<Option<JwtClaims>, _>(state)
+            .await?;
         Ok(claims.ok_or_eyre(NotLoggedInError)?)
     }
 }
 
 impl<S> OptionalFromRequestParts<S> for UnsafeLoggedInUser
 where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        _state: &S,
+        state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
-        let user = parts
-            .extensions
-            .get::<Option<UnsafeLoggedInUser>>()
-            .ok_or_eyre("No user in request extensions")?
-            .clone();
-        Ok(user)
+        let session = parts
+            .extract_with_state::<Option<Session>, _>(state)
+            .await?;
+        Ok(session.map(|session| session.user().clone()))
     }
 }
 
 impl<S> FromRequestParts<S> for UnsafeLoggedInUser
 where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<UnsafeLoggedInUser>, S>(state)
+            .extract_with_state::<Option<UnsafeLoggedInUser>, _>(state)
             .await
         {
             Ok(Some(session)) => Ok(session),
@@ -447,8 +482,9 @@ where
 
 impl<S> OptionalFromRequestParts<S> for AuthorizedUser
 where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
 {
     type Rejection = AppError;
 
@@ -457,7 +493,7 @@ where
         state: &S,
     ) -> Result<Option<Self>, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<UnsafeLoggedInUser>, S>(state)
+            .extract_with_state::<Option<UnsafeLoggedInUser>, _>(state)
             .await
         {
             Ok(Some(session)) => Ok(Some(
@@ -474,14 +510,15 @@ where
 
 impl<S> FromRequestParts<S> for AuthorizedUser
 where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         match parts
-            .extract_with_state::<Option<AuthorizedUser>, S>(state)
+            .extract_with_state::<Option<AuthorizedUser>, _>(state)
             .await
         {
             Ok(Some(session)) => Ok(session),
@@ -493,13 +530,14 @@ where
 
 impl<S> FromRequestParts<S> for Administrator
 where
-    S: Send + Sync,
-    DecodingKey: FromRef<S>,
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+    jsonwebtoken::DecodingKey: FromRef<S>,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match parts.extract_with_state::<AuthorizedUser, S>(state).await {
+        match parts.extract_with_state::<AuthorizedUser, _>(state).await {
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
         }
