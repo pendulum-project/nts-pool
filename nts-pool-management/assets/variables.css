@@ -19,6 +19,8 @@
   --space-xs: 0.5rem;
   --space-sm: 1rem;
   --space-md: 2.5rem;
+  --space-lg: 5rem;
+  --space-xl: 10rem;
 
   --border-radius: 0.75rem;
   --border-width: 2px;

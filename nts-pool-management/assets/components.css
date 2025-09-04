@@ -26,10 +26,6 @@ a.btn:hover,
     cursor: pointer;
 }
 
-.action-btn {
-    padding: var(--space-xs) var(--space-sm);
-}
-
 .btn-alt {
     background-color: color-mix(in lab, var(--primary), var(--white) 90%);
 }
@@ -44,8 +40,14 @@ a.btn:hover,
     text-decoration: underline;
 }
 
+.btn-sm {
+    max-width: fit-content;
+    padding: var(--space-xs) var(--space-sm);
+}
+
 input[type="text"],
 input[type="email"],
+input[type="number"],
 input[type="password"] {
     padding: var(--space-sm);
     border: var(--border-width) solid var(--grey);
@@ -54,12 +56,14 @@ input[type="password"] {
 
 input[type="text"]:hover,
 input[type="email"]:hover,
+input[type="number"]:hover,
 input[type="password"]:hover {
     border: var(--border-width) solid var(--primary);
 }
 
 input[type="text"].error,
 input[type="email"].error,
+input[type="number"].error,
 input[type="password"].error {
     border: var(--border-width) solid var(--error);
     background-color: var(--white);
@@ -85,11 +89,22 @@ h2 {
 }
 
 dd {
+    font-weight: var(--bold);
     margin-top: var(--space-sm);
 }
 
 dt {
     padding-left: var(--space-sm);
+
+    input[type="text"],
+    input[type="number"],
+    input[type="password"] {
+        margin-top: var(--space-xs);
+    }
+
+    input[type="number"] {
+        max-width: var(--space-xl);
+    }
 }
 
 details.confirmation-btn {
