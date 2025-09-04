@@ -32,6 +32,7 @@ axum = "0.8.4"
 axum-extra = "0.10.1"
 chrono = "0.4.41"
 maxminddb = "0.26.0"
+notify = "8.2.0"
 phf = { version = "0.12.1", features = ["macros"] }
 rand = "0.9.1"
 reqwest = { version = "0.12.15", default-features = false }
