@@ -1,5 +1,5 @@
 [
-    {"uuid": "UUID-a", "domain": "a.test", "port": 4460, "regions": ["EUROPE", "NL"]},
-    {"uuid": "UUID-b", "domain": "b.test", "port": 4460},
-    {"uuid": "UUID-c", "domain": "c.test", "port": 4460, "regions": ["ASIA", "NL", "BE"]}
+    {"uuid": "UUID-a", "domain": "a.test", "port": 4460, "regions": ["EUROPE", "NL"], "ipv4_capable": true, "ipv6_capable": true},
+    {"uuid": "UUID-b", "domain": "b.test", "port": 4460, "ipv4_capable": false},
+    {"uuid": "UUID-c", "domain": "c.test", "port": 4460, "regions": ["ASIA", "NL", "BE"], "ipv6_capable": false}
 ]
