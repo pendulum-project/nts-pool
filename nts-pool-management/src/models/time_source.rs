@@ -19,6 +19,7 @@ pub struct TimeSource {
     pub hostname: String,
     pub port: Option<Port>,
     pub countries: Vec<String>,
+    pub weight: i32,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -65,7 +66,7 @@ pub async fn create(
         r#"
             INSERT INTO time_sources (owner, hostname, port)
             VALUES ($1, $2, $3)
-            RETURNING id, owner, hostname, port AS "port: _", countries
+            RETURNING id, owner, hostname, port AS "port: _", countries, weight
         "#,
         owner as _,
         new_time_source.hostname,
@@ -102,7 +103,7 @@ pub async fn by_user(
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries
+            SELECT id, owner, hostname, port AS "port: _", countries, weight
             FROM time_sources
             WHERE owner = $1 AND deleted = false;
         "#,
