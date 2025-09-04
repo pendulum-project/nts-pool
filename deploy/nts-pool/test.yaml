@@ -1,0 +1,200 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ke-config
+data:
+  config: |
+    # part of the test setup for the NTS pool KE. Do not use in production!
+    # (the private key of the certificate is public!)
+    [server]
+    listen = "[::]:4460"
+    certificate-chain = "./end.fullchain.pem"
+    private-key = "./end.key"
+    max-connections = 100
+    monitoring-keys = ["testmonitor"]
+    use-proxy-protocol = true
+
+    [backend]
+    upstream-cas = "./testca.pem"
+    allowed-protocols = [0]
+    certificate-chain = "./end.fullchain.pem"
+    private-key = "./end.key"
+    key-exchange-servers = "./servers.json"
+  servers: |
+    [
+        { "uuid": "UUID-A", "domain": "time-a", "port": 4460 },
+        { "uuid": "UUID-B", "domain": "time-b", "port": 4460 }
+    ]
+  cas: |
+    -----BEGIN CERTIFICATE-----
+    MIIDkTCCAnmgAwIBAgIUSJ4RLbU532cpXBrIPM0dgLjFoRowDQYJKoZIhvcNAQEL
+    BQAwVzELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+    GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDEQMA4GA1UEAwwHVGVzdCBDQTAgFw0y
+    MzAxMjAwOTQzMzdaGA80NzYwMTIxNzA5NDMzN1owVzELMAkGA1UEBhMCQVUxEzAR
+    BgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5
+    IEx0ZDEQMA4GA1UEAwwHVGVzdCBDQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+    AQoCggEBALzqkvECUcCFlg4cldjWKD1/X2e+FPrMBesmUCDExAtGYIjJy2YFovFL
+    20eNFa4K3QK61MfsmnbhC97Q3Nrm2tFiDXdM1XjnnbGk/GKtTH/cS/v5FQt+8kbj
+    YPKkxfwo02Nhgf8r0Ttsg439tuT+qpw3CymVzEZDllhYFL0EDq5JHAx9Sz5RiXm4
+    1+4E0ahWpWbTagiG/Ldgk/sXCTZvxsCw7gbULKSVEbaN+cW+pXqkD3YSvrnYCPtk
+    /8OK7llBCtDC9puDIntrd5z6tIxCbj3jnfb9Ek/Pb/AmK04NF5OPw+eUgEwteSde
+    lNInFgNnlEPikNrkDAmBydLuEX7yCO8CAwEAAaNTMFEwHQYDVR0OBBYEFHdVrpWw
+    rf3bQ1WPu2uRCK21yG2lMB8GA1UdIwQYMBaAFHdVrpWwrf3bQ1WPu2uRCK21yG2l
+    MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAFHWNTDdy9BbCoX5
+    RRvP0S4V0g8HcaWohYuI7uNsDwW/xvOsJ7u+1rjv/Hx3lOCtnEHCAS5peJQenf6Y
+    uQSXbt2BVX7U01TzGKC9y47yxgovpdKJDiJodWSGs6sZP/4x3M5AbGmhmdfSBFAZ
+    /fchAzZPWd5FdYBEaT5J1nnXDCe3G5Aa43zvZzN8i/YCJ376yB7Vt6qUW8L70o9X
+    ++snpnom2bvIKwkO4Z9jBY6njrpYjE212N1OY+eYRLknOdJlFuy6kGO2ipEoPKt/
+    +vur95a6fTo8WiU2kYQc649XiPNW53v1epWNFJCRoOFietIVrKANWuqQB7xVYuIG
+    Yo0A3Sw=
+    -----END CERTIFICATE-----
+  cert: |
+    -----BEGIN CERTIFICATE-----
+    MIIDsTCCApmgAwIBAgIUaNuir1ru01VEHIHC8baug66nkbQwDQYJKoZIhvcNAQEL
+    BQAwVzELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+    GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDEQMA4GA1UEAwwHVGVzdCBDQTAeFw0y
+    NTAyMjcwOTA3MTJaFw0yNjAyMjcwOTA3MTJaMEUxCzAJBgNVBAYTAkFVMRMwEQYD
+    VQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBM
+    dGQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDd0nhS+SWqtQMyIMuX
+    /WMopeUH6u+WljlUEXpxZQKa3KL0+3r4byo51D8R6OF05zG3ANw4NCSMKfRBpK/+
+    wb/QvVFi4Ib8wmrNJI019UE/gzbnDfg5QaMvztusAHZF2wkELRjgX/DdVBWXkQ1W
+    jA9052XyPZs+zTbVg6Am6n3GOmKoCI2n0TIY9sKG+ZCJFfE+TzQU0z7r9OnvnT0Z
+    BZ4poOgG8GbxTCr3dRfM+tLh8MLLMOZ3CKunGaMHD4zdeDm4l7fYZ6/jXVoZrbio
+    2/uj9+KjhhKi+xTIBc8zug91piotN0uCuxdawgt0EtjaO4czQoLl3D/WNNSez4rl
+    HLeVAgMBAAGjgYYwgYMwHwYDVR0jBBgwFoAUd1WulbCt/dtDVY+7a5EIrbXIbaUw
+    CQYDVR0TBAIwADALBgNVHQ8EBAMCA6gwEwYDVR0lBAwwCgYIKwYBBQUHAwEwFAYD
+    VR0RBA0wC4IJbG9jYWxob3N0MB0GA1UdDgQWBBT18h+AQlYckl0KMVOGK14oPlsM
+    NDANBgkqhkiG9w0BAQsFAAOCAQEAm6ZnJcT3IfF+1Y8P0NjkqG/U5CyPmEstwyFX
+    zxnRP9ILmtQ2l+9V10KQ+STNKqyQWsfJ/+F71nKjOBzkS8cHDidVDZ1Y/3JoLByf
+    sIbdA6XQVMLCNKDgLCJ33h8r0yDiucu1RRKQUIdMyLHnhNbPQtMpdFq8B2CjOi36
+    tD36Ah/nAzVDCxUg2wvcc/aLqmMyZVmFqjjDtOqLlPQIJ4iiUT2MYw7avqVWq8br
+    t0+3ezAGkMuTqjsBiTM/ov6l7OS12hFL/u+kA4lG38UuCkLoDjjG5QEu9d4q347l
+    Y3C1v7K1YDXkXmX28sRQgAqzKVfTIRcbcvKgu4jx4EIhSjaNug==
+    -----END CERTIFICATE-----
+    -----BEGIN CERTIFICATE-----
+    MIIDkTCCAnmgAwIBAgIUSJ4RLbU532cpXBrIPM0dgLjFoRowDQYJKoZIhvcNAQEL
+    BQAwVzELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+    GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDEQMA4GA1UEAwwHVGVzdCBDQTAgFw0y
+    MzAxMjAwOTQzMzdaGA80NzYwMTIxNzA5NDMzN1owVzELMAkGA1UEBhMCQVUxEzAR
+    BgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5
+    IEx0ZDEQMA4GA1UEAwwHVGVzdCBDQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+    AQoCggEBALzqkvECUcCFlg4cldjWKD1/X2e+FPrMBesmUCDExAtGYIjJy2YFovFL
+    20eNFa4K3QK61MfsmnbhC97Q3Nrm2tFiDXdM1XjnnbGk/GKtTH/cS/v5FQt+8kbj
+    YPKkxfwo02Nhgf8r0Ttsg439tuT+qpw3CymVzEZDllhYFL0EDq5JHAx9Sz5RiXm4
+    1+4E0ahWpWbTagiG/Ldgk/sXCTZvxsCw7gbULKSVEbaN+cW+pXqkD3YSvrnYCPtk
+    /8OK7llBCtDC9puDIntrd5z6tIxCbj3jnfb9Ek/Pb/AmK04NF5OPw+eUgEwteSde
+    lNInFgNnlEPikNrkDAmBydLuEX7yCO8CAwEAAaNTMFEwHQYDVR0OBBYEFHdVrpWw
+    rf3bQ1WPu2uRCK21yG2lMB8GA1UdIwQYMBaAFHdVrpWwrf3bQ1WPu2uRCK21yG2l
+    MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAFHWNTDdy9BbCoX5
+    RRvP0S4V0g8HcaWohYuI7uNsDwW/xvOsJ7u+1rjv/Hx3lOCtnEHCAS5peJQenf6Y
+    uQSXbt2BVX7U01TzGKC9y47yxgovpdKJDiJodWSGs6sZP/4x3M5AbGmhmdfSBFAZ
+    /fchAzZPWd5FdYBEaT5J1nnXDCe3G5Aa43zvZzN8i/YCJ376yB7Vt6qUW8L70o9X
+    ++snpnom2bvIKwkO4Z9jBY6njrpYjE212N1OY+eYRLknOdJlFuy6kGO2ipEoPKt/
+    +vur95a6fTo8WiU2kYQc649XiPNW53v1epWNFJCRoOFietIVrKANWuqQB7xVYuIG
+    Yo0A3Sw=
+    -----END CERTIFICATE-----
+  cert-key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDd0nhS+SWqtQMy
+    IMuX/WMopeUH6u+WljlUEXpxZQKa3KL0+3r4byo51D8R6OF05zG3ANw4NCSMKfRB
+    pK/+wb/QvVFi4Ib8wmrNJI019UE/gzbnDfg5QaMvztusAHZF2wkELRjgX/DdVBWX
+    kQ1WjA9052XyPZs+zTbVg6Am6n3GOmKoCI2n0TIY9sKG+ZCJFfE+TzQU0z7r9Onv
+    nT0ZBZ4poOgG8GbxTCr3dRfM+tLh8MLLMOZ3CKunGaMHD4zdeDm4l7fYZ6/jXVoZ
+    rbio2/uj9+KjhhKi+xTIBc8zug91piotN0uCuxdawgt0EtjaO4czQoLl3D/WNNSe
+    z4rlHLeVAgMBAAECggEAQ3Y8sONkEMA/ahHuSVm/PAAEIT3SwuYKJmawaecx/R4o
+    E0CeXAsW+QJzcgN0+gRMKt+AmjlFejlSN1qaSezr5NSG+X7Wnu2T5LL+nU/rGaFS
+    479sZCFxu1r6lRuI3OLqIZKDk82p5+4oKPHs8ArlsoSjjSIuYlGwIQyIev1q5guP
+    sfzi2cYAHc6rySDBCtFmP9yIxwdhkYRIrDqGWGbtrGIsguyuOUjQHbkidX5FaWjs
+    wj4ApcrYsFQcS/aeEWKqn0wjYTbm+MXXjfao5mAe+1jrPYXyvYs0GpkC3pt+rjS9
+    XO4pohuFEnAvrxZ9JX0DEsnvUoi5C38TB2A/LRboewKBgQD0Z2ZTvTwk+fUb9IRD
+    MRNCWuB8+eiHNZwTRx4v9ZHJQ9blfXirDV0thzV2loYvW1uI91iL4SIWLH1d/O5Z
+    WtwrrTBtzKjiQaeIqopzJH/a1enm8vSTDuazb/n2nmfe49ZBkfgdCnBEEGu4HuZZ
+    viPAdLTWLjimsiXOrBtzJBCFXwKBgQDoWMkoj+Lkx9ZGe3x5KqPMHI8UkEolsLXd
+    dyC8qLLtQJKIGbJj+uk2I0cYnyTfVNi+nOu+Rt2EK187wkMid1encnxqUyDsKoBJ
+    XGiSs9mqyc32DvGOH9X2heQ0FrnbNlaYozdW5jjXafFlV8dnpoX7wQnjMg329qDB
+    2zVSainTiwKBgBNSPU+vbRrLO+pa2T3qmkgroQWgSBawUUdg3u0Rr9XGbC22TpzP
+    MKeRwdM/MRp7UXAxhamBQc2Y9MxCW6Fqwm8dgO+dN1izsgfm240gvI7TTGt6l4Us
+    r2ZOGue5PCLtxhlm7cN1+MwYtDtZDgLYOkFTuJwaCVZ8TOraxkzC9B9nAoGATPbk
+    I4COKzSbIRvUnppmSb2IE8q8FQIVLDhC6tuC8Z47K8Q/WGkMCXfkHB7TavtDFNkM
+    Kip1REvNrxDphig8K+Z7mgjRVgm6FxL6POZAixdwFzrZ/zdCe/fcIPkKNbgpNUST
+    l0CJwamBYg2Sqx35Mey+5rh08cK+e5iucA9krYMCgYBe+4fUD9GC+GUjnsyzkjDT
+    oNKbsFMcYrjLld9nQdeX2oViWudqU7cGlk3mwpWyX81UkEc1LRcnE3/FSdd4Pj1t
+    xMUjq+fMXF2Au4w1NTZ4Exp6Vk8mz9gmsNuFfLKOKnr8x/MT89kYr7+959WlB0jE
+    0ayKuXuHxFpY1rDFSJabaw==
+    -----END PRIVATE KEY-----
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nts-pool-ke-lb
+  annotations:
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "true"
+    service.beta.kubernetes.io/scw-loadbalancer-ip-ids: "9a2a29a3-561a-4f92-9b27-23e0a1828295,4ca50153-ec83-47cc-8ecc-147d20f30836"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: nts-pool-ke
+  ports:
+  - port: 4460
+    targetPort: 4460
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nts-pool-ke-daemonset
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nts-pool-ke
+  template:
+
+    metadata:
+      labels:
+        app.kubernetes.io/name: nts-pool-ke
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      volumes:
+        - name: config-volume
+          configMap:
+            name: ke-config
+            items:
+              - key: config
+                path: "pool.toml"
+              - key: servers
+                path: "servers.json"
+              - key: cas
+                path: "testca.pem"
+              - key: cert
+                path: "end.fullchain.pem"
+              - key: cert-key
+                path: "end.key"
+      containers:
+      - name: ke
+        imagePullPolicy: Always
+        image: ghcr.io/pendulum-project/nts-pool:test
+        command: ["/usr/local/bin/nts-pool-ke", "-c", "./pool.toml", "-l", "trace"]
+        workingDir: "/tmp/ke"
+        volumeMounts:
+          - name: config-volume
+            mountPath: /tmp/ke
+            readOnly: true
+        env:
+          - name: RESTART_BUMP
+            value: "1"
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nts-pool-ke-cert
+spec:
+  privateKey:
+    rotationPolicy: Always
+    algorithm: ECDSA
+  commonName: ke.experimental.ntspooltest.org
+  dnsNames:
+    - ke.experimental.ntspooltest.org
+  issuerRef:
+    name: letsencrypt-staging-scaleway-dns
+    kind: ClusterIssuer
+  secretName: nts-pool-ke-cert

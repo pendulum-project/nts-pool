@@ -1,0 +1,44 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: nts-pool-ke-config-updater
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["configmaps"]
+  verbs: ["get", "update", "patch"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nts-pool-ke-config-updater
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nts-pool-ke-config-updater-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: nts-pool-ke-config-updater
+  namespace: default
+roleRef:
+  kind: Role
+  name: nts-pool-ke-config-updater
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nts-pool-ke-config-updater
+  labels:
+    app.kubernetes.io/name: nts-pool-ke-config-updater
+spec:
+  serviceAccountName: nts-pool-ke-config-updater
+  containers:
+  - name: nts-pool-ke-config-updater
+    image: ubuntu:latest
+    command: ["/bin/bash", "-c", "sleep 60000"]
+---
