@@ -1,0 +1,68 @@
+name: helm chart
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      overwrite:
+          description: "Overwrite existing chart"
+          required: false
+          type: boolean
+          default: false
+  push:
+    branches:
+      - main
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Extract version and check existance
+        id: check
+        run: |
+          set -euo pipefail
+          chart_version=$(yq '.version' ./helm-charts/nts-pool/Chart.yaml)
+          echo "chart_version=$chart_version" >> $GITHUB_OUTPUT
+          echo "Found chart version: $chart_version"
+          if helm pull oci://ghcr.io/pendulum-project/charts/nts-pool --version "$chart_version" >/dev/null 2>&1; then
+            echo "Chart version already exists at repository, will not push"
+            echo "chart_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Chart version does not exist at repository"
+            echo "chart_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.19.0
+
+      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint
+        run: helm lint ./helm-charts/nts-pool
+
+      - name: Package
+        run: helm package ./helm-charts/nts-pool --destination ./helm-charts-output
+
+      - name: Push
+        if: steps.check.outputs.chart_exists == 'false' || inputs.overwrite
+        run: helm push ./helm-charts-output/nts-pool-${{ steps.check.outputs.chart_version }}.tgz oci://ghcr.io/pendulum-project/charts
+
+      - name: Trigger update workflow
+        if: steps.check.outputs.chart_exists == 'false' || inputs.overwrite
+        run: |
+          curl -v -X POST \
+            -H "Authorization: token ${{ secrets.UPDATE_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/pendulum-project/nts-pool-deploy/dispatches \
+            -d '{"event_type":"chart-update","client_payload":{"chart":"nts-pool","version":"${{ steps.check.outputs.chart_version }}","commit":"${{ github.sha }}","ref":"${{ github.ref }}","ref_name":"${{ github.ref_name }}"}}'

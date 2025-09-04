@@ -7,6 +7,8 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 
+use crate::config::RunDatabaseMigrations;
+
 pub struct PostgresContainer;
 
 impl PostgresContainer {
@@ -28,9 +30,14 @@ impl PostgresContainer {
             .await
             .expect("Failed to start PostgreSQL container");
         let conn_str = PostgresContainer::connection_string(&node).await;
-        let pool = crate::pool_conn(&conn_str, 1, std::time::Duration::from_secs(1), true)
-            .await
-            .expect("Failed to connect to PostgreSQL container");
+        let pool = crate::pool_conn(
+            &conn_str,
+            1,
+            std::time::Duration::from_secs(1),
+            RunDatabaseMigrations::Yes,
+        )
+        .await
+        .expect("Failed to connect to PostgreSQL container");
         (node, pool)
     }
 }

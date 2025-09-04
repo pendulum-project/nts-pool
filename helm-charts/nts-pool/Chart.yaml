@@ -1,0 +1,7 @@
+apiVersion: v2
+name: nts-pool
+description: NTS Pool Deployment
+type: application
+icon: https://raw.githubusercontent.com/pendulum-project/nts-pool/main/nts-pool-management/assets/nts-pool.svg
+
+version: 0.1.0-alpha.14

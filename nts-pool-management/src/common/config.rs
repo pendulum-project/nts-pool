@@ -8,12 +8,19 @@ pub struct AppConfig {
     pub base_url: BaseUrl,
     pub poolke_name: String,
     pub database_url: String,
-    pub database_run_migrations: bool,
+    pub database_run_migrations: RunDatabaseMigrations,
     pub jwt_secret: String,
     pub cookie_secret: String,
     pub mail_from_address: String,
     pub mail_smtp_url: String,
     pub assets_path: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunDatabaseMigrations {
+    Yes,
+    No,
+    OnlyMigrate,
 }
 
 impl AppConfig {
@@ -31,8 +38,12 @@ impl AppConfig {
             .wrap_err("Missing NTSPOOL_DATABASE_URL/DATABASE_URL environment variable")?;
 
         let database_run_migrations = std::env::var("NTSPOOL_DATABASE_RUN_MIGRATIONS")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(true);
+            .map(|v| match v.to_lowercase().as_str() {
+                "1" | "true" | "yes" => RunDatabaseMigrations::Yes,
+                "only-migrate" => RunDatabaseMigrations::OnlyMigrate,
+                _ => RunDatabaseMigrations::No,
+            })
+            .unwrap_or(RunDatabaseMigrations::No);
 
         let jwt_secret = std::env::var("NTSPOOL_JWT_SECRET")
             .wrap_err("Missing NTSPOOL_JWT_SECRET environment variable")?;
@@ -68,7 +79,7 @@ impl Default for AppConfig {
             base_url: BaseUrl::new("http://localhost:3000"),
             poolke_name: "localhost:4460".into(),
             database_url: "postgres://nts-pool@localhost:5432/nts-pool".into(),
-            database_run_migrations: true,
+            database_run_migrations: RunDatabaseMigrations::No,
             jwt_secret: "UNSAFE_SECRET".into(),
             cookie_secret: "UNSAFE_SECRET".into(),
             mail_from_address: "noreply@example.com".into(),

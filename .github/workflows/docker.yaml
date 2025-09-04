@@ -5,8 +5,12 @@ permissions:
   packages: write
 
 on:
-  workflow_call: {}
   workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
 
 jobs:
   Build:
@@ -28,7 +32,10 @@ jobs:
         with:
           images: ghcr.io/pendulum-project/nts-pool
           tags: |
+            type=ref,event=tag
             type=sha
+        env:
+          DOCKER_METADATA_SHORT_SHA_LENGTH: 12
 
       - name: Cache
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
@@ -55,3 +62,13 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+
+      - name: Trigger update workflow
+        run: |
+          curl -v -X POST \
+            -H "Authorization: token ${{ secrets.UPDATE_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/pendulum-project/nts-pool-deploy/dispatches \
+            -d '{"event_type":"image-update","client_payload":{"chart":"nts-pool","tags":${{ toJson(fromJson(steps.meta.outputs.json).tags) }},"commit":"${{ github.sha }}","ref":"${{ github.ref }}","ref_name":"${{ github.ref_name }}","build_time":"${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}","build_version":"${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}"}}'

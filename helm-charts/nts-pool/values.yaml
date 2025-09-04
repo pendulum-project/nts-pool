@@ -1,0 +1,110 @@
+# This is for the secrets for pulling an image from a private repository more
+# information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+image:
+  pullSecrets: null
+  pullPolicy: IfNotPresent
+  repository: ghcr.io/pendulum-project/nts-pool
+  tag: test
+
+
+# Override the namespace where resources will be deployed
+# If not set, the namespace where the chart is deployed will be used
+namespaceOverride: null
+
+# Override the chart name and fullname
+nameOverride: ""
+fullnameOverride: ""
+
+services:
+  # Configuration for the management service
+  management:
+    # Annotations to add to the management service
+    annotations: {}
+  # Configuration for the Key Exchange (KE) service
+  ke:
+    # Annotations to add to the KE service
+    annotations: {}
+    # The type of the KE service (ClusterIP, NodePort, LoadBalancer, etc.)
+    type: ClusterIP
+    # For a load balancer service, specify the IP address to use
+    loadBalancerIP: null
+    # The port on which the KE service will be exposed
+    port: 4460
+
+ingresses:
+  # Configuration for the management ingress
+  management:
+    # Annotations to add to the management ingress
+    annotations: {}
+    # Ingress class to match to the ingress controller to use for the management ingress
+    className: nginx
+    # List of hostnames for the management ingress
+    hosts: []
+    # Optional name of the secret that stores the TLS certificate and key for the management ingress
+    tlsSecretName: null
+
+# Configuration for the Key Exchange (KE) service
+ke:
+  # Domain names on which the KE will be available (first one will be the primary, i.e. common name)
+  domainName: ntspool.example.com
+  # Name of the secret that stores the TLS certificate and key for the KE service
+  certificateSecretName: null
+  # Maximum number of simultaneous connections the KE will accept
+  maxConnections: 100
+  # Whether to use the PROXY protocol for connections to the KE
+  useProxyProtocol: true
+  # Update this to a new value to trigger setting up a new set of key exchange pods
+  restartBump: 1
+  # Override global image settings for the key exchange service
+  image:
+    pullSecrets: null
+    pullPolicy: null
+    repository: null
+    tag: null
+
+# Configuration for the management interface
+management:
+  # Mail adres used as a sender for notification emails
+  mailFromAddress: null
+  # Base URL for the management interface, e.g. https://nts-pool.example.com
+  baseUrl: null
+  # Database connection URL secret reference
+  databaseUrlSecretRef:
+    name: nts-pool-management-database-url
+    key: database-url
+  # JWT secret for signing and validating tokens secret reference
+  jwtKeySecretRef:
+    name: nts-pool-management-jwt-secret
+    key: jwt-secret
+  # Cookie secret for encrypting/decrypting private cookies
+  cookieSecretRef:
+    name: nts-pool-management-cookie-secret
+    key: cookie-secret
+  # SMTP server connection URL secret reference
+  smtpUrlSecretRef:
+    name: nts-pool-management-smtp-url
+    key: smtp-url
+  # If connecting to the database using TLS, provide the certificate here
+  databaseCertificate:
+    # Path where the certificate will be mounted inside management pods
+    mountPath: /opts/nts-pool-management/database-cert/cert.pem
+    # The certificate content (in PEM format)
+    cert: null
+  # Update this to a new value to trigger setting up a new set of management pods
+  restartBump: 1
+  # Override global image settings for the management service
+  image:
+    pullSecrets: null
+    pullPolicy: null
+    repository: null
+    tag: null
+
+configUpdater:
+  # When to run the config updater job
+  schedule: "0 * * * *"
+  # Override global image settings for the config updater
+  image:
+    pullSecrets: null
+    pullPolicy: null
+    repository: null
+    tag: null
