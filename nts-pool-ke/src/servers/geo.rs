@@ -41,7 +41,8 @@ pub struct GeographicServerManager {
 
 struct GeographicServerManagerInner {
     servers: Box<[KeyExchangeServer]>,
-    regions: HashMap<String, Vec<usize>>,
+    regions_ipv4: HashMap<String, Vec<usize>>,
+    regions_ipv6: HashMap<String, Vec<usize>>,
     geodb: maxminddb::Reader<Vec<u8>>,
     uuid_lookup: HashMap<String, usize>,
 }
@@ -72,25 +73,55 @@ impl GeographicServerManager {
             let server_file = std::fs::File::open(servers)?;
             let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
 
-            let mut regions: HashMap<String, Vec<usize>> = HashMap::new();
+            let mut regions_ipv4: HashMap<String, Vec<usize>> = HashMap::new();
+            let mut regions_ipv6: HashMap<String, Vec<usize>> = HashMap::new();
             let mut uuid_lookup = HashMap::new();
             for (index, server) in servers.iter().enumerate() {
                 uuid_lookup.insert(server.uuid.clone(), index);
-                for region in &server.regions {
-                    if let Some(region_list) = regions.get_mut(region) {
-                        region_list.push(index)
-                    } else {
-                        regions.insert(region.clone(), vec![index]);
+                if server.ipv4_capable {
+                    for region in &server.regions {
+                        if let Some(region_list) = regions_ipv4.get_mut(region) {
+                            region_list.push(index)
+                        } else {
+                            regions_ipv4.insert(region.clone(), vec![index]);
+                        }
+                    }
+                }
+                if server.ipv6_capable {
+                    for region in &server.regions {
+                        if let Some(region_list) = regions_ipv6.get_mut(region) {
+                            region_list.push(index)
+                        } else {
+                            regions_ipv6.insert(region.clone(), vec![index]);
+                        }
                     }
                 }
             }
-            regions.insert(GLOBAL.into(), (0..servers.len()).collect());
+            regions_ipv4.insert(
+                GLOBAL.into(),
+                servers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, server)| server.ipv4_capable)
+                    .map(|(index, _)| index)
+                    .collect(),
+            );
+            regions_ipv6.insert(
+                GLOBAL.into(),
+                servers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, server)| server.ipv6_capable)
+                    .map(|(index, _)| index)
+                    .collect(),
+            );
 
             let geodb = maxminddb::Reader::open_readfile(geodb).map_err(std::io::Error::other)?;
 
             Ok(GeographicServerManagerInner {
                 servers,
-                regions,
+                regions_ipv4,
+                regions_ipv6,
                 geodb,
                 uuid_lookup,
             })
@@ -112,23 +143,28 @@ impl ServerManager for GeographicServerManager {
         denied_servers: &[Cow<'_, str>],
     ) -> Self::Server<'_> {
         let inner = self.inner.read().unwrap().clone();
+        let regions = if address.is_ipv4() {
+            &inner.regions_ipv4
+        } else {
+            &inner.regions_ipv6
+        };
         let region =
             if let Ok(Some(location)) = inner.geodb.lookup::<geoip2::Country>(address.ip()) {
                 location
                     .country
                     .and_then(|v| v.iso_code)
-                    .and_then(|v| inner.regions.get(v))
+                    .and_then(|v| regions.get(v))
                     .or_else(|| {
                         location
                             .continent
                             .and_then(|v| v.code)
                             .and_then(|v| CONTINENTS.get(v))
-                            .and_then(|v| inner.regions.get(*v))
+                            .and_then(|v| regions.get(*v))
                     })
             } else {
                 None
             }
-            .unwrap_or_else(|| inner.regions.get(GLOBAL).unwrap());
+            .unwrap_or_else(|| regions.get(GLOBAL).unwrap());
 
         let start_index = (rand::rng().random::<u64>() as usize) % region.len();
 
@@ -283,7 +319,8 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv6: HashMap::from([("@".into(), vec![0, 1])]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -335,7 +372,8 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv6: HashMap::from([("@".into(), vec![0, 1])]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -380,7 +418,8 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv6: HashMap::from([("@".into(), vec![0, 1])]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -434,7 +473,12 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions: HashMap::from([
+                regions_ipv4: HashMap::from([
+                    ("@".into(), vec![0]),
+                    ("EUROPE".into(), vec![1]),
+                    ("GB".into(), vec![2]),
+                ]),
+                regions_ipv6: HashMap::from([
                     ("@".into(), vec![0]),
                     ("EUROPE".into(), vec![1]),
                     ("GB".into(), vec![2]),
@@ -465,6 +509,65 @@ mod tests {
         assert_eq!(server.name(), "global.test");
     }
 
+    #[test]
+    fn test_v4_v6_handling() {
+        crate::test_init();
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        uuid: "UUID-both".into(),
+                        domain: "both.test".into(),
+                        server_name: ServerName::try_from("both.test").unwrap(),
+                        connection_address: ("both.test".into(), 4460),
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                    KeyExchangeServer {
+                        uuid: "UUID-ipv4".into(),
+                        domain: "ipv4.test".into(),
+                        server_name: ServerName::try_from("ipv4.test").unwrap(),
+                        connection_address: ("ipv4.test".into(), 4460),
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: false,
+                    },
+                    KeyExchangeServer {
+                        uuid: "UUID-ipv6".into(),
+                        domain: "ipv6.test".into(),
+                        server_name: ServerName::try_from("ipv6.test").unwrap(),
+                        connection_address: ("ipv6.test".into(), 4460),
+                        regions: vec![],
+                        ipv4_capable: false,
+                        ipv6_capable: true,
+                    },
+                ]
+                .into(),
+                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv6: HashMap::from([("@".into(), vec![0, 2])]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+                uuid_lookup: HashMap::from([
+                    ("UUID-both".into(), 0),
+                    ("UUID-ipv4".into(), 1),
+                    ("UUID-ipv6".into(), 2),
+                ]),
+            }))),
+            upstream_tls: upstream_tls_config(),
+            allowed_protocols: Arc::new(HashSet::new()),
+            timeout: Duration::from_secs(1),
+        };
+
+        let ipv4 = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+        assert!(ipv4.inner.servers[ipv4.index].ipv4_capable);
+
+        let ipv6 = manager.assign_server("[::]:4460".parse().unwrap(), &[]);
+        assert!(ipv6.inner.servers[ipv6.index].ipv6_capable);
+    }
+
     #[tokio::test]
     async fn test_server_list_parsing() {
         crate::test_init();
@@ -480,9 +583,23 @@ mod tests {
 
         let inner = manager.inner.read().unwrap();
         for (i, server) in inner.servers.iter().enumerate() {
-            assert!(inner.regions.get(GLOBAL).unwrap().contains(&i));
+            assert_eq!(
+                inner.regions_ipv4.get(GLOBAL).unwrap().contains(&i),
+                server.ipv4_capable
+            );
+            assert_eq!(
+                inner.regions_ipv6.get(GLOBAL).unwrap().contains(&i),
+                server.ipv6_capable
+            );
             for region in server.regions.iter() {
-                assert!(inner.regions.get(region).unwrap().contains(&i));
+                assert_eq!(
+                    inner.regions_ipv4.get(region).unwrap().contains(&i),
+                    server.ipv4_capable
+                );
+                assert_eq!(
+                    inner.regions_ipv6.get(region).unwrap().contains(&i),
+                    server.ipv6_capable
+                );
             }
         }
     }
