@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use tracing::info;
 
 use crate::{
+    common::config::RunDatabaseMigrations,
     config::AppConfig,
     email::{MailTransport, Mailer},
 };
@@ -45,7 +46,7 @@ pub async fn pool_conn(
     db_conn_str: &str,
     mut remaining_tries: u32,
     retry_interval: std::time::Duration,
-    run_migrations: bool,
+    run_migrations: RunDatabaseMigrations,
 ) -> Result<PgPool, sqlx::Error> {
     loop {
         let db = sqlx::postgres::PgPoolOptions::new()
@@ -55,7 +56,9 @@ pub async fn pool_conn(
         match db {
             Ok(db) => {
                 // run migrations to update the database schema to the latest version
-                if run_migrations {
+                if run_migrations == RunDatabaseMigrations::Yes
+                    || run_migrations == RunDatabaseMigrations::OnlyMigrate
+                {
                     sqlx::migrate!("./migrations").run(&db).await?;
                 }
                 break Ok(db);
@@ -94,6 +97,12 @@ async fn main() {
     )
     .await
     .expect("Error initializing database connection");
+
+    // early exit if we were only asked to run migrations
+    if config.database_run_migrations == RunDatabaseMigrations::OnlyMigrate {
+        info!("Migrations applied, exiting as requested.");
+        return;
+    }
 
     // Setup JWT encoding and decoding keys
     let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(config.jwt_secret.as_bytes());

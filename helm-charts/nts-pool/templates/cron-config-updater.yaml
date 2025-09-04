@@ -1,0 +1,29 @@
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-ke-config-updater
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.configUpdater.schedule }}"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ include "nts-pool.fullname" . }}-ke-config-updater
+          restartPolicy: Never
+          containers:
+            - name: ke-config-updater
+              imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
+              {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
+              imagePullSecrets:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              image: "{{ default .Values.image.repository .Values.ke.image.repository }}:{{ default .Values.image.tag .Values.ke.image.tag }}"
+              command:
+                - /bin/sh
+                - -c
+                - echo 'Hello from Kubernetes CronJob!'

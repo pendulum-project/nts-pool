@@ -1,0 +1,77 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-ke
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: ke
+      {{- include "nts-pool.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: ke
+        {{- include "nts-pool.selectorLabels" . | nindent 8 }}
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-ke-config
+            items:
+              - key: "pool.toml"
+                path: "pool.toml"
+        - name: monitoring-volume
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-monitoring-config
+            items:
+              - key: "monitoring.json"
+                path: "monitoring.json"
+        - name: servers-volume
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-servers-config
+            items:
+              - key: "servers.json"
+                path: "servers.json"
+        - name: tls-volume
+          secret:
+            secretName: {{ default (cat (include "nts-pool.fullname" .) "-ke-cert") .Values.ke.certificateSecretName }}
+            items:
+              - key: "tls.crt"
+                path: "tls.crt"
+              - key: "tls.key"
+                path: "tls.key"
+      containers:
+      - name: ke
+        imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
+        {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        image: "{{ default .Values.image.repository .Values.ke.image.repository }}:{{ default .Values.image.tag .Values.ke.image.tag }}"
+        command: ["/usr/local/bin/nts-pool-ke", "-c", "/opt/nts-pool/config/pool.toml", "-l", "trace"]
+        workingDir: "/opt/nts-pool"
+        ports:
+          - containerPort: 4460
+            name: nts-tcp
+        volumeMounts:
+          - name: config-volume
+            mountPath: /opt/nts-pool/config
+            readOnly: true
+          - name: monitoring-volume
+            mountPath: /opt/nts-pool/monitoring
+            readOnly: true
+          - name: servers-volume
+            mountPath: /opt/nts-pool/ke-servers
+            readOnly: true
+          - name: tls-volume
+            mountPath: /opt/nts-pool/tls
+            readOnly: true
+        env:
+          - name: RESTART_BUMP
+            value: "{{ default 1 .Values.ke.restartBump}}"
