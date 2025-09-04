@@ -12,13 +12,14 @@ use crate::{
 
 uuid!(TimeSourceId);
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, Deserialize, sqlx::FromRow)]
 pub struct TimeSource {
     pub id: TimeSourceId,
     pub owner: UserId,
     pub hostname: String,
     pub port: Option<Port>,
     pub countries: Vec<String>,
+    pub weight: i32,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -31,6 +32,11 @@ pub struct NewTimeSource {
 pub struct NewTimeSourceForm {
     pub hostname: String,
     pub port: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct UpdateTimeSourceForm {
+    pub weight: i32,
 }
 
 impl TryFrom<NewTimeSourceForm> for NewTimeSource {
@@ -65,11 +71,33 @@ pub async fn create(
         r#"
             INSERT INTO time_sources (owner, hostname, port)
             VALUES ($1, $2, $3)
-            RETURNING id, owner, hostname, port AS "port: _", countries
+            RETURNING id, owner, hostname, port AS "port: _", countries, weight
         "#,
         owner as _,
         new_time_source.hostname,
         new_time_source.port as _,
+    )
+    .fetch_one(conn)
+    .await
+}
+
+pub async fn update(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+    time_source_id: TimeSourceId,
+    time_source: UpdateTimeSourceForm,
+) -> Result<TimeSource, sqlx::Error> {
+    sqlx::query_as!(
+        TimeSource,
+        r#"
+            UPDATE time_sources
+            SET weight = $3
+            WHERE id = $1 AND owner = $2
+            RETURNING id, owner, hostname, port as "port: _", countries, weight
+        "#,
+        time_source_id as _,
+        owner as _,
+        time_source.weight
     )
     .fetch_one(conn)
     .await
@@ -102,7 +130,7 @@ pub async fn by_user(
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries
+            SELECT id, owner, hostname, port AS "port: _", countries, weight
             FROM time_sources
             WHERE owner = $1 AND deleted = false;
         "#,
