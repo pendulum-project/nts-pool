@@ -10,7 +10,9 @@ use crate::{
     auth::AuthorizedUser,
     context::AppContext,
     error::AppError,
-    models::time_source::{self, NewTimeSourceForm, TimeSource, TimeSourceId},
+    models::time_source::{
+        self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
+    },
     templates::{HtmlTemplate, filters},
 };
 
@@ -47,9 +49,19 @@ pub async fn create_time_source(
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     time_source::create(&state.db, user.id, new_time_source.try_into()?).await?;
-
     let time_sources = time_source::by_user(&state.db, user.id).await?;
+    Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
+}
 
+pub async fn update_time_source(
+    user: AuthorizedUser,
+    app: AppContext,
+    Path(time_source_id): Path<TimeSourceId>,
+    State(state): State<AppState>,
+    Form(time_source): Form<UpdateTimeSourceForm>,
+) -> Result<impl IntoResponse, AppError> {
+    time_source::update(&state.db, user.id, time_source_id, time_source).await?;
+    let time_sources = time_source::by_user(&state.db, user.id).await?;
     Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
 }
 

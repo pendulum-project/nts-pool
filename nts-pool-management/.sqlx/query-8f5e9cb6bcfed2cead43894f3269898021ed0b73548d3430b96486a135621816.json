@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO time_sources (owner, hostname, port)\n            VALUES ($1, $2, $3)\n            RETURNING id, owner, hostname, port AS \"port: _\", countries\n        ",
+  "query": "\n            INSERT INTO time_sources (owner, hostname, port)\n            VALUES ($1, $2, $3)\n            RETURNING id, owner, hostname, port AS \"port: _\", countries, weight\n        ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "countries",
         "type_info": "TextArray"
+      },
+      {
+        "ordinal": 5,
+        "name": "weight",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -41,8 +46,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "46ffeb3fa501836d81c641cc3226beefb1e33b1137de23ff2218917fc08bf47a"
+  "hash": "8f5e9cb6bcfed2cead43894f3269898021ed0b73548d3430b96486a135621816"
 }
