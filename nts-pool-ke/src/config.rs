@@ -288,6 +288,8 @@ pub struct KeyExchangeServer {
     pub domain: String,
     pub server_name: ServerName<'static>,
     pub regions: Vec<String>,
+    pub ipv4_capable: bool,
+    pub ipv6_capable: bool,
     pub connection_address: (String, u16),
 }
 
@@ -304,6 +306,10 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
             port: u16,
             #[serde(default)]
             regions: Vec<String>,
+            #[serde(default)]
+            ipv4_capable: Option<bool>,
+            #[serde(default)]
+            ipv6_capable: Option<bool>,
         }
 
         let bare = BareKeyExchangeServer::deserialize(deserializer)?;
@@ -321,6 +327,8 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
             server_name,
             regions: bare.regions,
             connection_address: (bare.domain.to_string(), bare.port),
+            ipv4_capable: bare.ipv4_capable.unwrap_or(true),
+            ipv6_capable: bare.ipv6_capable.unwrap_or(true),
         })
     }
 }
@@ -425,6 +433,8 @@ mod tests {
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     connection_address: (String::from("foo.bar"), 1234),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
                 KeyExchangeServer {
                     uuid: String::from("UUID-bar"),
@@ -432,6 +442,8 @@ mod tests {
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     connection_address: (String::from("bar.foo"), 4321),
                     regions: vec![],
+                    ipv4_capable: true,
+                    ipv6_capable: true,
                 },
             ]
             .as_slice()
