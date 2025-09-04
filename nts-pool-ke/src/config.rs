@@ -14,10 +14,10 @@ use rustls::{
 };
 use rustls_platform_verifier::Verifier;
 use serde::Deserialize;
-use tokio_rustls::{TlsAcceptor, TlsConnector};
+use tokio_rustls::TlsConnector;
 use tracing::{info, warn};
 
-use crate::nts::ProtocolId;
+use crate::{nts::ProtocolId, util::load_certificates};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -83,12 +83,6 @@ impl Config {
 
         Ok(config)
     }
-}
-
-fn load_certificates(
-    path: impl AsRef<std::path::Path>,
-) -> Result<Vec<rustls::pki_types::CertificateDer<'static>>, rustls::pki_types::pem::Error> {
-    rustls::pki_types::CertificateDer::pem_file_iter(path)?.collect()
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -231,7 +225,8 @@ fn default_max_connections() -> usize {
 
 #[derive(Clone)]
 pub struct NtsPoolKeConfig {
-    pub server_tls: TlsAcceptor,
+    pub certificate_chain: PathBuf,
+    pub private_key: PathBuf,
     pub listen: SocketAddr,
     pub key_exchange_timeout: Duration,
     pub timesource_timeout: Duration,
@@ -247,31 +242,9 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
     {
         let bare = BareNtsPoolKeConfig::deserialize(deserializer)?;
 
-        let certificate_chain = load_certificates(&bare.certificate_chain).map_err(|e| {
-            serde::de::Error::custom(format!(
-                "error reading server's certificate chain from `{:?}`: {:?}",
-                bare.certificate_chain, e
-            ))
-        })?;
-
-        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(&bare.private_key)
-            .map_err(|e| {
-                serde::de::Error::custom(format!(
-                    "error reading server's private key from `{:?}`: {:?}",
-                    bare.private_key, e
-                ))
-            })?;
-
-        let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&TLS13])
-            .with_no_client_auth()
-            .with_single_cert(certificate_chain.clone(), private_key.clone_key())
-            .map_err(serde::de::Error::custom)?;
-        server_config.alpn_protocols = vec!["ntske/1".into()];
-
-        let server_tls = TlsAcceptor::from(Arc::new(server_config));
-
         Ok(NtsPoolKeConfig {
-            server_tls,
+            certificate_chain: bare.certificate_chain,
+            private_key: bare.private_key,
             listen: bare.listen,
             key_exchange_timeout: std::time::Duration::from_millis(bare.key_exchange_timeout),
             timesource_timeout: std::time::Duration::from_millis(bare.timesource_timeout),
