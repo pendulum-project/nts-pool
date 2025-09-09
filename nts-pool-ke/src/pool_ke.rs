@@ -31,7 +31,7 @@ pub async fn run_nts_pool_ke(
     nts_pool_ke_config: NtsPoolKeConfig,
     server_manager: impl ServerManager + 'static,
 ) -> std::io::Result<()> {
-    let pool_ke = NtsPoolKe::new(nts_pool_ke_config, server_manager)?;
+    let pool_ke = NtsPoolKe::new(nts_pool_ke_config, server_manager).await?;
 
     Arc::new(pool_ke).serve().await
 }
@@ -43,8 +43,8 @@ struct NtsPoolKe<S> {
 }
 
 impl<S: ServerManager + 'static> NtsPoolKe<S> {
-    fn new(config: NtsPoolKeConfig, server_manager: S) -> std::io::Result<Self> {
-        let server_config = load_tls_config(&config)?;
+    async fn new(config: NtsPoolKeConfig, server_manager: S) -> std::io::Result<Self> {
+        let server_config = load_tls_config(&config).await?;
 
         let server_tls = RwLock::new(server_config);
 
@@ -138,7 +138,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             let _w = watcher;
             loop {
                 change_receiver.recv().await;
-                match load_tls_config(&self.config) {
+                match load_tls_config(&self.config).await {
                     Ok(server_tls) => {
                         *self.server_tls.write().unwrap() = server_tls;
                     }
@@ -402,17 +402,24 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
     }
 }
 
-fn load_tls_config(config: &NtsPoolKeConfig) -> Result<TlsAcceptor, std::io::Error> {
-    let certificate_chain =
-        load_certificates(&config.certificate_chain).map_err(std::io::Error::other)?;
-    let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(&config.private_key)
-        .map_err(std::io::Error::other)?;
-    let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&TLS13])
-        .with_no_client_auth()
-        .with_single_cert(certificate_chain.clone(), private_key.clone_key())
-        .map_err(std::io::Error::other)?;
-    server_config.alpn_protocols = vec!["ntske/1".into()];
-    Ok(TlsAcceptor::from(Arc::new(server_config)))
+async fn load_tls_config(config: &NtsPoolKeConfig) -> Result<TlsAcceptor, std::io::Error> {
+    let certificate_chain = config.certificate_chain.clone();
+    let private_key = config.private_key.clone();
+
+    tokio::task::spawn_blocking(|| {
+        let certificate_chain =
+            load_certificates(certificate_chain).map_err(std::io::Error::other)?;
+        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(private_key)
+            .map_err(std::io::Error::other)?;
+        let mut server_config = rustls::ServerConfig::builder_with_protocol_versions(&[&TLS13])
+            .with_no_client_auth()
+            .with_single_cert(certificate_chain.clone(), private_key.clone_key())
+            .map_err(std::io::Error::other)?;
+        server_config.alpn_protocols = vec!["ntske/1".into()];
+        Ok(TlsAcceptor::from(Arc::new(server_config)))
+    })
+    .await
+    .unwrap()
 }
 
 #[cfg(test)]
@@ -682,7 +689,7 @@ mod tests {
                 monitoring_keys: vec![],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -761,7 +768,7 @@ mod tests {
                 monitoring_keys: vec![],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -842,7 +849,7 @@ mod tests {
                 monitoring_keys: vec![],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -920,7 +927,7 @@ mod tests {
                 monitoring_keys: vec![],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -1001,7 +1008,7 @@ mod tests {
                 monitoring_keys: vec!["test".into()],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -1084,7 +1091,7 @@ mod tests {
                 monitoring_keys: vec!["test".into()],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -1156,7 +1163,7 @@ mod tests {
                 monitoring_keys: vec!["none".into()],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
@@ -1224,7 +1231,7 @@ mod tests {
                 monitoring_keys: vec!["none".into()],
             };
 
-            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).unwrap());
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
             pool.serve_inner(pool_listener).await
         });
 
