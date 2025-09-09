@@ -6,6 +6,7 @@ use std::{
 };
 
 use maxminddb::geoip2;
+use notify::{RecursiveMode, Watcher};
 use phf::phf_map;
 use rand::Rng;
 use tokio::{net::TcpStream, task::spawn_blocking};
@@ -35,9 +36,11 @@ pub struct GeographicServerManager {
     inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
     config: Arc<BackendConfig>,
     upstream_tls: Arc<RwLock<TlsConnector>>,
-    // Kept around for its effect on drop.
+    // Kept around for their effect on drop.
     #[allow(unused)]
     tls_updater: Arc<AbortingJoinHandle<()>>,
+    #[allow(unused)]
+    server_list_updater: Arc<AbortingJoinHandle<()>>,
 }
 
 struct GeographicServerManagerInner {
@@ -56,24 +59,81 @@ impl GeographicServerManager {
                 .await?
                 .into(),
         );
+        let inner = Arc::new(RwLock::new(Arc::new(
+            Self::load(
+                config.key_exchange_servers.clone(),
+                config
+                    .geolocation_db
+                    .clone()
+                    .ok_or(std::io::Error::other("Missing geolocation db"))?,
+            )
+            .await?,
+        )));
+        let server_list_updater = Arc::new(
+            Self::server_list_updater(inner.clone(), config.clone())
+                .await?
+                .into(),
+        );
 
         let result = Self {
-            inner: Arc::new(RwLock::new(Arc::new(
-                Self::load(
-                    config.key_exchange_servers.clone(),
-                    config
-                        .geolocation_db
-                        .clone()
-                        .ok_or(std::io::Error::other("Missing geolocation db"))?,
-                )
-                .await?,
-            ))),
+            inner,
             upstream_tls,
             config,
             tls_updater,
+            server_list_updater,
         };
 
         Ok(result)
+    }
+
+    async fn server_list_updater(
+        inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
+        config: Arc<BackendConfig>,
+    ) -> std::io::Result<tokio::task::JoinHandle<()>> {
+        let (change_sender, mut change_receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
+        // Use a poll watcher here as INotify can be unreliable in many ways and I don't want to deal with that.
+        let mut watcher = notify::poll::PollWatcher::new(
+            move |event: notify::Result<notify::Event>| {
+                if event.is_ok() {
+                    let _ = change_sender.send(());
+                }
+            },
+            notify::Config::default()
+                .with_poll_interval(std::time::Duration::from_secs(60))
+                .with_compare_contents(true),
+        )
+        .map_err(std::io::Error::other)?;
+
+        watcher
+            .watch(
+                config.geolocation_db.as_ref().unwrap(),
+                RecursiveMode::NonRecursive,
+            )
+            .map_err(std::io::Error::other)?;
+        watcher
+            .watch(&config.key_exchange_servers, RecursiveMode::NonRecursive)
+            .map_err(std::io::Error::other)?;
+
+        Ok(tokio::spawn(async move {
+            // keep the watcher alive
+            let _w = watcher;
+            loop {
+                change_receiver.recv().await;
+                match Self::load(
+                    config.key_exchange_servers.clone(),
+                    config.geolocation_db.clone().unwrap(),
+                )
+                .await
+                {
+                    Ok(new_inner) => {
+                        *inner.write().unwrap() = Arc::new(new_inner);
+                    }
+                    Err(e) => {
+                        tracing::error!("Could not reload tls configuration: {}", e);
+                    }
+                }
+            }
+        }))
     }
 
     async fn load(
@@ -300,6 +360,7 @@ mod tests {
                 timesource_timeout: Duration::from_secs(1),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
+            server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let first = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
@@ -356,6 +417,7 @@ mod tests {
                 timesource_timeout: Duration::from_secs(1),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
+            server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
@@ -405,6 +467,7 @@ mod tests {
                 timesource_timeout: Duration::from_secs(1),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
+            server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let first = manager.assign_server(
@@ -469,6 +532,7 @@ mod tests {
                 timesource_timeout: Duration::from_secs(1),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
+            server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         // GB
