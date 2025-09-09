@@ -23,7 +23,7 @@
 <section>
   <h2>Time source servers</h2>
   {%- for ts in time_sources %}
-    <article class="server-list">
+    <article class="card">
       <form action="/management/time-sources/{{ ts.id }}/update" method="POST">
         <input type="hidden" />
         <dl>

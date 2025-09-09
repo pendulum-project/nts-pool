@@ -88,6 +88,10 @@ h2 {
     padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-md);
 }
 
+dl {
+    margin-bottom: var(--space-md);
+}
+
 dd {
     font-weight: var(--bold);
     margin-top: var(--space-sm);
