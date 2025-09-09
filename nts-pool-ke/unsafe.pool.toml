@@ -5,7 +5,7 @@ listen = "0.0.0.0:4460"
 certificate-chain = "./testdata/end.fullchain.pem"
 private-key = "./testdata/end.key"
 max-connections = 100
-monitoring-keys = ["testmonitor"]
+monitoring-keys = "./monitoring.json"
 
 [backend]
 upstream-cas = "./testdata/testca.pem"

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
@@ -39,6 +40,7 @@ pub async fn run_nts_pool_ke(
 struct NtsPoolKe<S> {
     config: NtsPoolKeConfig,
     server_tls: RwLock<TlsAcceptor>,
+    monitoring_keys: RwLock<Arc<HashSet<String>>>,
     server_manager: S,
 }
 
@@ -48,9 +50,12 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         let server_tls = RwLock::new(server_config);
 
+        let monitoring_keys = RwLock::new(Arc::new(load_monitoring_keys(&config).await?));
+
         Ok(NtsPoolKe {
             config,
             server_tls,
+            monitoring_keys,
             server_manager,
         })
     }
@@ -189,13 +194,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         debug!("Recevied request from client");
 
+        let monitoring_keys = self.monitoring_keys.read().unwrap().clone();
+
         let pick = match &client_request {
             ClientRequest::Ordinary { denied_servers, .. } => self
                 .server_manager
                 .assign_server(source_address, denied_servers),
-            ClientRequest::Uuid { key, uuid, .. }
-                if self.config.monitoring_keys.iter().any(|v| v == key) =>
-            {
+            ClientRequest::Uuid { key, uuid, .. } if monitoring_keys.contains(key.as_ref()) => {
                 if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
                     server
                 } else {
@@ -417,6 +422,19 @@ async fn load_tls_config(config: &NtsPoolKeConfig) -> Result<TlsAcceptor, std::i
             .map_err(std::io::Error::other)?;
         server_config.alpn_protocols = vec!["ntske/1".into()];
         Ok(TlsAcceptor::from(Arc::new(server_config)))
+    })
+    .await
+    .unwrap()
+}
+
+async fn load_monitoring_keys(config: &NtsPoolKeConfig) -> Result<HashSet<String>, std::io::Error> {
+    let Some(monitoring_keys) = config.monitoring_keys.clone() else {
+        return Ok(HashSet::new());
+    };
+
+    tokio::task::spawn_blocking(|| {
+        serde_json::from_reader(std::fs::File::open(monitoring_keys)?)
+            .map_err(std::io::Error::other)
     })
     .await
     .unwrap()
@@ -686,7 +704,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec![],
+                monitoring_keys: None,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -765,7 +783,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec![],
+                monitoring_keys: None,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -846,7 +864,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec![],
+                monitoring_keys: None,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -924,7 +942,7 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: true,
-                monitoring_keys: vec![],
+                monitoring_keys: None,
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -1005,7 +1023,13 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec!["test".into()],
+                monitoring_keys: Some(
+                    format!(
+                        "{}/testdata/monitoring_keys.json",
+                        env!("CARGO_MANIFEST_DIR")
+                    )
+                    .into(),
+                ),
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -1088,7 +1112,13 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec!["test".into()],
+                monitoring_keys: Some(
+                    format!(
+                        "{}/testdata/monitoring_keys.json",
+                        env!("CARGO_MANIFEST_DIR")
+                    )
+                    .into(),
+                ),
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -1160,7 +1190,13 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec!["none".into()],
+                monitoring_keys: Some(
+                    format!(
+                        "{}/testdata/monitoring_keys.json",
+                        env!("CARGO_MANIFEST_DIR")
+                    )
+                    .into(),
+                ),
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
@@ -1175,7 +1211,7 @@ mod tests {
             .unwrap();
 
         conn.write_all(&[
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b't', b'e', b's', b't', 0xCF,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b'n', b'o', b'n', b'e', 0xCF,
             1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
         ])
         .await
@@ -1228,7 +1264,13 @@ mod tests {
                 timesource_timeout: Duration::from_millis(500),
                 max_connections: 1,
                 use_proxy_protocol: false,
-                monitoring_keys: vec!["none".into()],
+                monitoring_keys: Some(
+                    format!(
+                        "{}/testdata/monitoring_keys.json",
+                        env!("CARGO_MANIFEST_DIR")
+                    )
+                    .into(),
+                ),
             };
 
             let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
