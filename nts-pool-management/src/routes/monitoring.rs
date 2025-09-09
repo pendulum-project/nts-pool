@@ -3,9 +3,12 @@ use std::time::Duration;
 use axum::{
     Json,
     body::{Body, to_bytes},
+    extract::State,
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::{AppState, error::AppError, models};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 enum IpVersion {
@@ -26,21 +29,29 @@ struct ProbeControlCommand {
     ntp_timeout: Duration,
 }
 
-pub async fn get_work() -> impl IntoResponse {
-    Json(ProbeControlCommand {
-        timesources: vec![
-            (IpVersion::IpV4, "UUID-A".into()),
-            (IpVersion::IpV4, "UUID-B".into()),
-        ],
-        poolke: "localhost".into(),
-        result_endpoint: "http://localhost:3000/monitoring/submit".into(),
+pub async fn get_work(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+    let timesources = models::time_source::not_deleted(&state.db).await?;
+
+    Ok(Json(ProbeControlCommand {
+        timesources: timesources
+            .iter()
+            .flat_map(|ts| {
+                [
+                    (IpVersion::IpV4, ts.id.to_string()),
+                    (IpVersion::IpV6, ts.id.to_string()),
+                ]
+                .into_iter()
+            })
+            .collect(),
+        poolke: state.config.poolke_name,
+        result_endpoint: format!("{}/monitoring/submit", state.config.base_url),
         result_batchsize: 4,
         result_max_waittime: Duration::from_secs(60),
         update_interval: Duration::from_secs(60),
         probe_interval: Duration::from_secs(4),
         nts_timeout: Duration::from_secs(1),
         ntp_timeout: Duration::from_secs(1),
-    })
+    }))
 }
 
 pub async fn post_results(data: Body) {

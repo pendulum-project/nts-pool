@@ -83,6 +83,7 @@ services:
       NTSPOOL_SMTP_URL: "smtp://mailcrab:1025"
       NTSPOOL_MAIL_FROM_ADDRESS: "NTS Pool <noreply@example.com>"
       NTSPOOL_BASE_URL: "http://localhost:3000"
+      NTSPOOL_POOLKE_NAME: "localhost"
       SQLX_OFFLINE: "${DOCKER_SQLX_OFFLINE:-0}"
     volumes:
       - ".:/app"

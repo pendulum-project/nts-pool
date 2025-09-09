@@ -139,3 +139,16 @@ pub async fn by_user(
     .fetch_all(conn)
     .await
 }
+
+pub async fn not_deleted(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, sqlx::Error> {
+    sqlx::query_as!(
+        TimeSource,
+        r#"
+            SELECT id, owner, hostname, port AS "port: _", countries, weight
+            FROM time_sources
+            WHERE deleted = false;
+        "#,
+    )
+    .fetch_all(conn)
+    .await
+}

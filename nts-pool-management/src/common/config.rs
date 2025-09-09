@@ -6,6 +6,7 @@ use eyre::Context;
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub base_url: BaseUrl,
+    pub poolke_name: String,
     pub database_url: String,
     pub database_run_migrations: bool,
     pub jwt_secret: String,
@@ -20,6 +21,9 @@ impl AppConfig {
             std::env::var("NTSPOOL_BASE_URL")
                 .wrap_err("NTSPOOL_BASE_URL not set in environment")?,
         );
+
+        let poolke_name = std::env::var("NTSPOOL_POOLKE_NAME")
+            .wrap_err("NTSPOOL_POOLKE_NAME not set in environment")?;
 
         let database_url = std::env::var("NTSPOOL_DATABASE_URL")
             .or_else(|_| std::env::var("DATABASE_URL"))
@@ -42,6 +46,7 @@ impl AppConfig {
 
         Ok(Self {
             base_url,
+            poolke_name,
             database_url,
             database_run_migrations,
             jwt_secret,
@@ -56,6 +61,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             base_url: BaseUrl::new("http://localhost:3000"),
+            poolke_name: "localhost:4460".into(),
             database_url: "postgres://nts-pool@localhost:5432/nts-pool".into(),
             database_run_migrations: true,
             jwt_secret: "UNSAFE_SECRET".into(),
