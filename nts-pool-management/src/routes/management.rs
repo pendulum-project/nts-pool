@@ -2,7 +2,7 @@ use askama::Template;
 use axum::{
     Form,
     extract::{Path, State},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
 };
 
 use crate::{
@@ -15,6 +15,8 @@ use crate::{
     },
     templates::{HtmlTemplate, filters},
 };
+
+pub const TIME_SOURCES_ENDPOINT: &'static str = "/management/time-sources";
 
 #[derive(Template)]
 #[template(path = "management/dashboard.html.j2")]
@@ -44,34 +46,28 @@ pub async fn time_sources(
 
 pub async fn create_time_source(
     user: AuthorizedUser,
-    app: AppContext,
     State(state): State<AppState>,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     time_source::create(&state.db, user.id, new_time_source.try_into()?).await?;
-    let time_sources = time_source::by_user(&state.db, user.id).await?;
-    Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
+    Ok(Redirect::to(TIME_SOURCES_ENDPOINT))
 }
 
 pub async fn update_time_source(
     user: AuthorizedUser,
-    app: AppContext,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
     Form(time_source): Form<UpdateTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     time_source::update(&state.db, user.id, time_source_id, time_source).await?;
-    let time_sources = time_source::by_user(&state.db, user.id).await?;
-    Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
+    Ok(Redirect::to(TIME_SOURCES_ENDPOINT))
 }
 
 pub async fn delete_time_source(
     user: AuthorizedUser,
-    app: AppContext,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     time_source::delete(&state.db, user.id, time_source_id).await?;
-    let time_sources = time_source::by_user(&state.db, user.id).await?;
-    Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
+    Ok(Redirect::to(TIME_SOURCES_ENDPOINT))
 }
