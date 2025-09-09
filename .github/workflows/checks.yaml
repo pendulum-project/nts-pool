@@ -59,11 +59,11 @@ jobs:
         run: cargo +nightly-2025-08-11 update -Z direct-minimal-versions
         if: ${{ matrix.rust == 'msrv' }}
       - name: Install cross-compilation tools
-        uses: taiki-e/setup-cross-toolchain-action@4c366193ea262ae0c17c6b79c3edc3d4f1394263
+        uses: taiki-e/setup-cross-toolchain-action@5084abba9e77b5db42d44a1420a56e7c1c7c8433
         with:
           target: ${{ matrix.target }}
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@f63c33fd96cc1e69a29bafd06541cf28588b43a4
+        uses: taiki-e/install-action@0c5db7f7f897c03b771660e91d065338615679f4
         with:
           tool: cargo-llvm-cov
       - name: Rust cache
@@ -77,7 +77,7 @@ jobs:
         env:
           RUST_BACKTRACE: 1
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fdcc8476540edceab3de004e990f80d881c6cc00
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -99,7 +99,7 @@ jobs:
         with:
           toolchain: nightly-2025-08-11
       - name: Install udeps
-        uses: taiki-e/install-action@f63c33fd96cc1e69a29bafd06541cf28588b43a4
+        uses: taiki-e/install-action@0c5db7f7f897c03b771660e91d065338615679f4
         with:
           tool: cargo-udeps
       - name: cargo udeps
@@ -159,7 +159,7 @@ jobs:
         if: ${{matrix.runs_on == 'ubuntu-latest'}}
 
       - name: Install bindgen-cli
-        uses: taiki-e/install-action@f63c33fd96cc1e69a29bafd06541cf28588b43a4
+        uses: taiki-e/install-action@0c5db7f7f897c03b771660e91d065338615679f4
         with:
           tool: bindgen-cli
         if: ${{matrix.runs_on == 'ubuntu-latest'}}
@@ -214,7 +214,7 @@ jobs:
           toolchain: nightly-2025-08-11
           components: llvm-tools-preview
       - name: Install cargo fuzz & rustfilt
-        uses: taiki-e/install-action@f63c33fd96cc1e69a29bafd06541cf28588b43a4
+        uses: taiki-e/install-action@0c5db7f7f897c03b771660e91d065338615679f4
         with:
           tool: cargo-fuzz,rustfilt
       - name: Run `cargo fuzz`
@@ -233,7 +233,7 @@ jobs:
               --format=lcov \
               -ignore-filename-regex="\.cargo|\.rustup" > lcov.info
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fdcc8476540edceab3de004e990f80d881c6cc00
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7
         with:
           files: ./lcov.info
           fail_ci_if_error: false
