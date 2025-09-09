@@ -2,10 +2,11 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
+use notify::{RecursiveMode, Watcher};
 use rustls::{pki_types::pem::PemObject, version::TLS13};
 use rustls_platform_verifier::Verifier;
 use tokio::{
@@ -127,6 +128,57 @@ async fn fetch_support_data(
         Ok(v) => v,
         Err(_) => Err(PoolError::Timeout),
     }
+}
+
+async fn tls_config_updater(
+    upstream_tls: Arc<RwLock<TlsConnector>>,
+    config: Arc<BackendConfig>,
+) -> std::io::Result<tokio::task::JoinHandle<()>> {
+    let (change_sender, mut change_receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
+    // Use a poll watcher here as INotify can be unreliable in many ways and I don't want to deal with that.
+    let mut watcher = notify::poll::PollWatcher::new(
+        move |event: notify::Result<notify::Event>| {
+            if event.is_ok() {
+                let _ = change_sender.send(());
+            }
+        },
+        notify::Config::default()
+            .with_poll_interval(std::time::Duration::from_secs(60))
+            .with_compare_contents(true),
+    )
+    .map_err(std::io::Error::other)?;
+
+    watcher
+        .watch(&config.certificate_chain, RecursiveMode::NonRecursive)
+        .map_err(std::io::Error::other)?;
+    watcher
+        .watch(&config.private_key, RecursiveMode::NonRecursive)
+        .map_err(std::io::Error::other)?;
+    config
+        .upstream_cas
+        .as_ref()
+        .map(|upstream_cas| {
+            watcher
+                .watch(upstream_cas, RecursiveMode::NonRecursive)
+                .map_err(std::io::Error::other)
+        })
+        .transpose()?;
+
+    Ok(tokio::task::spawn(async move {
+        // keep the watcher alive
+        let _w = watcher;
+        loop {
+            change_receiver.recv().await;
+            match load_upstream_tls(&config).await {
+                Ok(tls) => {
+                    *upstream_tls.write().unwrap() = tls;
+                }
+                Err(e) => {
+                    tracing::error!("Could not reload tls configuration: {}", e);
+                }
+            }
+        }
+    }))
 }
 
 async fn load_upstream_tls(config: &BackendConfig) -> std::io::Result<TlsConnector> {

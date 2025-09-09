@@ -1,9 +1,8 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, RwLock},
-    time::Duration,
 };
 
 use maxminddb::geoip2;
@@ -15,8 +14,8 @@ use tracing::debug;
 
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
-    nts::ProtocolId,
-    servers::{Server, ServerManager, fetch_support_data, load_upstream_tls},
+    servers::{Server, ServerManager, fetch_support_data, load_upstream_tls, tls_config_updater},
+    util::AbortingJoinHandle,
 };
 
 static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
@@ -34,9 +33,11 @@ const GLOBAL: &str = "@";
 #[derive(Clone)]
 pub struct GeographicServerManager {
     inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
-    upstream_tls: TlsConnector,
-    allowed_protocols: Arc<HashSet<ProtocolId>>,
-    timeout: Duration,
+    config: Arc<BackendConfig>,
+    upstream_tls: Arc<RwLock<TlsConnector>>,
+    // Kept around for its effect on drop.
+    #[allow(unused)]
+    tls_updater: Arc<AbortingJoinHandle<()>>,
 }
 
 struct GeographicServerManagerInner {
@@ -48,21 +49,31 @@ struct GeographicServerManagerInner {
 
 impl GeographicServerManager {
     pub async fn new(config: BackendConfig) -> std::io::Result<Self> {
-        let upstream_tls = load_upstream_tls(&config).await?;
-        Ok(Self {
+        let upstream_tls = Arc::new(RwLock::new(load_upstream_tls(&config).await?));
+        let config = Arc::new(config);
+        let tls_updater = Arc::new(
+            tls_config_updater(upstream_tls.clone(), config.clone())
+                .await?
+                .into(),
+        );
+
+        let result = Self {
             inner: Arc::new(RwLock::new(Arc::new(
                 Self::load(
-                    config.key_exchange_servers,
+                    config.key_exchange_servers.clone(),
                     config
                         .geolocation_db
+                        .clone()
                         .ok_or(std::io::Error::other("Missing geolocation db"))?,
                 )
                 .await?,
             ))),
             upstream_tls,
-            allowed_protocols: Arc::new(config.allowed_protocols),
-            timeout: config.timesource_timeout,
-        })
+            config,
+            tls_updater,
+        };
+
+        Ok(result)
     }
 
     async fn load(
@@ -148,8 +159,7 @@ impl ServerManager for GeographicServerManager {
                 inner,
                 upstream_tls: self.upstream_tls.clone(),
                 index,
-                allowed_protocols: self.allowed_protocols.clone(),
-                timeout: self.timeout,
+                config: self.config.clone(),
             };
         }
 
@@ -159,8 +169,7 @@ impl ServerManager for GeographicServerManager {
             upstream_tls: self.upstream_tls.clone(),
             index: region[start_index],
             inner,
-            allowed_protocols: self.allowed_protocols.clone(),
-            timeout: self.timeout,
+            config: self.config.clone(),
         }
     }
 
@@ -171,8 +180,7 @@ impl ServerManager for GeographicServerManager {
         index.map(move |index| GeographicServer {
             inner,
             upstream_tls: self.upstream_tls.clone(),
-            allowed_protocols: self.allowed_protocols.clone(),
-            timeout: self.timeout,
+            config: self.config.clone(),
             index,
         })
     }
@@ -180,9 +188,8 @@ impl ServerManager for GeographicServerManager {
 
 pub struct GeographicServer {
     inner: Arc<GeographicServerManagerInner>,
-    upstream_tls: TlsConnector,
-    allowed_protocols: Arc<HashSet<ProtocolId>>,
-    timeout: Duration,
+    upstream_tls: Arc<RwLock<TlsConnector>>,
+    config: Arc<BackendConfig>,
     index: usize,
 }
 
@@ -205,14 +212,19 @@ impl Server for GeographicServer {
         ),
         crate::error::PoolError,
     > {
-        fetch_support_data(self.connect().await?, &self.allowed_protocols, self.timeout).await
+        fetch_support_data(
+            self.connect().await?,
+            &self.config.allowed_protocols,
+            self.config.timesource_timeout,
+        )
+        .await
     }
 
     async fn connect<'a>(&'a self) -> Result<Self::Connection<'a>, crate::error::PoolError> {
         let io =
             TcpStream::connect(self.inner.servers[self.index].connection_address.clone()).await?;
-        Ok(self
-            .upstream_tls
+        let upstream_tls = self.upstream_tls.read().unwrap().clone();
+        Ok(upstream_tls
             .connect(self.inner.servers[self.index].server_name.clone(), io)
             .await?)
     }
@@ -220,6 +232,8 @@ impl Server for GeographicServer {
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashSet, time::Duration};
+
     use maxminddb::Reader;
     use rustls::{
         RootCertStore,
@@ -246,8 +260,8 @@ mod tests {
         TlsConnector::from(Arc::new(upstream_config))
     }
 
-    #[test]
-    fn test_load_is_distributed() {
+    #[tokio::test]
+    async fn test_load_is_distributed() {
         crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
@@ -275,9 +289,17 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
-            upstream_tls: upstream_tls_config(),
-            allowed_protocols: Arc::new(HashSet::new()),
-            timeout: Duration::from_secs(1),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+            }),
+            tls_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let first = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
@@ -294,8 +316,8 @@ mod tests {
         assert!(ok);
     }
 
-    #[test]
-    fn test_respect_denied_if_possible() {
+    #[tokio::test]
+    async fn test_respect_denied_if_possible() {
         crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
@@ -323,9 +345,17 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
-            upstream_tls: upstream_tls_config(),
-            allowed_protocols: Arc::new(HashSet::new()),
-            timeout: Duration::from_secs(1),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+            }),
+            tls_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
@@ -335,8 +365,8 @@ mod tests {
         assert_ne!(server.name(), "a.test");
     }
 
-    #[test]
-    fn test_ignore_denied_if_impossible() {
+    #[tokio::test]
+    async fn test_ignore_denied_if_impossible() {
         crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
@@ -364,9 +394,17 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
-            upstream_tls: upstream_tls_config(),
-            allowed_protocols: Arc::new(HashSet::new()),
-            timeout: Duration::from_secs(1),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+            }),
+            tls_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let first = manager.assign_server(
@@ -376,8 +414,8 @@ mod tests {
         assert!(first.name() == "a.test" || first.name() == "b.test");
     }
 
-    #[test]
-    fn test_region_handling() {
+    #[tokio::test]
+    async fn test_region_handling() {
         crate::test_init();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
@@ -420,9 +458,17 @@ mod tests {
                     ("UUID-gb".into(), 2),
                 ]),
             }))),
-            upstream_tls: upstream_tls_config(),
-            allowed_protocols: Arc::new(HashSet::new()),
-            timeout: Duration::from_secs(1),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+            }),
+            tls_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
         // GB
