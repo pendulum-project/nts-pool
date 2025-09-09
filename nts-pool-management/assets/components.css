@@ -118,17 +118,17 @@ dt {
 details.confirmation-btn {
     width: 200px;
     padding: var(--space-sm) 0;
-}
 
-summary {
-    color: var(--primary);
-    cursor: pointer;
-    text-decoration: underline;
-    user-select: none;
-}
+    summary {
+        color: var(--primary);
+        cursor: pointer;
+        text-decoration: underline;
+        user-select: none;
+    }
 
-summary::marker {
-    content: "Delete";
+    summary::marker {
+        content: "Delete";
+    }
 }
 
 details.confirmation-btn[open] summary::marker {
@@ -172,6 +172,7 @@ details.confirmation-btn > div {
     border-color: var(--error)
 }
 
+details.toast > summary,
 aside {
     padding: var(--space-sm) var(--space-md);
     border-width: var(--border-width);
