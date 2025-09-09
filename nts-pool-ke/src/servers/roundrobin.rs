@@ -14,7 +14,7 @@ use crate::{
     config::{BackendConfig, KeyExchangeServer},
     error::PoolError,
     nts::{AlgorithmDescription, AlgorithmId, ProtocolId},
-    servers::{Server, ServerManager, fetch_support_data},
+    servers::{Server, ServerManager, fetch_support_data, load_upstream_tls},
 };
 
 pub struct RoundRobinServerManager {
@@ -27,7 +27,9 @@ pub struct RoundRobinServerManager {
 }
 
 impl RoundRobinServerManager {
-    pub fn new(config: BackendConfig) -> std::io::Result<Self> {
+    pub async fn new(config: BackendConfig) -> std::io::Result<Self> {
+        let upstream_tls = load_upstream_tls(&config).await?;
+
         let server_file = std::fs::File::open(config.key_exchange_servers)?;
         let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
 
@@ -40,7 +42,7 @@ impl RoundRobinServerManager {
             servers,
             uuid_lookup,
             allowed_protocols: config.allowed_protocols,
-            upstream_tls: config.upstream_tls,
+            upstream_tls,
             next_start: AtomicUsize::new(0),
             timeout: config.timesource_timeout,
         })

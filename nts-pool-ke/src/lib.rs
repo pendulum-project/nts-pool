@@ -122,7 +122,7 @@ async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>
         let backend = GeographicServerManager::new(config.backend).await?;
         run_nts_pool_ke(config.server, backend).await
     } else {
-        let backend = RoundRobinServerManager::new(config.backend)?;
+        let backend = RoundRobinServerManager::new(config.backend).await?;
         run_nts_pool_ke(config.server, backend).await
     };
 

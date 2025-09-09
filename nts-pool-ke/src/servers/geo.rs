@@ -16,7 +16,7 @@ use tracing::debug;
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
     nts::ProtocolId,
-    servers::{Server, ServerManager, fetch_support_data},
+    servers::{Server, ServerManager, fetch_support_data, load_upstream_tls},
 };
 
 static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
@@ -48,6 +48,7 @@ struct GeographicServerManagerInner {
 
 impl GeographicServerManager {
     pub async fn new(config: BackendConfig) -> std::io::Result<Self> {
+        let upstream_tls = load_upstream_tls(&config).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(Arc::new(
                 Self::load(
@@ -58,7 +59,7 @@ impl GeographicServerManager {
                 )
                 .await?,
             ))),
-            upstream_tls: config.upstream_tls,
+            upstream_tls,
             allowed_protocols: Arc::new(config.allowed_protocols),
             timeout: config.timesource_timeout,
         })
@@ -439,7 +440,15 @@ mod tests {
     async fn test_server_list_parsing() {
         crate::test_init();
         let manager = GeographicServerManager::new(BackendConfig {
-            upstream_tls: upstream_tls_config(),
+            upstream_cas: Some(
+                format!("{}/testdata/testca.pem", env!("CARGO_MANIFEST_DIR")).into(),
+            ),
+            private_key: format!("{}/testdata/pool.test.key", env!("CARGO_MANIFEST_DIR")).into(),
+            certificate_chain: format!(
+                "{}/testdata/pool.test.fullchain.pem",
+                env!("CARGO_MANIFEST_DIR")
+            )
+            .into(),
             key_exchange_servers: "testdata/testservers.json".into(),
             geolocation_db: Some("testdata/GeoLite2-Country-Test.mmdb".into()),
             allowed_protocols: HashSet::new(),
