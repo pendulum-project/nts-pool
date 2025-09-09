@@ -74,6 +74,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         info!("listening on '{:?}'", listener.local_addr());
 
         let tls_updater = self.clone().tls_config_updater().await?;
+        let monitoring_keys_updater = self.clone().monitoring_keys_updater().await?;
 
         loop {
             let permit = connectionpermits
@@ -107,11 +108,54 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         tracker.close();
         tls_updater.abort();
+        monitoring_keys_updater.abort();
         tracker.wait().await;
 
         info!("Finished all connections");
 
         Ok(())
+    }
+
+    async fn monitoring_keys_updater(
+        self: Arc<Self>,
+    ) -> Result<tokio::task::JoinHandle<()>, std::io::Error> {
+        let Some(monitoring_keys_path) = self.config.monitoring_keys.clone() else {
+            return Ok(tokio::task::spawn(async {}));
+        };
+
+        let (change_sender, mut change_receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
+        // Use a poll watcher here as INotify can be unreliable in many ways and I don't want to deal with that.
+        let mut watcher = notify::poll::PollWatcher::new(
+            move |event: notify::Result<notify::Event>| {
+                if event.is_ok() {
+                    let _ = change_sender.send(());
+                }
+            },
+            notify::Config::default()
+                .with_poll_interval(std::time::Duration::from_secs(60))
+                .with_compare_contents(true),
+        )
+        .map_err(std::io::Error::other)?;
+
+        watcher
+            .watch(&monitoring_keys_path, RecursiveMode::NonRecursive)
+            .map_err(std::io::Error::other)?;
+
+        Ok(tokio::spawn(async move {
+            // keep the watcher alive
+            let _w = watcher;
+            loop {
+                change_receiver.recv().await;
+                match load_monitoring_keys(&self.config).await {
+                    Ok(monitoring_keys) => {
+                        *self.monitoring_keys.write().unwrap() = Arc::new(monitoring_keys);
+                    }
+                    Err(e) => {
+                        tracing::error!("Could not reload tls configuration: {}", e);
+                    }
+                }
+            }
+        }))
     }
 
     async fn tls_config_updater(
