@@ -4,20 +4,14 @@ use std::{
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    sync::Arc,
     time::Duration,
 };
 
-use rustls::{
-    pki_types::{ServerName, pem::PemObject},
-    version::TLS13,
-};
-use rustls_platform_verifier::Verifier;
+use rustls::pki_types::ServerName;
 use serde::Deserialize;
-use tokio_rustls::TlsConnector;
 use tracing::{info, warn};
 
-use crate::{nts::ProtocolId, util::load_certificates};
+use crate::nts::ProtocolId;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -116,7 +110,9 @@ struct BareBackendConfig {
 
 #[derive(Clone)]
 pub struct BackendConfig {
-    pub upstream_tls: TlsConnector,
+    pub upstream_cas: Option<PathBuf>,
+    pub certificate_chain: PathBuf,
+    pub private_key: PathBuf,
     pub key_exchange_servers: PathBuf,
     pub allowed_protocols: HashSet<ProtocolId>,
     pub geolocation_db: Option<PathBuf>,
@@ -130,53 +126,10 @@ impl<'de> Deserialize<'de> for BackendConfig {
     {
         let bare = BareBackendConfig::deserialize(deserializer)?;
 
-        let upstream_cas = bare
-            .upstream_cas
-            .map(|path| {
-                load_certificates(&path).map_err(|e| {
-                    serde::de::Error::custom(format!(
-                        "error reading additional upstream ca certificates from `{path:?}`: {e:?}"
-                    ))
-                })
-            })
-            .transpose()?;
-
-        let certificate_chain = load_certificates(&bare.certificate_chain).map_err(|e| {
-            serde::de::Error::custom(format!(
-                "error reading server's certificate chain from `{:?}`: {:?}",
-                bare.certificate_chain, e
-            ))
-        })?;
-
-        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(&bare.private_key)
-            .map_err(|e| {
-                serde::de::Error::custom(format!(
-                    "error reading server's private key from `{:?}`: {:?}",
-                    bare.private_key, e
-                ))
-            })?;
-
-        let upstream_config_builder =
-            rustls::ClientConfig::builder_with_protocol_versions(&[&TLS13]);
-        let provider = upstream_config_builder.crypto_provider().clone();
-        let verifier = match upstream_cas {
-            Some(upstream_cas) => {
-                Verifier::new_with_extra_roots(upstream_cas.iter().cloned(), provider)
-                    .map_err(serde::de::Error::custom)?
-            }
-            None => Verifier::new(provider).map_err(serde::de::Error::custom)?,
-        };
-
-        let mut upstream_config = upstream_config_builder
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(verifier))
-            .with_client_auth_cert(certificate_chain, private_key)
-            .map_err(serde::de::Error::custom)?;
-        upstream_config.alpn_protocols = vec![b"ntske/1".to_vec()];
-        let upstream_tls = TlsConnector::from(Arc::new(upstream_config));
-
         Ok(Self {
-            upstream_tls,
+            upstream_cas: bare.upstream_cas,
+            certificate_chain: bare.certificate_chain,
+            private_key: bare.private_key,
             key_exchange_servers: bare.key_exchange_servers,
             allowed_protocols: bare.allowed_protocols.into_iter().collect(),
             geolocation_db: bare.geolocation_db,

@@ -2,22 +2,26 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
+    sync::Arc,
     time::Duration,
 };
 
+use rustls::{pki_types::pem::PemObject, version::TLS13};
+use rustls_platform_verifier::Verifier;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
 };
-use tokio_rustls::client::TlsStream;
+use tokio_rustls::{TlsConnector, client::TlsStream};
 
 use crate::{
+    config::BackendConfig,
     error::PoolError,
     nts::{
         AlgorithmDescription, AlgorithmId, MAX_MESSAGE_SIZE, ProtocolId, ServerInformationRequest,
         ServerInformationResponse,
     },
-    util::BufferBorrowingReader,
+    util::{BufferBorrowingReader, load_certificates},
 };
 
 mod geo;
@@ -170,6 +174,48 @@ async fn fetch_support_data(
         Ok(v) => v,
         Err(_) => Err(PoolError::Timeout),
     }
+}
+
+async fn load_upstream_tls(config: &BackendConfig) -> std::io::Result<TlsConnector> {
+    // Unfortunately, we need to clone here as there is no way to use references with tokio's spawn_blocking
+    let upstream_cas = config.upstream_cas.clone();
+    let certificate_chain = config.certificate_chain.clone();
+    let private_key = config.private_key.clone();
+
+    tokio::task::spawn_blocking(|| {
+        let upstream_cas = upstream_cas
+            .map(|path| load_certificates(path).map_err(std::io::Error::other))
+            .transpose()?;
+
+        let certificate_chain =
+            load_certificates(certificate_chain).map_err(std::io::Error::other)?;
+
+        let private_key = rustls::pki_types::PrivateKeyDer::from_pem_file(private_key)
+            .map_err(std::io::Error::other)?;
+
+        let upstream_config_builder =
+            rustls::ClientConfig::builder_with_protocol_versions(&[&TLS13]);
+        let provider = upstream_config_builder.crypto_provider().clone();
+        let verifier = match upstream_cas {
+            Some(upstream_cas) => {
+                Verifier::new_with_extra_roots(upstream_cas.iter().cloned(), provider)
+                    .map_err(std::io::Error::other)?
+            }
+            None => Verifier::new(provider).map_err(std::io::Error::other)?,
+        };
+
+        let mut upstream_config = upstream_config_builder
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(verifier))
+            .with_client_auth_cert(certificate_chain, private_key)
+            .map_err(std::io::Error::other)?;
+        upstream_config.alpn_protocols = vec![b"ntske/1".to_vec()];
+        let upstream_tls = TlsConnector::from(Arc::new(upstream_config));
+
+        Ok(upstream_tls)
+    })
+    .await
+    .unwrap()
 }
 
 #[cfg(test)]
