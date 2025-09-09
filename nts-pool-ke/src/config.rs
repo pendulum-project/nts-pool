@@ -208,7 +208,7 @@ struct BareNtsPoolKeConfig {
     pub use_proxy_protocol: bool,
     /// Monitoring keys
     #[serde(default)]
-    monitoring_keys: Vec<String>,
+    monitoring_keys: Option<PathBuf>,
 }
 
 fn default_nts_ke_timeout() -> u64 {
@@ -242,6 +242,15 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
     {
         let bare = BareNtsPoolKeConfig::deserialize(deserializer)?;
 
+        let monitoring_keys = if let Some(monitoring_keys) = bare.monitoring_keys {
+            serde_json::from_reader(
+                std::fs::File::open(monitoring_keys).map_err(serde::de::Error::custom)?,
+            )
+            .map_err(serde::de::Error::custom)?
+        } else {
+            vec![]
+        };
+
         Ok(NtsPoolKeConfig {
             certificate_chain: bare.certificate_chain,
             private_key: bare.private_key,
@@ -250,7 +259,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
             timesource_timeout: std::time::Duration::from_millis(bare.timesource_timeout),
             max_connections: bare.max_connections,
             use_proxy_protocol: bare.use_proxy_protocol,
-            monitoring_keys: bare.monitoring_keys,
+            monitoring_keys,
         })
     }
 }
