@@ -22,7 +22,7 @@ pub struct TimeSource {
     pub weight: i32,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct NewTimeSource {
     pub hostname: String,
     pub port: Option<Port>,
@@ -50,9 +50,20 @@ impl TryFrom<NewTimeSourceForm> for NewTimeSource {
                 form.port
                     .parse::<u16>()
                     .wrap_err("Could not parse into port number")?
-                    .into(),
+                    .try_into()
+                    .wrap_err("Could not parse into port number")?,
             )
         };
+
+        // Check domain name is reasonable (cf. RFC 1035)
+        if form.hostname.is_empty()
+            || !form
+                .hostname
+                .chars()
+                .all(|c| matches!(c, '0'..='9' | '.' | 'a'..='z' | 'A'..='Z'))
+        {
+            return Err(eyre::eyre!("Invalid domain name").into());
+        }
 
         Ok(Self {
             hostname: form.hostname,
@@ -138,4 +149,142 @@ pub async fn by_user(
     )
     .fetch_all(conn)
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_time_source_form_valid_without_port_1() {
+        assert_eq!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "test".into(),
+                port: "".into()
+            })
+            .unwrap(),
+            NewTimeSource {
+                hostname: "test".into(),
+                port: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_valid_without_port_2() {
+        assert_eq!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "ExAmPlE.com".into(),
+                port: "".into()
+            })
+            .unwrap(),
+            NewTimeSource {
+                hostname: "ExAmPlE.com".into(),
+                port: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_valid_with_port() {
+        assert_eq!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "test".into(),
+                port: "456".into()
+            })
+            .unwrap(),
+            NewTimeSource {
+                hostname: "test".into(),
+                port: Some(456.try_into().unwrap())
+            }
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_weird_characters_1() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "js(.com".into(),
+                port: "".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_weird_characters_2() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "jsê.com".into(),
+                port: "".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_weird_characters_3() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "js@.com".into(),
+                port: "".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_port_0() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "example.com".into(),
+                port: "0".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_port_100000() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "example.com".into(),
+                port: "100000".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_non_numeric_port() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "example.com".into(),
+                port: "fe".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_port_with_trailing_garbage() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "example.com".into(),
+                port: "123 abc".into(),
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_require_hostname() {
+        assert!(
+            NewTimeSource::try_from(NewTimeSourceForm {
+                hostname: "".into(),
+                port: "".into(),
+            })
+            .is_err()
+        );
+    }
 }

@@ -1,5 +1,6 @@
 use std::{
     fmt::{Display, Formatter},
+    num::{NonZeroU16, TryFromIntError},
     ops::{Deref, DerefMut},
 };
 
@@ -11,22 +12,24 @@ use sqlx::{
 
 #[derive(Debug, Deserialize, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
-pub struct Port(u16);
+pub struct Port(NonZeroU16);
 
-impl From<u16> for Port {
-    fn from(port: u16) -> Self {
-        Port(port)
+impl TryFrom<u16> for Port {
+    type Error = TryFromIntError;
+
+    fn try_from(port: u16) -> Result<Self, TryFromIntError> {
+        Ok(Port(port.try_into()?))
     }
 }
 
 impl From<Port> for u16 {
     fn from(port: Port) -> Self {
-        port.0
+        port.0.into()
     }
 }
 
 impl Deref for Port {
-    type Target = u16;
+    type Target = NonZeroU16;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -48,7 +51,7 @@ impl Type<Postgres> for Port {
 impl<'r> Decode<'r, Postgres> for Port {
     fn decode(value: PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let int_value: i32 = Decode::<Postgres>::decode(value)?;
-        Ok(Port(u16::try_from(int_value)?))
+        Ok(Port(u16::try_from(int_value)?.try_into()?))
     }
 }
 
@@ -65,7 +68,7 @@ impl<'q> Encode<'q, Postgres> for Port {
         &self,
         buf: &mut PgArgumentBuffer,
     ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-        Encode::<Postgres>::encode_by_ref(&(self.0 as i32), buf)
+        Encode::<Postgres>::encode_by_ref(&(self.0.get() as i32), buf)
     }
 }
 
