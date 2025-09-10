@@ -16,7 +16,7 @@ use crate::{
     templates::{HtmlTemplate, filters},
 };
 
-pub const TIME_SOURCES_ENDPOINT: &'static str = "/management/time-sources";
+pub const TIME_SOURCES_ENDPOINT: &str = "/management/time-sources";
 
 #[derive(Template)]
 #[template(path = "management/dashboard.html.j2")]
