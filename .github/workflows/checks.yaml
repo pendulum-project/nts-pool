@@ -170,7 +170,7 @@ jobs:
             shared-key: "stable-${{matrix.target}}"
 
       - name: Run clippy
-        run: cargo clippy --target ${{matrix.target}} --all-targets
+        run: cargo clippy --target ${{matrix.target}} --all-targets -- -D warnings
 
   audit-dependencies:
     name: Audit dependencies
