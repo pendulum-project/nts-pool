@@ -1,14 +1,18 @@
 use askama::Template;
 use axum::{
-    Router,
+    Json, Router,
+    extract::State,
     response::IntoResponse,
     routing::{get, post},
 };
 use management::TIME_SOURCES_ENDPOINT;
+use serde::Serialize;
 
 use crate::{
     AppState,
     context::AppContext,
+    error::AppError,
+    models,
     templates::{HtmlTemplate, filters, not_found_page},
 };
 
@@ -55,6 +59,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/management", get(management::dashboard))
         .route("/monitoring/get_work", get(monitoring::get_work))
         .route("/monitoring/submit", post(monitoring::post_results))
+        .route("/poolke_servers", get(poolke_servers))
         .fallback(async |app: AppContext| not_found_page(app))
 }
 
@@ -66,4 +71,24 @@ struct IndexTemplate {
 
 pub async fn index(app: AppContext) -> impl IntoResponse {
     HtmlTemplate(IndexTemplate { app })
+}
+
+pub async fn poolke_servers(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+    #[derive(Serialize)]
+    struct PoolkeTimesource {
+        uuid: String,
+        domain: String,
+        port: u16,
+    }
+    let timesources = models::time_source::not_deleted(&state.db).await?;
+    Ok(Json(
+        timesources
+            .into_iter()
+            .map(|ts| PoolkeTimesource {
+                uuid: ts.id.to_string(),
+                domain: ts.hostname,
+                port: ts.port.map(|p| p.into()).unwrap_or(4460),
+            })
+            .collect::<Vec<_>>(),
+    ))
 }
