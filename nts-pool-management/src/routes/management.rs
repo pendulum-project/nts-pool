@@ -4,13 +4,13 @@ use axum::{
     extract::{Path, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::{PrivateCookieJar, cookie::Cookie};
 
 use crate::{
     AppState,
     auth::AuthorizedUser,
     context::AppContext,
     error::AppError,
+    flash::FlashMessage,
     models::time_source::{
         self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
     },
@@ -48,14 +48,15 @@ pub async fn time_sources(
 pub async fn create_time_source(
     user: AuthorizedUser,
     State(state): State<AppState>,
-    cookie_jar: PrivateCookieJar,
+    flash: FlashMessage,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    time_source::create(&state.db, user.id, new_time_source.try_into()?).await?;
+    let flash = match time_source::create(&state.db, user.id, new_time_source.try_into()?).await {
+        Ok(_) => flash.set("Time source added successfully".to_string()),
+        Err(_) => flash.set("Could not add time source".to_string()),
+    };
 
-    let updated_cookie_jar = cookie_jar.add(Cookie::new("flash", "kdjfngdkfsjgn"));
-
-    Ok((updated_cookie_jar, Redirect::to(TIME_SOURCES_ENDPOINT)))
+    Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }
 
 pub async fn update_time_source(

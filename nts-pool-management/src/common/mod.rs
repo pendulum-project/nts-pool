@@ -3,6 +3,7 @@ pub mod config;
 pub mod context;
 pub mod email;
 pub mod error;
+pub mod flash;
 
 use std::convert::Infallible;
 
