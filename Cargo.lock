@@ -2118,6 +2118,7 @@ version = "0.1.0"
 dependencies = [
  "maxminddb",
  "notify",
+ "nts-pool-shared",
  "phf 0.12.1",
  "rand 0.9.2",
  "rustls",
@@ -2183,6 +2184,9 @@ dependencies = [
 [[package]]
 name = "nts-pool-shared"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "nu-ansi-term"
