@@ -6,28 +6,9 @@ use axum::{
     extract::State,
     response::IntoResponse,
 };
-use serde::{Deserialize, Serialize};
+use nts_pool_shared::{IpVersion, ProbeControlCommand};
 
 use crate::{AppState, error::AppError, models};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
-enum IpVersion {
-    IpV4,
-    IpV6,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ProbeControlCommand {
-    timesources: Vec<(IpVersion, String)>,
-    poolke: String,
-    result_endpoint: String,
-    result_batchsize: usize,
-    result_max_waittime: Duration,
-    update_interval: Duration,
-    probe_interval: Duration,
-    nts_timeout: Duration,
-    ntp_timeout: Duration,
-}
 
 pub async fn get_work(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     let timesources = models::time_source::not_deleted(&state.db).await?;
