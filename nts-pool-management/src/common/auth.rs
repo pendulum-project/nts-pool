@@ -269,12 +269,6 @@ impl TryFrom<AuthorizedUser> for Administrator {
     }
 }
 
-struct RawSession {
-    claims: JwtClaims,
-    user: UnsafeLoggedInUser,
-    parent: Option<Administrator>,
-}
-
 /// A valid user session
 ///
 /// This guarantees
@@ -289,19 +283,22 @@ pub struct Session {
 }
 
 impl Session {
-    fn try_from_raw(raw: RawSession) -> Option<Session> {
-        if raw
-            .parent
+    fn new(
+        claims: JwtClaims,
+        user: UnsafeLoggedInUser,
+        parent: Option<Administrator>,
+    ) -> Option<Session> {
+        if parent
             .as_ref()
             .map(|admin| &admin.session_revoke_token)
-            .unwrap_or(&raw.user.session_revoke_token)
-            == &raw.claims.session_revoke_token
-            && (raw.claims.parent.is_some() == raw.parent.is_some())
+            .unwrap_or(&user.session_revoke_token)
+            == &claims.session_revoke_token
+            && (claims.parent.is_some() == parent.is_some())
         {
             Some(Session {
-                claims: raw.claims,
-                user: raw.user,
-                parent: raw.parent,
+                claims,
+                user,
+                parent,
             })
         } else {
             None
@@ -394,11 +391,7 @@ where
             None
         };
 
-        let session = Session::try_from_raw(RawSession {
-            claims,
-            user: UnsafeLoggedInUser(user),
-            parent,
-        });
+        let session = Session::new(claims, UnsafeLoggedInUser(user), parent);
 
         parts.extensions.insert(session.clone());
 
