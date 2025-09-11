@@ -9,13 +9,33 @@ use libfuzzer_sys::fuzz_target;
 use pool_nts::{BufferBorrowingReader, ClientRequest};
 
 fuzz_target!(|data: &[u8]| {
-    let mut buf = [0u8; 4096];
+    let mut buf1 = [0u8; 4096];
     match pin!(ClientRequest::parse(&mut BufferBorrowingReader::new(
-        data, &mut buf
+        data, &mut buf1
     )))
     .poll(&mut Context::from_waker(Waker::noop()))
     {
+        std::task::Poll::Ready(Ok(record)) => {
+            let mut out1 = vec![];
+            assert!(matches!(
+                pin!(record.serialize(&mut out1)).poll(&mut Context::from_waker(Waker::noop())),
+                std::task::Poll::Ready(Ok(_))
+            ));
+            let mut buf2 = [0u8; 4096];
+            let std::task::Poll::Ready(Ok(record2)) = pin!(ClientRequest::parse(
+                &mut BufferBorrowingReader::new(out1.as_slice(), &mut buf2)
+            ))
+            .poll(&mut Context::from_waker(Waker::noop())) else {
+                panic!("Unexpected stall during parsing");
+            };
+            let mut out2 = vec![];
+            assert!(matches!(
+                pin!(record2.serialize(&mut out2)).poll(&mut Context::from_waker(Waker::noop())),
+                std::task::Poll::Ready(Ok(_))
+            ));
+            assert_eq!(out1, out2);
+        }
         std::task::Poll::Ready(_) => {}
-        std::task::Poll::Pending => panic!("Unexpected failure to complete parsing"),
+        std::task::Poll::Pending => panic!("Unexpected stall during parsing"),
     }
 });
