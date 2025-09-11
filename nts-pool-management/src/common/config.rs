@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub database_url: String,
     pub database_run_migrations: bool,
     pub jwt_secret: String,
+    pub cookie_secret: String,
     pub mail_from_address: String,
     pub mail_smtp_url: String,
     pub assets_path: String,
@@ -36,6 +37,10 @@ impl AppConfig {
         let jwt_secret = std::env::var("NTSPOOL_JWT_SECRET")
             .wrap_err("Missing NTSPOOL_JWT_SECRET environment variable")?;
 
+        let cookie_secret = std::env::var("NTSPOOL_COOKIE_SECRET")
+            .wrap_err("Missing NTSPOOL_COOKIE_SECRET environment variable")?;
+        println!("SECRET OMG");
+        println!("{}", cookie_secret);
         let mail_from_address = std::env::var("NTSPOOL_MAIL_FROM_ADDRESS")
             .wrap_err("NTSPOOL_MAIL_FROM_ADDRESS not set")?;
 
@@ -50,6 +55,7 @@ impl AppConfig {
             database_url,
             database_run_migrations,
             jwt_secret,
+            cookie_secret,
             mail_from_address,
             mail_smtp_url,
             assets_path,
@@ -65,6 +71,7 @@ impl Default for AppConfig {
             database_url: "postgres://nts-pool@localhost:5432/nts-pool".into(),
             database_run_migrations: true,
             jwt_secret: "UNSAFE_SECRET".into(),
+            cookie_secret: "UNSAFE_SECRET".into(),
             mail_from_address: "noreply@example.com".into(),
             mail_smtp_url: "smtp://localhost:25".into(),
             assets_path: "./assets".into(),
