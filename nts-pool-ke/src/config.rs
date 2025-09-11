@@ -224,23 +224,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
     where
         D: serde::Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        struct BareKeyExchangeServer {
-            uuid: String,
-            domain: String,
-            port: u16,
-            #[serde(default)]
-            weight: Option<usize>,
-            #[serde(default)]
-            regions: Vec<String>,
-            #[serde(default)]
-            ipv4_capable: Option<bool>,
-            #[serde(default)]
-            ipv6_capable: Option<bool>,
-        }
-
-        let bare = BareKeyExchangeServer::deserialize(deserializer)?;
+        let bare = nts_pool_shared::KeyExchangeServer::deserialize(deserializer)?;
 
         let Ok(server_name) = ServerName::try_from(bare.domain.clone()) else {
             return Err(serde::de::Error::invalid_value(
