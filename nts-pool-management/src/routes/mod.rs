@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use management::TIME_SOURCES_ENDPOINT;
-use serde::Serialize;
+use nts_pool_shared::KeyExchangeServer;
 
 use crate::{
     AppState,
@@ -74,22 +74,18 @@ pub async fn index(app: AppContext) -> impl IntoResponse {
 }
 
 pub async fn poolke_servers(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
-    #[derive(Serialize)]
-    struct PoolkeTimesource {
-        uuid: String,
-        domain: String,
-        port: u16,
-        weight: i32,
-    }
     let timesources = models::time_source::not_deleted(&state.db).await?;
     Ok(Json(
         timesources
             .into_iter()
-            .map(|ts| PoolkeTimesource {
+            .map(|ts| KeyExchangeServer {
                 uuid: ts.id.to_string(),
                 domain: ts.hostname,
                 port: ts.port.map(|p| p.into()).unwrap_or(4460),
-                weight: ts.weight,
+                weight: Some(ts.weight.try_into().unwrap_or(1)),
+                regions: vec![],
+                ipv4_capable: None,
+                ipv6_capable: None,
             })
             .collect::<Vec<_>>(),
     ))
