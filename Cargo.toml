@@ -1,5 +1,5 @@
 [workspace]
-members = ["nts-pool-ke", "nts-pool-management", "nts-pool-monitor", "pool-nts"]
+members = ["nts-pool-ke", "nts-pool-management", "nts-pool-monitor", "nts-pool-shared", "pool-nts"]
 resolver = "3"
 
 # Global settings for our crates
@@ -59,4 +59,5 @@ zeroize = "1.7"
 testcontainers = "0.25.0"
 scraper = "0.24.0"
 
+nts-pool-shared = { path = "./nts-pool-shared" }
 pool-nts = { path = "./pool-nts" }
