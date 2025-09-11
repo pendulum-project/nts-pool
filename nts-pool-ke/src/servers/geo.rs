@@ -12,7 +12,6 @@ use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
 use rand::Rng;
 use tokio::{net::TcpStream, task::spawn_blocking};
 use tokio_rustls::{TlsConnector, client::TlsStream};
-use tracing::debug;
 
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
@@ -35,6 +34,11 @@ static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
 
 const GLOBAL: &str = "@";
 
+struct ServerLookup {
+    total_weight_including: usize,
+    index: usize,
+}
+
 #[derive(Clone)]
 pub struct GeographicServerManager {
     inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
@@ -49,8 +53,8 @@ pub struct GeographicServerManager {
 
 struct GeographicServerManagerInner {
     servers: Box<[KeyExchangeServer]>,
-    regions_ipv4: HashMap<String, Vec<usize>>,
-    regions_ipv6: HashMap<String, Vec<usize>>,
+    regions_ipv4: HashMap<String, Vec<ServerLookup>>,
+    regions_ipv6: HashMap<String, Vec<ServerLookup>>,
     geodb: maxminddb::Reader<Vec<u8>>,
     uuid_lookup: HashMap<String, usize>,
 }
@@ -149,46 +153,86 @@ impl GeographicServerManager {
             let server_file = std::fs::File::open(servers)?;
             let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
 
-            let mut regions_ipv4: HashMap<String, Vec<usize>> = HashMap::new();
-            let mut regions_ipv6: HashMap<String, Vec<usize>> = HashMap::new();
+            let mut regions_ipv4: HashMap<String, Vec<ServerLookup>> = HashMap::new();
+            let mut regions_ipv6: HashMap<String, Vec<ServerLookup>> = HashMap::new();
             let mut uuid_lookup = HashMap::new();
             for (index, server) in servers.iter().enumerate() {
                 uuid_lookup.insert(server.uuid.clone(), index);
                 if server.ipv4_capable {
                     for region in &server.regions {
                         if let Some(region_list) = regions_ipv4.get_mut(region) {
-                            region_list.push(index)
+                            region_list.push(ServerLookup {
+                                index,
+                                total_weight_including: server.weight
+                                    + region_list
+                                        .last()
+                                        .map(|v| v.total_weight_including)
+                                        .unwrap_or(0),
+                            })
                         } else {
-                            regions_ipv4.insert(region.clone(), vec![index]);
+                            regions_ipv4.insert(
+                                region.clone(),
+                                vec![ServerLookup {
+                                    index,
+                                    total_weight_including: server.weight,
+                                }],
+                            );
                         }
                     }
                 }
                 if server.ipv6_capable {
                     for region in &server.regions {
                         if let Some(region_list) = regions_ipv6.get_mut(region) {
-                            region_list.push(index)
+                            region_list.push(ServerLookup {
+                                index,
+                                total_weight_including: server.weight
+                                    + region_list
+                                        .last()
+                                        .map(|v| v.total_weight_including)
+                                        .unwrap_or(0),
+                            })
                         } else {
-                            regions_ipv6.insert(region.clone(), vec![index]);
+                            regions_ipv6.insert(
+                                region.clone(),
+                                vec![ServerLookup {
+                                    index,
+                                    total_weight_including: server.weight,
+                                }],
+                            );
                         }
                     }
                 }
             }
+            let mut ipv4weight = 0;
             regions_ipv4.insert(
                 GLOBAL.into(),
                 servers
                     .iter()
                     .enumerate()
                     .filter(|(_, server)| server.ipv4_capable)
-                    .map(|(index, _)| index)
+                    .map(|(index, server)| {
+                        ipv4weight += server.weight;
+                        ServerLookup {
+                            total_weight_including: ipv4weight,
+                            index,
+                        }
+                    })
                     .collect(),
             );
+            let mut ipv6weight = 0;
             regions_ipv6.insert(
                 GLOBAL.into(),
                 servers
                     .iter()
                     .enumerate()
                     .filter(|(_, server)| server.ipv6_capable)
-                    .map(|(index, _)| index)
+                    .map(|(index, server)| {
+                        ipv6weight += server.weight;
+                        ServerLookup {
+                            total_weight_including: ipv6weight,
+                            index,
+                        }
+                    })
                     .collect(),
             );
 
@@ -206,6 +250,8 @@ impl GeographicServerManager {
         .map_err(std::io::Error::other)?
     }
 }
+
+const MAX_SKIPS: usize = 3;
 
 impl ServerManager for GeographicServerManager {
     type Server<'a>
@@ -242,34 +288,61 @@ impl ServerManager for GeographicServerManager {
             }
             .unwrap_or_else(|| regions.get(GLOBAL).unwrap());
 
-        let start_index = (rand::rng().random::<u64>() as usize) % region.len();
+        let total_weight = region.last().map(|v| v.total_weight_including).unwrap();
+        struct Skip {
+            weight: usize,
+            above: usize,
+        }
+        let mut skips: Vec<Skip> = Vec::with_capacity(MAX_SKIPS);
 
-        let (left, right) = region.split_at(start_index);
-        let rotated_servers = right.iter().chain(left.iter()).copied();
-
-        for index in rotated_servers {
-            if denied_servers
-                .iter()
-                .any(|v| *v == inner.servers[index].domain)
-            {
-                continue;
+        loop {
+            // Make a choice by weight, removing the weights of the skipped servers
+            let mut choice = rand::rng()
+                .random_range(0..(total_weight - skips.iter().map(|v| v.weight).sum::<usize>()));
+            // Compensate for the skipped servers
+            for skip in &skips {
+                if choice >= skip.above {
+                    choice += skip.weight
+                }
             }
 
-            return GeographicServer {
-                inner,
-                upstream_tls: self.upstream_tls.clone(),
-                index,
-                config: self.config.clone(),
-            };
-        }
+            // Binary search always returns an error since we never return equal.
+            // This provides the "boundary" between less returning elements and
+            // greater returning elements, which is exactly the index of the
+            // element we are looking for.
+            //
+            // Note that since choice < total_weight, pick is guaranteed to be
+            // smaller than region.len()
+            let pick = region
+                .binary_search_by(|probe| {
+                    if probe.total_weight_including <= choice {
+                        std::cmp::Ordering::Less
+                    } else {
+                        std::cmp::Ordering::Greater
+                    }
+                })
+                .unwrap_err();
 
-        debug!("All servers denied. Falling back to denied server");
-
-        GeographicServer {
-            upstream_tls: self.upstream_tls.clone(),
-            index: region[start_index],
-            inner,
-            config: self.config.clone(),
+            if skips.len() + 1 < region.len()
+                && skips.len() < MAX_SKIPS
+                && denied_servers
+                    .iter()
+                    .any(|v| *v == inner.servers[region[pick].index].domain)
+            {
+                let weight = inner.servers[region[pick].index].weight;
+                skips.push(Skip {
+                    above: region[pick].total_weight_including - weight,
+                    weight,
+                });
+                skips.sort_by(|a, b| a.above.cmp(&b.above))
+            } else {
+                return GeographicServer {
+                    upstream_tls: self.upstream_tls.clone(),
+                    index: region[pick].index,
+                    inner,
+                    config: self.config.clone(),
+                };
+            }
         }
     }
 
@@ -395,8 +468,32 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
-                regions_ipv6: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -459,8 +556,32 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
-                regions_ipv6: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -516,8 +637,32 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
-                regions_ipv6: HashMap::from([("@".into(), vec![0, 1])]),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -584,14 +729,50 @@ mod tests {
                 ]
                 .into(),
                 regions_ipv4: HashMap::from([
-                    ("@".into(), vec![0]),
-                    ("EUROPE".into(), vec![1]),
-                    ("GB".into(), vec![2]),
+                    (
+                        "@".into(),
+                        vec![ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        }],
+                    ),
+                    (
+                        "EUROPE".into(),
+                        vec![ServerLookup {
+                            total_weight_including: 1,
+                            index: 1,
+                        }],
+                    ),
+                    (
+                        "GB".into(),
+                        vec![ServerLookup {
+                            total_weight_including: 1,
+                            index: 2,
+                        }],
+                    ),
                 ]),
                 regions_ipv6: HashMap::from([
-                    ("@".into(), vec![0]),
-                    ("EUROPE".into(), vec![1]),
-                    ("GB".into(), vec![2]),
+                    (
+                        "@".into(),
+                        vec![ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        }],
+                    ),
+                    (
+                        "EUROPE".into(),
+                        vec![ServerLookup {
+                            total_weight_including: 1,
+                            index: 1,
+                        }],
+                    ),
+                    (
+                        "GB".into(),
+                        vec![ServerLookup {
+                            total_weight_including: 1,
+                            index: 2,
+                        }],
+                    ),
                 ]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
@@ -666,8 +847,32 @@ mod tests {
                     },
                 ]
                 .into(),
-                regions_ipv4: HashMap::from([("@".into(), vec![0, 1])]),
-                regions_ipv6: HashMap::from([("@".into(), vec![0, 2])]),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 2,
+                        },
+                    ],
+                )]),
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
@@ -723,23 +928,230 @@ mod tests {
         let inner = manager.inner.read().unwrap();
         for (i, server) in inner.servers.iter().enumerate() {
             assert_eq!(
-                inner.regions_ipv4.get(GLOBAL).unwrap().contains(&i),
+                inner
+                    .regions_ipv4
+                    .get(GLOBAL)
+                    .unwrap()
+                    .iter()
+                    .any(|v| v.index == i),
                 server.ipv4_capable
             );
             assert_eq!(
-                inner.regions_ipv6.get(GLOBAL).unwrap().contains(&i),
+                inner
+                    .regions_ipv6
+                    .get(GLOBAL)
+                    .unwrap()
+                    .iter()
+                    .any(|v| v.index == i),
                 server.ipv6_capable
             );
             for region in server.regions.iter() {
                 assert_eq!(
-                    inner.regions_ipv4.get(region).unwrap().contains(&i),
+                    inner
+                        .regions_ipv4
+                        .get(region)
+                        .unwrap()
+                        .iter()
+                        .any(|v| v.index == i),
                     server.ipv4_capable
                 );
                 assert_eq!(
-                    inner.regions_ipv6.get(region).unwrap().contains(&i),
+                    inner
+                        .regions_ipv6
+                        .get(region)
+                        .unwrap()
+                        .iter()
+                        .any(|v| v.index == i),
                     server.ipv6_capable
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_server_weighting_no_exclusion() {
+        crate::test_init();
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        uuid: "UUID-a".into(),
+                        domain: "a.test".into(),
+                        server_name: ServerName::try_from("a.test").unwrap(),
+                        connection_address: ("a.test".into(), 4460),
+                        weight: 1,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                    KeyExchangeServer {
+                        uuid: "UUID-b".into(),
+                        domain: "b.test".into(),
+                        server_name: ServerName::try_from("b.test").unwrap(),
+                        connection_address: ("b.test".into(), 4460),
+                        weight: 2,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                ]
+                .into(),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 3,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 3,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+            }))),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+            }),
+            tls_updater: Arc::new(tokio::spawn(async {}).into()),
+            server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+        };
+
+        // 500 trials, about 166 should be server with UUID-a as id
+        let mut count_0 = 0;
+        for _ in 0..500 {
+            let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+            if server.index == 0 {
+                count_0 += 1;
+            }
+        }
+        // Failure bounds chosen such that only 1 in 10^10 executions will result in
+        // failure by chance.
+        assert!(count_0 >= 102);
+        assert!(count_0 <= 235);
+    }
+
+    #[tokio::test]
+    async fn test_server_weighting_with_exclusion() {
+        crate::test_init();
+        let manager = GeographicServerManager {
+            inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        uuid: "UUID-a".into(),
+                        domain: "a.test".into(),
+                        server_name: ServerName::try_from("a.test").unwrap(),
+                        connection_address: ("a.test".into(), 4460),
+                        weight: 1,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                    KeyExchangeServer {
+                        uuid: "UUID-b".into(),
+                        domain: "b.test".into(),
+                        server_name: ServerName::try_from("b.test").unwrap(),
+                        connection_address: ("b.test".into(), 4460),
+                        weight: 2,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                    KeyExchangeServer {
+                        uuid: "UUID-c".into(),
+                        domain: "c.test".into(),
+                        server_name: ServerName::try_from("c.test").unwrap(),
+                        connection_address: ("c.test".into(), 4460),
+                        weight: 4,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                ]
+                .into(),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 3,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 3,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+            }))),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+            }),
+            tls_updater: Arc::new(tokio::spawn(async {}).into()),
+            server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+        };
+
+        // 500 trials, about 166 should be server with UUID-a as id
+        let mut count_0 = 0;
+        for _ in 0..500 {
+            let server =
+                manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["c.test".into()]);
+            if server.index == 0 {
+                count_0 += 1;
+            }
+        }
+        // Failure bounds chosen such that only 1 in 10^10 executions will result in
+        // failure by chance.
+        assert!(count_0 >= 102);
+        assert!(count_0 <= 235);
     }
 }
