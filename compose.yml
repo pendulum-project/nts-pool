@@ -80,6 +80,7 @@ services:
       NTSPOOL_DATABASE_RUN_MIGRATIONS: "false"
       NTSPOOL_ASSETS_DIR: "/app/nts-pool-management/assets"
       NTSPOOL_JWT_SECRET: "a-string-secret-at-least-256-bits-long"
+      NTSPOOL_COOKIE_SECRET: "another-string-secret-at-least-256-bits-long"
       NTSPOOL_SMTP_URL: "smtp://mailcrab:1025"
       NTSPOOL_MAIL_FROM_ADDRESS: "NTS Pool <noreply@example.com>"
       NTSPOOL_BASE_URL: "http://localhost:3000"

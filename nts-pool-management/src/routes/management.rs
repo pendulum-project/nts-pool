@@ -4,6 +4,7 @@ use axum::{
     extract::{Path, State},
     response::{IntoResponse, Redirect},
 };
+use axum_extra::extract::{PrivateCookieJar, cookie::Cookie};
 
 use crate::{
     AppState,
@@ -47,10 +48,14 @@ pub async fn time_sources(
 pub async fn create_time_source(
     user: AuthorizedUser,
     State(state): State<AppState>,
+    cookie_jar: PrivateCookieJar,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     time_source::create(&state.db, user.id, new_time_source.try_into()?).await?;
-    Ok(Redirect::to(TIME_SOURCES_ENDPOINT))
+
+    let updated_cookie_jar = cookie_jar.add(Cookie::new("flash", "kdjfngdkfsjgn"));
+
+    Ok((updated_cookie_jar, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }
 
 pub async fn update_time_source(

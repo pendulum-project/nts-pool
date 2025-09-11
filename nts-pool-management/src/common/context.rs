@@ -4,6 +4,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::{PrivateCookieJar, cookie::Key};
 use eyre::{Context, OptionExt};
 
 use crate::{
@@ -18,6 +19,7 @@ pub struct AppContext {
     pub path: String,
     pub user: Option<UnsafeLoggedInUser>,
     pub parent_user: Option<Administrator>,
+    pub flash_message: Option<String>,
     pub base_url: BaseUrl,
 }
 
@@ -27,6 +29,7 @@ impl Default for AppContext {
             path: "/".to_string(),
             user: Default::default(),
             parent_user: Default::default(),
+            flash_message: Default::default(),
             base_url: "http://localhost:3000".into(),
         }
     }
@@ -50,7 +53,11 @@ pub async fn context_middleware(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let context = match extract_context(&mut parts, &state).await {
+    let cookie_jar: PrivateCookieJar<Key> =
+        PrivateCookieJar::from_request_parts(&mut parts, &state)
+            .await
+            .unwrap();
+    let (cookie_jar, context) = match extract_context(&mut parts, &state, cookie_jar).await {
         Ok(ctx) => ctx,
         Err(err) => {
             return err.into_response();
@@ -61,10 +68,14 @@ pub async fn context_middleware(
     request.extensions_mut().insert(context.clone());
     let mut response = next.run(request).await;
     response.extensions_mut().insert(context);
-    response
+    (cookie_jar, response).into_response()
 }
 
-async fn extract_context(parts: &mut Parts, state: &AppState) -> Result<AppContext, AppError> {
+async fn extract_context(
+    parts: &mut Parts,
+    state: &AppState,
+    cookie_jar: PrivateCookieJar,
+) -> Result<(PrivateCookieJar, AppContext), AppError> {
     let uri = OriginalUri::from_request_parts(parts, state)
         .await
         .wrap_err("Cannot extract original URI")?;
@@ -77,12 +88,22 @@ async fn extract_context(parts: &mut Parts, state: &AppState) -> Result<AppConte
         .unzip();
     let parent_user = parent_user.flatten();
 
-    Ok(AppContext {
-        path,
-        user,
-        parent_user,
-        base_url: state.config.base_url.clone(),
-    })
+    let (updated_cookie_jar, flash_message) = if let Some(flash) = cookie_jar.get("flash") {
+        (cookie_jar.remove("flash"), Some(flash.value().to_string()))
+    } else {
+        (cookie_jar, None)
+    };
+
+    Ok((
+        updated_cookie_jar,
+        AppContext {
+            path,
+            user,
+            parent_user,
+            flash_message,
+            base_url: state.config.base_url.clone(),
+        },
+    ))
 }
 
 impl FromRequestParts<AppState> for AppContext {
