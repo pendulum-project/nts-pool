@@ -212,6 +212,7 @@ pub struct KeyExchangeServer {
     pub uuid: String,
     pub domain: String,
     pub server_name: ServerName<'static>,
+    pub weight: usize,
     pub regions: Vec<String>,
     pub ipv4_capable: bool,
     pub ipv6_capable: bool,
@@ -229,6 +230,8 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
             uuid: String,
             domain: String,
             port: u16,
+            #[serde(default)]
+            weight: Option<usize>,
             #[serde(default)]
             regions: Vec<String>,
             #[serde(default)]
@@ -250,6 +253,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
             uuid: bare.uuid,
             domain: bare.domain.to_string(),
             server_name,
+            weight: bare.weight.unwrap_or(1),
             regions: bare.regions,
             connection_address: (bare.domain.to_string(), bare.port),
             ipv4_capable: bare.ipv4_capable.unwrap_or(true),
@@ -343,7 +347,7 @@ mod tests {
             r#"
         [
                 { "uuid": "UUID-foo", "domain": "foo.bar", "port": 1234 },
-                { "uuid": "UUID-bar", "domain": "bar.foo", "port": 4321 }
+                { "uuid": "UUID-bar", "domain": "bar.foo", "port": 4321, "weight": 2 }
         ]
         "#,
         )
@@ -356,6 +360,7 @@ mod tests {
                     uuid: String::from("UUID-foo"),
                     domain: String::from("foo.bar"),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
+                    weight: 1,
                     connection_address: (String::from("foo.bar"), 1234),
                     regions: vec![],
                     ipv4_capable: true,
@@ -365,6 +370,7 @@ mod tests {
                     uuid: String::from("UUID-bar"),
                     domain: String::from("bar.foo"),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
+                    weight: 2,
                     connection_address: (String::from("bar.foo"), 4321),
                     regions: vec![],
                     ipv4_capable: true,
