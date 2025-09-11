@@ -48,11 +48,13 @@
       <header>
         {% block header %}{% endblock %}
       </header>
-      <details class="toast success" open>
-        <summary>
-          Failed successfully!
-        </summary>
-      </details>
+      {% if let Some(msg) = app.flash_message %}
+        <details class="toast success" open>
+          <summary>
+            {{ msg }}
+          </summary>
+        </details>
+      {% endif %}
       <main>
         {% block content %}{% endblock %}
       </main>

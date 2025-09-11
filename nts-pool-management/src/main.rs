@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use axum::{extract::FromRef, middleware};
+use axum_extra::extract::cookie;
 use sqlx::PgPool;
 use tracing::info;
 
@@ -23,6 +24,7 @@ pub struct AppState {
     db: PgPool,
     jwt_encoding_key: jsonwebtoken::EncodingKey,
     jwt_decoding_key: jsonwebtoken::DecodingKey,
+    private_cookie_key: cookie::Key,
     mailer: Mailer,
     config: AppConfig,
 }
@@ -97,6 +99,9 @@ async fn main() {
     let jwt_encoding_key = jsonwebtoken::EncodingKey::from_secret(config.jwt_secret.as_bytes());
     let jwt_decoding_key = jsonwebtoken::DecodingKey::from_secret(config.jwt_secret.as_bytes());
 
+    // Setup private cookie key
+    let private_cookie_key = cookie::Key::derive_from(config.cookie_secret.as_bytes());
+
     // Setup mail transport for sending mails
     let mail_transport = MailTransport::from_url(&config.mail_smtp_url)
         .expect("Failed to create mail transport")
@@ -112,6 +117,7 @@ async fn main() {
         db,
         jwt_encoding_key,
         jwt_decoding_key,
+        private_cookie_key,
         mailer,
         config,
     };
