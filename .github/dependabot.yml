@@ -12,7 +12,7 @@ updates:
 - package-ecosystem: cargo
   directories: ["/", "/fuzz/"]
   allow:
-    dependency-type: all
+    - dependency-type: all
   schedule:
     interval: daily
   versioning-strategy: lockfile-only
