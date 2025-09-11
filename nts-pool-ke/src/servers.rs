@@ -7,6 +7,10 @@ use std::{
 };
 
 use notify::{RecursiveMode, Watcher};
+use pool_nts::{
+    AlgorithmDescription, AlgorithmId, BufferBorrowingReader, MAX_MESSAGE_SIZE, ProtocolId,
+    ServerInformationRequest, ServerInformationResponse,
+};
 use rustls::{pki_types::pem::PemObject, version::TLS13};
 use rustls_platform_verifier::Verifier;
 use tokio::{
@@ -15,15 +19,7 @@ use tokio::{
 };
 use tokio_rustls::{TlsConnector, client::TlsStream};
 
-use crate::{
-    config::BackendConfig,
-    error::PoolError,
-    nts::{
-        AlgorithmDescription, AlgorithmId, MAX_MESSAGE_SIZE, ProtocolId, ServerInformationRequest,
-        ServerInformationResponse,
-    },
-    util::{BufferBorrowingReader, load_certificates},
-};
+use crate::{config::BackendConfig, error::PoolError, util::load_certificates};
 
 mod geo;
 pub use geo::GeographicServerManager;

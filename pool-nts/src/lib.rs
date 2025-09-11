@@ -3,16 +3,16 @@ use std::{borrow::Cow, fmt::Display, io::Error, slice};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 mod record;
+mod util;
 
 #[cfg(feature = "fuzz")]
 pub use record::NtsRecord;
 #[cfg(not(feature = "fuzz"))]
 use record::NtsRecord;
 
-use crate::{
-    nts::record::{AlgorithmDescriptionList, AlgorithmList, ProtocolList},
-    util::BufferBorrowingReader,
-};
+use crate::record::{AlgorithmDescriptionList, AlgorithmList, ProtocolList};
+
+pub use util::BufferBorrowingReader;
 
 pub type ProtocolId = u16;
 pub type AlgorithmId = u16;
@@ -360,7 +360,6 @@ impl<'a> FixedKeyRequest<'a> {
         Ok(())
     }
 
-    #[cfg(test)]
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
