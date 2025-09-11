@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use axum_extra::extract::{PrivateCookieJar, cookie::Key};
+use axum_extra::extract::PrivateCookieJar;
 use eyre::{Context, OptionExt};
 
 use crate::{
@@ -13,6 +13,8 @@ use crate::{
     config::BaseUrl,
     error::AppError,
 };
+
+use super::flash::{FlashMessageService, extract_flash_message};
 
 #[derive(Clone, Debug)]
 pub struct AppContext {
@@ -53,11 +55,7 @@ pub async fn context_middleware(
     next: Next,
 ) -> Response {
     let (mut parts, body) = request.into_parts();
-    let cookie_jar: PrivateCookieJar<Key> =
-        PrivateCookieJar::from_request_parts(&mut parts, &state)
-            .await
-            .unwrap();
-    let (cookie_jar, context) = match extract_context(&mut parts, &state, cookie_jar).await {
+    let (cookie_jar, context) = match extract_context(&mut parts, &state).await {
         Ok(ctx) => ctx,
         Err(err) => {
             return err.into_response();
@@ -74,7 +72,6 @@ pub async fn context_middleware(
 async fn extract_context(
     parts: &mut Parts,
     state: &AppState,
-    cookie_jar: PrivateCookieJar,
 ) -> Result<(PrivateCookieJar, AppContext), AppError> {
     let uri = OriginalUri::from_request_parts(parts, state)
         .await
@@ -88,14 +85,12 @@ async fn extract_context(
         .unzip();
     let parent_user = parent_user.flatten();
 
-    let (updated_cookie_jar, flash_message) = if let Some(flash) = cookie_jar.get("flash") {
-        (cookie_jar.remove("flash"), Some(flash.value().to_string()))
-    } else {
-        (cookie_jar, None)
-    };
-
+    let flash_message_service = FlashMessageService::from_request_parts(parts, &state)
+        .await
+        .wrap_err("Cannot extract cookie jar")?;
+    let (flash_message_service, flash_message) = extract_flash_message(flash_message_service.0);
     Ok((
-        updated_cookie_jar,
+        flash_message_service,
         AppContext {
             path,
             user,
