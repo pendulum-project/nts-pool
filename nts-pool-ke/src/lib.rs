@@ -4,10 +4,6 @@ mod cli;
 mod config;
 mod error;
 mod haproxy;
-#[cfg(feature = "fuzz")]
-pub mod nts;
-#[cfg(not(feature = "fuzz"))]
-mod nts;
 mod pool_ke;
 mod servers;
 mod tracing;

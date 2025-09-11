@@ -1,4 +1,4 @@
-use crate::nts::NtsError;
+use pool_nts::NtsError;
 
 #[derive(Debug)]
 pub enum PoolError {

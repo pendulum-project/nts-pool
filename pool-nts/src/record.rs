@@ -541,7 +541,7 @@ mod tests {
         task::{Context, Poll, Waker},
     };
 
-    use crate::nts::{AlgorithmDescription, ErrorCode, WarningCode};
+    use crate::{AlgorithmDescription, ErrorCode, WarningCode};
 
     use super::NtsRecord;
 

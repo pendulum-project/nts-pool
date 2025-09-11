@@ -16,6 +16,7 @@ __internal-fuzz = []
 [dependencies]
 aead.workspace = true
 aes-siv.workspace = true
+pool-nts.workspace = true
 rand.workspace = true
 rustls.workspace = true
 rustls-platform-verifier.workspace = true

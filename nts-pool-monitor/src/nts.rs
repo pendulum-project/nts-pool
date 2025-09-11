@@ -1,5 +1,8 @@
 use std::{borrow::Cow, sync::Arc};
 
+use pool_nts::{
+    AlgorithmId, BufferBorrowingReader, ClientRequest, ErrorCode, KeyExchangeResponse, ProtocolId,
+};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
@@ -9,17 +12,6 @@ use crate::{
     tls_utils::{self, Certificate, ServerName, TLS13},
 };
 
-#[cfg(feature = "__internal-fuzz")]
-pub use messages::{KeyExchangeResponse, Request};
-#[cfg(not(feature = "__internal-fuzz"))]
-use messages::{KeyExchangeResponse, Request};
-#[cfg(feature = "__internal-fuzz")]
-pub use record::NtsRecord;
-
-mod messages;
-mod record;
-
-const DEFAULT_NUMBER_OF_COOKIES: usize = 8;
 const NTP_DEFAULT_PORT: u16 = 123;
 
 /// From https://www.iana.org/assignments/aead-parameters/aead-parameters.xhtml
@@ -146,70 +138,6 @@ impl NtsKeys {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ErrorCode {
-    UnrecognizedCriticalRecord,
-    BadRequest,
-    InternalServerError,
-    NoSuchServer,
-    Unknown(u16),
-}
-
-impl From<u16> for ErrorCode {
-    fn from(value: u16) -> Self {
-        match value {
-            0 => Self::UnrecognizedCriticalRecord,
-            1 => Self::BadRequest,
-            2 => Self::InternalServerError,
-            0xF000 => Self::NoSuchServer,
-            v => Self::Unknown(v),
-        }
-    }
-}
-
-impl From<ErrorCode> for u16 {
-    fn from(value: ErrorCode) -> Self {
-        match value {
-            ErrorCode::UnrecognizedCriticalRecord => 0,
-            ErrorCode::BadRequest => 1,
-            ErrorCode::InternalServerError => 2,
-            ErrorCode::NoSuchServer => 0xF000,
-            ErrorCode::Unknown(v) => v,
-        }
-    }
-}
-
-impl std::fmt::Display for ErrorCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ErrorCode::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
-            ErrorCode::BadRequest => f.write_str("Bad request"),
-            ErrorCode::InternalServerError => f.write_str("Internal server error"),
-            ErrorCode::NoSuchServer => f.write_str("Requested server doesn't exist"),
-            ErrorCode::Unknown(id) => write!(f, "Unknown({id})"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum WarningCode {
-    Unknown(u16),
-}
-
-impl From<u16> for WarningCode {
-    fn from(value: u16) -> Self {
-        Self::Unknown(value)
-    }
-}
-
-impl From<WarningCode> for u16 {
-    fn from(value: WarningCode) -> Self {
-        match value {
-            WarningCode::Unknown(v) => v,
-        }
-    }
-}
-
 /// Error generated during the parsing of NTS messages.
 #[derive(Debug)]
 pub enum NtsError {
@@ -218,8 +146,6 @@ pub enum NtsError {
     Dns(tls_utils::InvalidDnsNameError),
     UnrecognizedCriticalRecord,
     Invalid,
-    NoOverlappingProtocol,
-    NoOverlappingAlgorithm,
     UnknownWarning(u16),
     Error(ErrorCode),
 }
@@ -242,6 +168,18 @@ impl From<tls_utils::InvalidDnsNameError> for NtsError {
     }
 }
 
+impl From<pool_nts::NtsError> for NtsError {
+    fn from(value: pool_nts::NtsError) -> Self {
+        match value {
+            pool_nts::NtsError::IO(error) => NtsError::IO(error),
+            pool_nts::NtsError::UnrecognizedCriticalRecord => NtsError::UnrecognizedCriticalRecord,
+            pool_nts::NtsError::Invalid => NtsError::Invalid,
+            pool_nts::NtsError::UnknownWarning(v) => NtsError::UnknownWarning(v),
+            pool_nts::NtsError::Error(error_code) => NtsError::Error(error_code),
+        }
+    }
+}
+
 impl std::fmt::Display for NtsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -250,10 +188,6 @@ impl std::fmt::Display for NtsError {
             NtsError::Dns(error) => error.fmt(f),
             NtsError::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
             NtsError::Invalid => f.write_str("Invalid request or response"),
-            NtsError::NoOverlappingProtocol => f.write_str("No overlap in supported protocols"),
-            NtsError::NoOverlappingAlgorithm => {
-                f.write_str("No overlap in supported AEAD algorithms")
-            }
             NtsError::UnknownWarning(code) => {
                 write!(f, "Received unknown warning from remote: {code}")
             }
@@ -333,11 +267,23 @@ impl KeyExchangeClient {
         server_name: String,
         uuid: impl AsRef<str>,
     ) -> Result<KeyExchangeResult, NtsError> {
-        let request = Request::KeyExchange {
-            algorithms: self.algorithms.as_ref().into(),
-            protocols: self.protocols.as_ref().into(),
-            authentication_key: Some(self.authorization_key.as_str().into()),
-            uuid: Some(uuid.as_ref().into()),
+        let request = ClientRequest::Uuid {
+            algorithms: self
+                .algorithms
+                .iter()
+                .copied()
+                .map(|v| v.into())
+                .collect::<Vec<AlgorithmId>>()
+                .into(),
+            protocols: self
+                .protocols
+                .iter()
+                .copied()
+                .map(|v| v.into())
+                .collect::<Vec<ProtocolId>>()
+                .into(),
+            key: self.authorization_key.as_str().into(),
+            uuid: uuid.as_ref().into(),
         };
 
         let mut io = self
@@ -353,12 +299,15 @@ impl KeyExchangeClient {
 
         io.flush().await?;
 
-        let response = KeyExchangeResponse::parse(&mut io).await?;
+        let mut buffer = [0u8; 4096];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut io, &mut buffer))
+                .await?;
 
         let keys = NtsKeys::extract_from_connection(
             io.get_ref().1,
-            response.protocol,
-            response.algorithm,
+            response.protocol.into(),
+            response.algorithm.into(),
         )?;
 
         Ok(KeyExchangeResult {
@@ -374,7 +323,7 @@ impl KeyExchangeClient {
                 .collect(),
             c2s: keys.c2s,
             s2c: keys.s2c,
-            protocol_version: match response.protocol {
+            protocol_version: match response.protocol.into() {
                 NextProtocol::NTPv4 => NtpVersion::V4,
                 NextProtocol::DraftNTPv5 => NtpVersion::V5,
                 NextProtocol::Unknown(_) => return Err(NtsError::Invalid),
@@ -398,20 +347,6 @@ mod tests {
     fn test_next_protocol_encoding() {
         for i in 0..=u16::MAX {
             assert_eq!(i, u16::from(NextProtocol::from(i)));
-        }
-    }
-
-    #[test]
-    fn test_error_code_encoding() {
-        for i in 0..=u16::MAX {
-            assert_eq!(i, u16::from(ErrorCode::from(i)));
-        }
-    }
-
-    #[test]
-    fn test_warning_code_encoding() {
-        for i in 0..=u16::MAX {
-            assert_eq!(i, u16::from(WarningCode::from(i)));
         }
     }
 }

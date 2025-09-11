@@ -5,6 +5,11 @@ use std::{
 };
 
 use notify::{RecursiveMode, Watcher};
+use pool_nts::{
+    AlgorithmDescription, BufferBorrowingReader, ClientRequest, ErrorCode, ErrorResponse,
+    FixedKeyRequest, KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError,
+    ProtocolId,
+};
 use rustls::{pki_types::pem::PemObject, version::TLS13};
 use tokio::{
     io::AsyncWriteExt,
@@ -20,12 +25,8 @@ use crate::{
     config::NtsPoolKeConfig,
     error::PoolError,
     haproxy::parse_haproxy_header,
-    nts::{
-        AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
-        KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError, ProtocolId,
-    },
     servers::{ConnectionType, Server, ServerConnection, ServerManager},
-    util::{BufferBorrowingReader, load_certificates},
+    util::load_certificates,
 };
 
 pub async fn run_nts_pool_ke(
@@ -497,6 +498,10 @@ mod tests {
         time::Duration,
     };
 
+    use pool_nts::{
+        AlgorithmDescription, AlgorithmId, BufferBorrowingReader, ErrorCode, FixedKeyRequest,
+        KeyExchangeResponse, MAX_MESSAGE_SIZE, NtsError, ProtocolId,
+    };
     use rustls::{
         RootCertStore,
         pki_types::{ServerName, pem::PemObject},
@@ -510,13 +515,8 @@ mod tests {
 
     use crate::{
         config::NtsPoolKeConfig,
-        nts::{
-            AlgorithmDescription, ErrorCode, FixedKeyRequest, KeyExchangeResponse,
-            MAX_MESSAGE_SIZE, NtsError, ProtocolId,
-        },
         pool_ke::NtsPoolKe,
         servers::{ConnectionType, Server, ServerConnection, ServerManager},
-        util::BufferBorrowingReader,
     };
 
     fn upstream_tls_config() -> TlsConnector {
@@ -539,8 +539,8 @@ mod tests {
     struct TestManagerInner {
         name: String,
         supports: (
-            std::collections::HashSet<crate::nts::ProtocolId>,
-            std::collections::HashMap<crate::nts::AlgorithmId, crate::nts::AlgorithmDescription>,
+            std::collections::HashSet<ProtocolId>,
+            std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
         ),
         written: Mutex<Vec<u8>>,
         uuid_exists: bool,
@@ -623,8 +623,8 @@ mod tests {
     struct TestServer<'a> {
         name: &'a str,
         supports: (
-            std::collections::HashSet<crate::nts::ProtocolId>,
-            std::collections::HashMap<crate::nts::AlgorithmId, crate::nts::AlgorithmDescription>,
+            std::collections::HashSet<ProtocolId>,
+            std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
         ),
         written: &'a Mutex<Vec<u8>>,
         read_data: &'a [u8],
@@ -644,11 +644,8 @@ mod tests {
             &self,
         ) -> Result<
             (
-                std::collections::HashSet<crate::nts::ProtocolId>,
-                std::collections::HashMap<
-                    crate::nts::AlgorithmId,
-                    crate::nts::AlgorithmDescription,
-                >,
+                std::collections::HashSet<ProtocolId>,
+                std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
             ),
             crate::error::PoolError,
         > {

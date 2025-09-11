@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
 use tracing::debug;
@@ -13,7 +14,6 @@ use tracing::debug;
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
     error::PoolError,
-    nts::{AlgorithmDescription, AlgorithmId, ProtocolId},
     servers::{
         ConnectionType, Server, ServerManager, fetch_support_data, load_upstream_tls,
         resolve_with_type,

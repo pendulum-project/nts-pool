@@ -3,16 +3,16 @@ use std::{borrow::Cow, fmt::Display, io::Error, slice};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 mod record;
+mod util;
 
 #[cfg(feature = "fuzz")]
 pub use record::NtsRecord;
 #[cfg(not(feature = "fuzz"))]
 use record::NtsRecord;
 
-use crate::{
-    nts::record::{AlgorithmDescriptionList, AlgorithmList, ProtocolList},
-    util::BufferBorrowingReader,
-};
+use crate::record::{AlgorithmDescriptionList, AlgorithmList, ProtocolList};
+
+pub use util::BufferBorrowingReader;
 
 pub type ProtocolId = u16;
 pub type AlgorithmId = u16;
@@ -234,6 +234,61 @@ impl<'a> ClientRequest<'a> {
             Err(NtsError::Invalid)
         }
     }
+
+    pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin + Send) -> Result<(), Error> {
+        match self {
+            ClientRequest::Ordinary {
+                algorithms,
+                protocols,
+                denied_servers,
+            } => {
+                NtsRecord::NextProtocol {
+                    protocol_ids: protocols,
+                }
+                .serialize(&mut writer)
+                .await?;
+                NtsRecord::AeadAlgorithm {
+                    algorithm_ids: algorithms,
+                }
+                .serialize(&mut writer)
+                .await?;
+                for denied in denied_servers {
+                    NtsRecord::NtpServerDeny { denied }
+                        .serialize(&mut writer)
+                        .await?;
+                }
+                NtsRecord::EndOfMessage.serialize(&mut writer).await?;
+
+                Ok(())
+            }
+            ClientRequest::Uuid {
+                algorithms,
+                protocols,
+                key,
+                uuid,
+            } => {
+                NtsRecord::Authentication { key }
+                    .serialize(&mut writer)
+                    .await?;
+                NtsRecord::UUIDRequest { uuid }
+                    .serialize(&mut writer)
+                    .await?;
+                NtsRecord::NextProtocol {
+                    protocol_ids: protocols,
+                }
+                .serialize(&mut writer)
+                .await?;
+                NtsRecord::AeadAlgorithm {
+                    algorithm_ids: algorithms,
+                }
+                .serialize(&mut writer)
+                .await?;
+                NtsRecord::EndOfMessage.serialize(&mut writer).await?;
+
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -360,7 +415,6 @@ impl<'a> FixedKeyRequest<'a> {
         Ok(())
     }
 
-    #[cfg(test)]
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
@@ -597,6 +651,8 @@ mod tests {
         task::{Context, Poll, Waker},
     };
 
+    use crate::record::{AlgorithmList, ProtocolList};
+
     use super::{
         AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
         KeyExchangeResponse, NoAgreementResponse, NtsError, ServerInformationRequest,
@@ -644,6 +700,75 @@ mod tests {
             Ok(())
         ));
         assert_eq!(buf, [0x80, 2, 0, 2, 0, 2, 0x80, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_client_request_serialize_basic() {
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                ClientRequest::serialize,
+                ClientRequest::Ordinary {
+                    algorithms: AlgorithmList::from([0, 1].as_slice()),
+                    protocols: ProtocolList::from([0, 1].as_slice()),
+                    denied_servers: vec![]
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x80, 1, 0, 4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0x80, 0, 0, 0
+            ]
+        );
+
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                ClientRequest::serialize,
+                ClientRequest::Ordinary {
+                    algorithms: AlgorithmList::from([0, 1].as_slice()),
+                    protocols: ProtocolList::from([0, 1].as_slice()),
+                    denied_servers: vec!["test".into()]
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x80, 1, 0, 4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0x40, 3, 0, 4, b't', b'e',
+                b's', b't', 0x80, 0, 0, 0
+            ]
+        );
+    }
+
+    #[test]
+    fn test_client_request_serialize_uuid() {
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                ClientRequest::serialize,
+                ClientRequest::Uuid {
+                    algorithms: AlgorithmList::from([0, 1].as_slice()),
+                    protocols: ProtocolList::from([0, 1].as_slice()),
+                    key: "key".into(),
+                    uuid: "uuid".into(),
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x4F, 0, 0, 3, b'k', b'e', b'y', 0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 1, 0,
+                4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0x80, 0, 0, 0
+            ]
+        );
     }
 
     #[test]

@@ -10,8 +10,8 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-[dependencies.nts-pool-ke]
-path = "../nts-pool-ke"
+[dependencies.pool-nts]
+path = "../pool-nts"
 features = ["fuzz"]
 
 [workspace]

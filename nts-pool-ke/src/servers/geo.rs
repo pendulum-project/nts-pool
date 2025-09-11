@@ -8,6 +8,7 @@ use std::{
 use maxminddb::geoip2;
 use notify::{RecursiveMode, Watcher};
 use phf::phf_map;
+use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
 use rand::Rng;
 use tokio::{net::TcpStream, task::spawn_blocking};
 use tokio_rustls::{TlsConnector, client::TlsStream};
@@ -306,8 +307,8 @@ impl Server for GeographicServer {
         &self,
     ) -> Result<
         (
-            std::collections::HashSet<crate::nts::ProtocolId>,
-            HashMap<crate::nts::AlgorithmId, crate::nts::AlgorithmDescription>,
+            std::collections::HashSet<ProtocolId>,
+            HashMap<AlgorithmId, AlgorithmDescription>,
         ),
         crate::error::PoolError,
     > {
