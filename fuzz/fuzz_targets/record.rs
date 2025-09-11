@@ -6,7 +6,7 @@ use std::{
 };
 
 use libfuzzer_sys::fuzz_target;
-use nts_pool_ke::{nts::NtsRecord, BufferBorrowingReader};
+use pool_nts::{BufferBorrowingReader, NtsRecord};
 
 fuzz_target!(|data: &[u8]| {
     let mut buf1 = [0u8; 4096];

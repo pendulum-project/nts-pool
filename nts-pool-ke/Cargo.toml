@@ -27,6 +27,7 @@ default = []
 fuzz = []
 
 [dependencies]
+pool-nts.workspace = true
 tokio = { workspace = true, default-features = false, features = [
     "rt-multi-thread",
     "io-util",

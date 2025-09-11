@@ -7,11 +7,10 @@ use std::{
     time::Duration,
 };
 
+use pool_nts::ProtocolId;
 use rustls::pki_types::ServerName;
 use serde::Deserialize;
 use tracing::{info, warn};
-
-use crate::nts::ProtocolId;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
