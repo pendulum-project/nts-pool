@@ -4,8 +4,11 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use nts_pool_shared::{
+    KeyExchangeProbeResult, KeyExchangeStatus, ProbeResult, SecuredNtpProbeResult,
+    SecuredNtpProbeStatus,
+};
 use rand::{Rng, rng};
-use serde::{Deserialize, Serialize};
 use tokio::{
     net::TcpStream,
     select,
@@ -32,52 +35,6 @@ pub struct Probe {
     ntske: KeyExchangeClient,
     nts_timeout: Duration,
     ntp_timeout: Duration,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct ProbeResult {
-    keyexchange: KeyExchangeProbeResult,
-    ntp_with_ke_cookie: SecuredNtpProbeResult,
-    ntp_with_ntp_cookie: SecuredNtpProbeResult,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum KeyExchangeStatus {
-    Success,
-    Failed,
-    Timeout,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct KeyExchangeProbeResult {
-    pub status: KeyExchangeStatus,
-    pub exchange_start: u64,
-    pub exchange_duration: f64,
-    pub num_cookies: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum SecuredNtpProbeStatus {
-    Success,
-    DnsLookupFailed,
-    NtsNak,
-    Deny,
-    Timeout,
-    #[default]
-    NotAttempted,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub struct SecuredNtpProbeResult {
-    pub status: SecuredNtpProbeStatus,
-    pub request_sent: u64,
-    pub roundtrip_duration: Option<f64>,
-    pub remote_residence_time: Option<f64>,
-    pub offset: Option<f64>,
-    pub stratum: Option<u8>,
-    pub leap_indicates_synchronized: bool,
-    pub requested_cookies: usize,
-    pub received_cookies: usize,
 }
 
 struct NtpInputs {

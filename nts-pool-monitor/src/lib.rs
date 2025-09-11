@@ -1,6 +1,6 @@
 use std::{fmt::Display, net::SocketAddr, path::PathBuf};
 
-use serde::{Deserialize, Serialize};
+use nts_pool_shared::IpVersion;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::{cli::MonitorOptions, config::Config, control::run_probing, tracing::LogLevel};
@@ -18,12 +18,6 @@ mod tls_utils;
 mod tracing;
 
 use self::tracing as daemon_tracing;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
-enum IpVersion {
-    IpV4,
-    IpV6,
-}
 
 async fn resolve_as_version<T: tokio::net::ToSocketAddrs>(
     addr: T,

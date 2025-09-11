@@ -2199,6 +2199,7 @@ version = "0.1.0"
 dependencies = [
  "aead",
  "aes-siv",
+ "nts-pool-shared",
  "pool-nts",
  "rand 0.9.2",
  "reqwest",
