@@ -10,7 +10,7 @@ use crate::{
     auth::AuthorizedUser,
     context::AppContext,
     error::AppError,
-    flash::FlashMessage,
+    flash::{FlashMessageService, MessageType},
     models::time_source::{
         self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
     },
@@ -48,12 +48,15 @@ pub async fn time_sources(
 pub async fn create_time_source(
     user: AuthorizedUser,
     State(state): State<AppState>,
-    flash: FlashMessage,
+    flash: FlashMessageService,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let flash = match time_source::create(&state.db, user.id, new_time_source.try_into()?).await {
-        Ok(_) => flash.set("Time source added successfully".to_string()),
-        Err(_) => flash.set("Could not add time source".to_string()),
+        Ok(_) => flash.set(
+            MessageType::Success,
+            "Time source added successfully".to_string(),
+        ),
+        Err(_) => flash.set(MessageType::Error, "Could not add time source".to_string()),
     };
 
     Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
