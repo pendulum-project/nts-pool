@@ -79,6 +79,7 @@ pub async fn poolke_servers(State(state): State<AppState>) -> Result<impl IntoRe
         uuid: String,
         domain: String,
         port: u16,
+        weight: i32,
     }
     let timesources = models::time_source::not_deleted(&state.db).await?;
     Ok(Json(
@@ -88,6 +89,7 @@ pub async fn poolke_servers(State(state): State<AppState>) -> Result<impl IntoRe
                 uuid: ts.id.to_string(),
                 domain: ts.hostname,
                 port: ts.port.map(|p| p.into()).unwrap_or(4460),
+                weight: ts.weight,
             })
             .collect::<Vec<_>>(),
     ))
