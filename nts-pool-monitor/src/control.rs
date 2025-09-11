@@ -24,12 +24,12 @@
 // existing list, it is advisable to have an update interval that is not an
 // integer multiple of the probing interval.
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::VecDeque,
     sync::{Arc, RwLock},
-    time::Duration,
 };
 
-use serde::{Deserialize, Serialize};
+use nts_pool_shared::{ProbeControlCommand, ProbeResult};
+use serde::Serialize;
 use tokio::{
     select,
     time::{Instant, sleep_until},
@@ -40,21 +40,8 @@ use crate::{
     IpVersion, NtpVersion,
     config::ProbeControlConfig,
     nts::NtsClientConfig,
-    probe::{Probe, ProbeConfig, ProbeResult},
+    probe::{Probe, ProbeConfig},
 };
-
-#[derive(Serialize, Deserialize)]
-struct ProbeControlCommand {
-    timesources: HashSet<(IpVersion, String)>,
-    poolke: String,
-    result_endpoint: String,
-    result_batchsize: usize,
-    result_max_waittime: Duration,
-    update_interval: Duration,
-    probe_interval: Duration,
-    nts_timeout: Duration,
-    ntp_timeout: Duration,
-}
 
 const MAX_PARALLEL_PROBES: usize = 250;
 const MAX_RESULT_QUEUE_SIZE: usize = 100;
