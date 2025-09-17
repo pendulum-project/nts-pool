@@ -70,14 +70,10 @@ async fn extract_context(parts: &mut Parts, state: &AppState) -> Result<AppConte
         .wrap_err("Cannot extract original URI")?;
     let path = uri.path().to_string();
 
-    let (user, parent_user) = parts
-        .extensions
-        .get::<Option<Session>>()
-        .and_then(|outer| {
-            outer
-                .as_ref()
-                .map(|session| (session.user().clone(), session.parent().cloned()))
-        })
+    let (user, parent_user) = Option::<Session>::from_request_parts(parts, state)
+        .await
+        .wrap_err("Cannot extract session")?
+        .map(|outer| (outer.user().clone(), outer.parent().cloned()))
         .unzip();
     let parent_user = parent_user.flatten();
 
