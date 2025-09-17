@@ -3,11 +3,14 @@ use axum::{
     extract::{FromRef, FromRequestParts, OptionalFromRequestParts},
     http::request::Parts,
 };
-use axum_extra::extract::{
-    CookieJar,
-    cookie::{Cookie, SameSite},
+use axum_extra::{
+    TypedHeader,
+    extract::{
+        CookieJar,
+        cookie::{Cookie, SameSite},
+    },
 };
-use eyre::{Context, OptionExt};
+use eyre::{Context, OptionExt, eyre};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -15,7 +18,10 @@ use tracing::debug;
 use crate::{
     DbConnLike, InfallibleUnwrap,
     error::AppError,
-    models::user::{User, UserId, UserRole},
+    models::{
+        monitor::{self, Monitor},
+        user::{User, UserId, UserRole},
+    },
 };
 
 const AUTH_COOKIE_NAME: &str = "auth";
@@ -544,6 +550,41 @@ where
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
         }
+    }
+}
+
+pub struct AuthenticatedMonitor(Monitor);
+
+impl From<AuthenticatedMonitor> for Monitor {
+    fn from(value: AuthenticatedMonitor) -> Self {
+        value.0
+    }
+}
+
+impl<S> FromRequestParts<S> for AuthenticatedMonitor
+where
+    S: Sync + Send,
+    sqlx::PgPool: FromRef<S>,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Some(token) = Option::<
+            TypedHeader<headers::Authorization<headers::authorization::Bearer>>,
+        >::from_request_parts(parts, state)
+        .await
+        .ok()
+        .flatten() else {
+            return Err(eyre!("Not authenticated").into());
+        };
+
+        let monitor = monitor::get_by_authentication_key(
+            &sqlx::PgPool::from_ref(state),
+            token.token().to_owned(),
+        )
+        .await?;
+
+        Ok(AuthenticatedMonitor(monitor))
     }
 }
 

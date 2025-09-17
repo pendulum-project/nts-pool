@@ -8,9 +8,17 @@ use axum::{
 };
 use nts_pool_shared::{IpVersion, ProbeControlCommand};
 
-use crate::{AppState, error::AppError, models};
+use crate::{
+    AppState,
+    auth::AuthenticatedMonitor,
+    error::AppError,
+    models::{self, monitor::Monitor},
+};
 
-pub async fn get_work(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+pub async fn get_work(
+    _monitor: AuthenticatedMonitor,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
     let timesources = models::time_source::not_deleted(&state.db).await?;
 
     Ok(Json(ProbeControlCommand {
@@ -35,10 +43,12 @@ pub async fn get_work(State(state): State<AppState>) -> Result<impl IntoResponse
     }))
 }
 
-pub async fn post_results(data: Body) {
+pub async fn post_results(monitor: AuthenticatedMonitor, data: Body) {
     let body_bytes = to_bytes(data, usize::MAX).await.unwrap_or_default();
+    let monitor: Monitor = monitor.into();
     println!(
-        "Received monitoring result: {}",
+        "Received monitoring result from {}: {}",
+        monitor.name,
         std::str::from_utf8(&body_bytes).unwrap_or("invalid utf8")
     )
 }
