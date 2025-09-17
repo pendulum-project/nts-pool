@@ -16,6 +16,10 @@ nameOverride: ""
 fullnameOverride: ""
 
 services:
+  # Configuration for the management service
+  management:
+    # Annotations to add to the management service
+    annotations: {}
   # Configuration for the Key Exchange (KE) service
   ke:
     # Annotations to add to the KE service
