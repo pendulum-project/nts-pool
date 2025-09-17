@@ -44,6 +44,12 @@ pub fn create_router() -> Router<AppState> {
         .route("/admin/users/{id}/block", post(admin::user_block))
         .route("/admin/users/{id}/unblock", post(admin::user_unblock))
         .route("/admin/users/{id}/login-as", post(admin::login_as))
+        .route("/admin/monitors", get(admin::monitors))
+        .route("/admin/monitors/new", post(admin::create_monitor))
+        .route(
+            "/admin/monitors/{id}/regenerate_key",
+            post(admin::rekey_monitor),
+        )
         .route(
             TIME_SOURCES_ENDPOINT,
             get(management::time_sources).post(management::create_time_source),

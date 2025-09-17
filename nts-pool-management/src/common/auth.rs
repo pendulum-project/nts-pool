@@ -55,6 +55,16 @@ pub fn generate_session_revoke_token() -> String {
         .collect()
 }
 
+pub fn generate_monitor_token() -> String {
+    use rand::{Rng, distr::Alphanumeric};
+
+    rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(30)
+        .map(char::from)
+        .collect()
+}
+
 /// Checks if a password is valid for use in our system.
 pub fn is_valid_password(password: &str) -> bool {
     password.len() >= 8 && !is_too_large_password(password)

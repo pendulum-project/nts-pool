@@ -1,0 +1,40 @@
+
+{% extends "../layout.html.j2" %}
+
+{% block nav_monitors %}aria-current="page"{% endblock %}
+
+{% block header %}<h1>Monitors</h1>{% endblock %}
+
+{% block content %}
+<section class="form">
+  <h2>Add a monitor</h2>
+  <form action="/admin/monitors/new" method="POST">
+    <fieldset class="monitor-name">
+      <label for="name">Name</label>
+      <input name="name" type="text" />
+    </fieldset>
+    <button type="submit">Add</button>
+  </form>
+</section>
+<section>
+  <h2>Current monitors</h2>
+  <table>
+    <thead>
+      <th>Name</th>
+      <td><!-- Actions --></td>
+    </thead>
+    <tbody>
+  {%- for monitor in monitors %}
+    <tr>
+      <td>{{ monitor.name }}</td>
+      <td class="actions">
+        <form action="/admin/monitors/{{ monitor.id }}/regenerate_key" method="POST">
+          <button class="btn-sm btn-alt" type="submit">Rekey</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
