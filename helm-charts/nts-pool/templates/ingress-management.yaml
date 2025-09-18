@@ -14,7 +14,7 @@ spec:
   ingressClassName: {{ .Values.ingresses.management.className }}
   rules:
     {{- range .Values.ingresses.management.hosts }}
-    - host: {{ .host }}
+    - host: "{{ . }}"
       http:
         paths:
           - path: /
@@ -28,7 +28,7 @@ spec:
   tls:
     hosts:
       {{- range .Values.ingresses.management.hosts }}
-        - {{ .host }}
+        - "{{ . }}"
       {{- end }}
     {{- with .Values.ingresses.management.tlsSecretName }}
     secretName: {{ . }}
