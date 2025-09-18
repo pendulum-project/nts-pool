@@ -335,7 +335,7 @@ mod tests {
 
         let findings = probe
             .probe_ntp(NtpInputs {
-                ipprot: IpVersion::IpV4,
+                ipprot: IpVersion::Ipv4,
                 host: "doesnotexist".into(),
                 port: 123,
                 cookie: b"1234".into(),
@@ -374,9 +374,9 @@ mod tests {
         let finding = probe
             .probe_ntp(NtpInputs {
                 ipprot: if server_addr.is_ipv4() {
-                    IpVersion::IpV4
+                    IpVersion::Ipv4
                 } else {
-                    IpVersion::IpV6
+                    IpVersion::Ipv6
                 },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
@@ -423,9 +423,9 @@ mod tests {
         let finding = probe
             .probe_ntp(NtpInputs {
                 ipprot: if server_addr.is_ipv4() {
-                    IpVersion::IpV4
+                    IpVersion::Ipv4
                 } else {
-                    IpVersion::IpV6
+                    IpVersion::Ipv6
                 },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
@@ -472,9 +472,9 @@ mod tests {
         let finding = probe
             .probe_ntp(NtpInputs {
                 ipprot: if server_addr.is_ipv4() {
-                    IpVersion::IpV4
+                    IpVersion::Ipv4
                 } else {
-                    IpVersion::IpV6
+                    IpVersion::Ipv6
                 },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),
@@ -528,9 +528,9 @@ mod tests {
         let finding = probe
             .probe_ntp(NtpInputs {
                 ipprot: if server_addr.is_ipv4() {
-                    IpVersion::IpV4
+                    IpVersion::Ipv4
                 } else {
-                    IpVersion::IpV6
+                    IpVersion::Ipv6
                 },
                 host: server_addr.ip().to_string(),
                 port: server_addr.port(),

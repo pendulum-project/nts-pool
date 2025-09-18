@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum IpVersion {
-    IpV4,
-    IpV6,
+    Ipv4,
+    Ipv6,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -26,8 +26,8 @@ pub async fn get_work(
             .iter()
             .flat_map(|ts| {
                 [
-                    (IpVersion::IpV4, ts.id.to_string()),
-                    (IpVersion::IpV6, ts.id.to_string()),
+                    (IpVersion::Ipv4, ts.id.to_string()),
+                    (IpVersion::Ipv6, ts.id.to_string()),
                 ]
                 .into_iter()
             })
