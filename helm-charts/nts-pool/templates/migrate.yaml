@@ -10,12 +10,18 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      {{- if .Values.management.databaseCertificate.cert }}
+      volumes:
+        - name: db-cert-volume
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-management-db-cert
+      {{- end }}
       containers:
         - name: management-migrate
           imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.management.image.pullPolicy }}"
           {{- with default .Values.image.pullSecrets .Values.management.image.pullSecrets }}
           imagePullSecrets:
-            {{- toYaml . | nindent 10 }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           image: "{{ default .Values.image.repository .Values.management.image.repository }}:{{ default .Values.image.tag .Values.management.image.tag }}"
           command: ["/usr/local/bin/nts-pool-management"]
