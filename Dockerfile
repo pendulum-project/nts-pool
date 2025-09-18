@@ -41,6 +41,10 @@ RUN apt update \
 COPY --from=builder /build/artifacts/nts-pool-ke /usr/local/bin/nts-pool-ke
 COPY --from=builder /build/artifacts/nts-pool-management /usr/local/bin/nts-pool-management
 COPY --from=builder /build/artifacts/nts-pool-monitor /usr/local/bin/nts-pool-monitor
+COPY --from=builder /build/nts-pool-management/assets /opt/nts-pool-management/assets
+
+# Set a default assets directory
+ENV NTSPOOL_ASSETS_DIR=/opt/nts-pool-management/assets
 
 # Setup a user and group for the runner
 ARG USER=nts-pool
@@ -57,4 +61,4 @@ RUN addgroup --system --gid "${GID}" "${USER}" \
         --uid "${UID}" \
         --gid "${GID}" \
         "${USER}"
-# USER ${USER}
+USER ${USER}
