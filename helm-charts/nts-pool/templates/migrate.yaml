@@ -57,4 +57,5 @@ spec:
               value: "{{ .Values.management.baseUrl }}"
             - name: NTSPOOL_POOLKE_NAME
               value: "{{ .Values.management.poolKeName }}"
-
+            - name: RUST_BACKTRACE
+              value: "1"

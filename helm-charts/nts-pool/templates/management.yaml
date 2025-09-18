@@ -81,6 +81,8 @@ spec:
             value: "{{ .Values.management.baseUrl }}"
           - name: NTSPOOL_POOLKE_NAME
             value: "{{ .Values.management.poolKeName }}"
+          - name: RUST_BACKTRACE
+            value: "1"
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.management.restartBump}}"
 
