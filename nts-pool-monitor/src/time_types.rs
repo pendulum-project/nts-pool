@@ -504,6 +504,7 @@ ntp_duration_scalar_div!(u32);
 pub struct PollInterval(i8);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg(test)]
 pub struct PollIntervalLimits {
     pub min: PollInterval,
     pub max: PollInterval,
@@ -513,6 +514,7 @@ pub struct PollIntervalLimits {
 // with the exception that we have lowered the MAX value, which is needed because
 // we don't support bursting, and hence using a larger poll interval gives issues
 // with the responsiveness of the client to environmental changes
+#[cfg(test)]
 impl Default for PollIntervalLimits {
     fn default() -> Self {
         Self {

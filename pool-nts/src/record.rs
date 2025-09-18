@@ -112,7 +112,7 @@ pub struct ProtocolList<'a> {
 
 impl<'a> ProtocolList<'a> {
     pub fn from_buffer(data: &'a [u8]) -> Result<Self, Error> {
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             return Err(ErrorKind::InvalidData.into());
         }
         Ok(Self {
@@ -152,7 +152,7 @@ pub struct AlgorithmList<'a> {
 
 impl<'a> AlgorithmList<'a> {
     pub fn from_buffer(data: &'a [u8]) -> Result<Self, Error> {
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             return Err(ErrorKind::InvalidData.into());
         }
         Ok(Self {
@@ -192,7 +192,7 @@ pub struct AlgorithmDescriptionList<'a> {
 
 impl<'a> AlgorithmDescriptionList<'a> {
     pub fn from_buffer(data: &'a [u8]) -> Result<Self, Error> {
-        if data.len() % 4 != 0 {
+        if !data.len().is_multiple_of(4) {
             return Err(ErrorKind::InvalidData.into());
         }
         Ok(Self {
@@ -397,7 +397,7 @@ impl<'a> NtsRecord<'a> {
     }
 
     fn parse_fixed_key_request(body: &'a [u8]) -> Result<Self, Error> {
-        if body.len() % 2 != 0 {
+        if !body.len().is_multiple_of(2) {
             return Err(ErrorKind::InvalidData.into());
         }
 
