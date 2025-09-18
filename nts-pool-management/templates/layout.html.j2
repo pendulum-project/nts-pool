@@ -48,8 +48,8 @@
       <header>
         {% block header %}{% endblock %}
       </header>
-      {% if let Some(msg) = app.flash_message %}
-        <details class="toast success" open>
+      {% if let Some((msg_type, msg)) = app.flash_message %}
+        <details class="toast {{ msg_type }}" open>
           <summary>
             {{ msg }}
           </summary>

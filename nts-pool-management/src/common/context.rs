@@ -14,14 +14,14 @@ use crate::{
     error::AppError,
 };
 
-use super::flash::{FlashMessageService, extract_flash_message};
+use super::flash::{FlashMessageService, MessageType, extract_flash_message};
 
 #[derive(Clone, Debug)]
 pub struct AppContext {
     pub path: String,
     pub user: Option<UnsafeLoggedInUser>,
     pub parent_user: Option<Administrator>,
-    pub flash_message: Option<String>,
+    pub flash_message: Option<(MessageType, String)>,
     pub base_url: BaseUrl,
 }
 
@@ -85,10 +85,10 @@ async fn extract_context(
         .unzip();
     let parent_user = parent_user.flatten();
 
-    let flash_message_service = FlashMessageService::from_request_parts(parts, &state)
+    let flash_message_service = FlashMessageService::from_request_parts(parts, state)
         .await
         .wrap_err("Cannot extract cookie jar")?;
-    let (flash_message_service, flash_message) = extract_flash_message(flash_message_service.0);
+    let (flash_message_service, flash_message) = extract_flash_message(flash_message_service.0)?;
     Ok((
         flash_message_service,
         AppContext {

@@ -39,8 +39,7 @@ impl AppConfig {
 
         let cookie_secret = std::env::var("NTSPOOL_COOKIE_SECRET")
             .wrap_err("Missing NTSPOOL_COOKIE_SECRET environment variable")?;
-        println!("SECRET OMG");
-        println!("{}", cookie_secret);
+
         let mail_from_address = std::env::var("NTSPOOL_MAIL_FROM_ADDRESS")
             .wrap_err("NTSPOOL_MAIL_FROM_ADDRESS not set")?;
 
