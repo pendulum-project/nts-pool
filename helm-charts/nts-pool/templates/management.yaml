@@ -67,8 +67,6 @@ spec:
                 {{- toYaml .Values.management.databaseUrlSecretRef | nindent 16 }}
           - name: NTSPOOL_DATABASE_RUN_MIGRATIONS
             value: "true"
-          - name: NTSPOOL_ASSETS_DIR
-            value: "/app/nts-pool-management/assets"
           - name: NTSPOOL_JWT_SECRET
             valueFrom:
               secretKeyRef:
