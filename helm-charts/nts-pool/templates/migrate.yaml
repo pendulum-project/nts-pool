@@ -47,6 +47,10 @@ spec:
               valueFrom:
                 secretKeyRef:
                   {{- toYaml .Values.management.jwtKeySecretRef | nindent 18 }}
+            - name: NTSPOOL_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- toYaml .Values.management.cookieSecretRef | nindent 18 }}
             - name: NTSPOOL_SMTP_URL
               valueFrom:
                 secretKeyRef:
