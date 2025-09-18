@@ -5,11 +5,27 @@ use axum_extra::extract::{PrivateCookieJar, cookie::Cookie};
 
 use crate::AppState;
 
+use super::error::AppError;
+
 pub const FLASH_COOKIE_NAME: &str = "flash";
 
+#[derive(Debug, Clone)]
 pub enum MessageType {
     Success,
     Error,
+}
+
+impl TryFrom<&str> for MessageType {
+    type Error = eyre::Error;
+
+    fn try_from(value: &str) -> Result<Self, <MessageType as TryFrom<&str>>::Error> {
+        println!("{value}");
+        match value {
+            "success" => Ok(Self::Success),
+            "error" => Ok(Self::Error),
+            _ => Err(eyre::eyre!("unknown message type")),
+        }
+    }
 }
 
 impl Display for MessageType {
@@ -36,11 +52,20 @@ impl FromRequestParts<AppState> for FlashMessageService {
 }
 
 impl FlashMessageService {
-    pub fn set(&self, level: MessageType, message: String) -> Self {
-        Self(self.0.clone().add(Cookie::new(
-            FLASH_COOKIE_NAME,
-            format!("{}|{}", level, message),
-        )))
+    pub fn set(&self, level: MessageType, msg: String) -> Self {
+        Self(
+            self.0
+                .clone()
+                .add(Cookie::new(FLASH_COOKIE_NAME, format!("{}|{}", level, msg))),
+        )
+    }
+
+    pub fn success(&self, msg: String) -> Self {
+        self.set(MessageType::Success, msg)
+    }
+
+    pub fn error(&self, msg: String) -> Self {
+        self.set(MessageType::Error, msg)
     }
 }
 
@@ -55,22 +80,19 @@ impl IntoResponseParts for FlashMessageService {
     }
 }
 
-pub fn extract_flash_message(cookie_jar: PrivateCookieJar) -> (PrivateCookieJar, Option<String>) {
+pub fn extract_flash_message(
+    cookie_jar: PrivateCookieJar,
+) -> Result<(PrivateCookieJar, Option<(MessageType, String)>), AppError> {
     if let Some(flash) = cookie_jar.get(FLASH_COOKIE_NAME) {
-
         if let Some((msg_type, msg)) = flash.value().split_once("|") {
-            (
+            Ok((
                 cookie_jar.remove(FLASH_COOKIE_NAME),
-                Some(msg.to_string()),
-            )
+                Some((msg_type.try_into()?, msg.to_string())),
+            ))
         } else {
-            (
-                cookie_jar.remove(FLASH_COOKIE_NAME),
-                None,
-            )
+            Ok((cookie_jar.remove(FLASH_COOKIE_NAME), None))
         }
-
     } else {
-        (cookie_jar, None)
+        Ok((cookie_jar, None))
     }
 }

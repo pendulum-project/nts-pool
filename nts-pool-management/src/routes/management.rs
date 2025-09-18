@@ -10,7 +10,7 @@ use crate::{
     auth::AuthorizedUser,
     context::AppContext,
     error::AppError,
-    flash::{FlashMessageService, MessageType},
+    flash::FlashMessageService,
     models::time_source::{
         self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
     },
@@ -52,11 +52,8 @@ pub async fn create_time_source(
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let flash = match time_source::create(&state.db, user.id, new_time_source.try_into()?).await {
-        Ok(_) => flash.set(
-            MessageType::Success,
-            "Time source added successfully".to_string(),
-        ),
-        Err(_) => flash.set(MessageType::Error, "Could not add time source".to_string()),
+        Ok(_) => flash.success("Time source added successfully".to_string()),
+        Err(_) => flash.error("Could not add time source".to_string()),
     };
 
     Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
@@ -66,17 +63,27 @@ pub async fn update_time_source(
     user: AuthorizedUser,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
+    flash: FlashMessageService,
     Form(time_source): Form<UpdateTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    time_source::update(&state.db, user.id, time_source_id, time_source).await?;
-    Ok(Redirect::to(TIME_SOURCES_ENDPOINT))
+    let flash = match time_source::update(&state.db, user.id, time_source_id, time_source).await {
+        Ok(_) => flash.success("Time source updated successfully".to_string()),
+        Err(_) => flash.error("Could not update time source".to_string()),
+    };
+
+    Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }
 
 pub async fn delete_time_source(
     user: AuthorizedUser,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
+    flash: FlashMessageService,
 ) -> Result<impl IntoResponse, AppError> {
-    time_source::delete(&state.db, user.id, time_source_id).await?;
-    Ok(Redirect::to(TIME_SOURCES_ENDPOINT))
+    let flash = match time_source::delete(&state.db, user.id, time_source_id).await {
+        Ok(_) => flash.success("Time source deleted successfully".to_string()),
+        Err(_) => flash.error("Could not delete time source".to_string()),
+    };
+
+    Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }
