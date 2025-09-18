@@ -26,10 +26,7 @@ spec:
                   number: 3000
     {{- end }}
   tls:
-    hosts:
-      {{- range .Values.ingresses.management.hosts }}
-        - "{{ . }}"
-      {{- end }}
+    hosts: {{ toJson .Values.ingresses.management.hosts }}
     {{- with .Values.ingresses.management.tlsSecretName }}
     secretName: {{ . }}
     {{- end }}
