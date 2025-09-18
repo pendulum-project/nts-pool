@@ -2,7 +2,7 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: {{ include "nts-pool.fullname" . }}-ke
+  name: {{ include "nts-pool.fullname" . }}-ke-cert
   namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
   labels:
     {{- include "nts-pool.labels" . | nindent 4 }}
@@ -59,7 +59,7 @@ spec:
                 path: "servers.json"
         - name: tls-volume
           secret:
-            name: {{ include "nts-pool.fullname" . }}-ke-cert
+            secretName: {{ include "nts-pool.fullname" . }}-ke-cert
             items:
               - key: "tls.crt"
                 path: "tls.crt"
