@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE time_sources\n            SET weight = $3\n            WHERE id = $1 AND owner = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7c2dab955b909bdcf0ba72b5cc072ecaaf2fde24b174b1d30d7c395ea7af569"
+}

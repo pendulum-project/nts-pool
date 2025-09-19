@@ -90,8 +90,8 @@ pub async fn poolke_servers(State(state): State<AppState>) -> Result<impl IntoRe
                 port: ts.port.map(|p| p.into()).unwrap_or(4460),
                 weight: Some(ts.weight.try_into().unwrap_or(1)),
                 regions: vec![],
-                ipv4_capable: None,
-                ipv6_capable: None,
+                ipv4_capable: Some(ts.ipv4_score > 10.0),
+                ipv6_capable: Some(ts.ipv6_score > 10.0),
             })
             .collect::<Vec<_>>(),
     ))
