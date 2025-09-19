@@ -1,18 +1,19 @@
 use std::time::Duration;
 
-use axum::{
-    Json,
-    body::{Body, to_bytes},
-    extract::State,
-    response::IntoResponse,
-};
-use nts_pool_shared::{IpVersion, ProbeControlCommand};
+use axum::{Json, extract::State, response::IntoResponse};
+use eyre::Context;
+use nts_pool_shared::{IpVersion, ProbeControlCommand, ProbeResult};
 
 use crate::{
     AppState,
     auth::AuthenticatedMonitor,
     error::AppError,
-    models::{self, monitor::Monitor},
+    models::{
+        self,
+        monitor::{Monitor, NewSample},
+        time_source::TimeSourceId,
+    },
+    scoring::score_sample,
 };
 
 pub async fn get_work(
@@ -43,12 +44,30 @@ pub async fn get_work(
     }))
 }
 
-pub async fn post_results(monitor: AuthenticatedMonitor, data: Body) {
-    let body_bytes = to_bytes(data, usize::MAX).await.unwrap_or_default();
+pub async fn post_results(
+    monitor: AuthenticatedMonitor,
+    State(state): State<AppState>,
+    Json(samples): Json<Vec<((IpVersion, TimeSourceId), ProbeResult)>>,
+) -> Result<(), AppError> {
     let monitor: Monitor = monitor.into();
-    println!(
-        "Received monitoring result from {}: {}",
-        monitor.name,
-        std::str::from_utf8(&body_bytes).unwrap_or("invalid utf8")
-    )
+
+    for ((protocol, time_source_id), probe_result) in samples {
+        let scored_step = score_sample(&probe_result);
+
+        models::monitor::add_sample(
+            &state.db,
+            NewSample {
+                time_source_id,
+                protocol,
+                monitor_id: monitor.id,
+                step: scored_step.step,
+                max_score: scored_step.max_score,
+                raw_sample: probe_result,
+            },
+        )
+        .await
+        .wrap_err("Could not store sample in database")?;
+    }
+
+    Ok(())
 }

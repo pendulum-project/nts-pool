@@ -1,6 +1,10 @@
 use chrono::{DateTime, Utc};
+use nts_pool_shared::{IpVersion, ProbeResult};
 
-use crate::{DbConnLike, models::util::uuid};
+use crate::{
+    DbConnLike,
+    models::{time_source::TimeSourceId, util::uuid},
+};
 
 uuid!(MonitorId);
 
@@ -86,4 +90,52 @@ pub async fn update_authentication_key(
     )
     .fetch_one(conn)
     .await
+}
+
+pub struct NewSample {
+    pub time_source_id: TimeSourceId,
+    pub protocol: IpVersion,
+    pub monitor_id: MonitorId,
+    pub step: f64,
+    pub max_score: Option<f64>,
+    pub raw_sample: ProbeResult,
+}
+
+pub async fn add_sample(conn: impl DbConnLike<'_>, sample: NewSample) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+            INSERT INTO monitor_samples (time_source_id, protocol, monitor_id, score, raw_sample)
+            SELECT 
+                $1 AS time_source_id, 
+                $2 AS protocol, 
+                $3 AS monitor_id, 
+                LEAST(score * 0.95 + $4, $5) AS score,
+                $6 AS raw_sample
+            FROM (
+                (
+                    SELECT score, 0 AS query_idx
+                    FROM monitor_samples 
+                    WHERE
+                        time_source_id = $1 AND
+                        protocol = $2 AND
+                        monitor_id = $3
+                    ORDER BY received_at DESC
+                    LIMIT 1
+                ) UNION ALL (
+                    SELECT 0 AS score, 1 AS query_idx
+                )
+                ORDER BY query_idx ASC
+                LIMIT 1
+            )
+        "#,
+        sample.time_source_id as _,
+        sample.protocol as _,
+        sample.monitor_id as _,
+        sample.step,
+        sample.max_score,
+        sqlx::types::Json(sample.raw_sample) as _,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
 }

@@ -16,6 +16,7 @@ pub use common::*;
 mod common;
 pub mod models;
 pub mod routes;
+mod scoring;
 pub mod templates;
 #[cfg(test)]
 pub mod test;
