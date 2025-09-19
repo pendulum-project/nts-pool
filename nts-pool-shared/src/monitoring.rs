@@ -3,9 +3,12 @@ use std::{collections::HashSet, time::Duration};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", sqlx(type_name = "ip_protocol"))]
+#[cfg_attr(feature = "sqlx", sqlx(rename_all = "kebab-case"))]
 pub enum IpVersion {
-    IpV4,
-    IpV6,
+    Ipv4,
+    Ipv6,
 }
 
 #[derive(Serialize, Deserialize)]

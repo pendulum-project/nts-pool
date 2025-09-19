@@ -385,7 +385,7 @@ mod tests {
             let (mut conn, _) = server.accept().await.unwrap();
             let mut req = [0u8; 4096];
             let _ = conn.read(&mut req).await.unwrap();
-            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 347\r\n\r\n{\"timesources\":[[\"IpV4\",\"UUID-A\"],[\"IpV6\",\"UUID-B\"]],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
+            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 347\r\n\r\n{\"timesources\":[[\"Ipv4\",\"UUID-A\"],[\"Ipv6\",\"UUID-B\"]],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
             conn.shutdown().await.unwrap();
         });
 
@@ -447,7 +447,7 @@ mod tests {
         ));
 
         channel_send
-            .send(((IpVersion::IpV4, "a".into()), "b".into()))
+            .send(((IpVersion::Ipv4, "a".into()), "b".into()))
             .await
             .unwrap();
         assert!(
@@ -455,19 +455,19 @@ mod tests {
                 .recv()
                 .await
                 .unwrap()
-                .ends_with(br#"[[["IpV4","a"],"b"]]"#)
+                .ends_with(br#"[[["Ipv4","a"],"b"]]"#)
         );
 
         channel_send
-            .send(((IpVersion::IpV4, "c".into()), "d".into()))
+            .send(((IpVersion::Ipv4, "c".into()), "d".into()))
             .await
             .unwrap();
         channel_send
-            .send(((IpVersion::IpV6, "e".into()), "f".into()))
+            .send(((IpVersion::Ipv6, "e".into()), "f".into()))
             .await
             .unwrap();
         channel_send
-            .send(((IpVersion::IpV6, "g".into()), "h".into()))
+            .send(((IpVersion::Ipv6, "g".into()), "h".into()))
             .await
             .unwrap();
         assert!(
@@ -475,14 +475,14 @@ mod tests {
                 .recv()
                 .await
                 .unwrap()
-                .ends_with(br#"[[["IpV4","c"],"d"],[["IpV6","e"],"f"]]"#)
+                .ends_with(br#"[[["Ipv4","c"],"d"],[["Ipv6","e"],"f"]]"#)
         );
         assert!(
             server_incoming_recv
                 .recv()
                 .await
                 .unwrap()
-                .ends_with(br#"[[["IpV6","g"],"h"]]"#)
+                .ends_with(br#"[[["Ipv6","g"],"h"]]"#)
         );
 
         drop(channel_send);
@@ -500,8 +500,8 @@ mod tests {
             ) -> Result<ProbeControlCommand, std::io::Error> {
                 Ok(ProbeControlCommand {
                     timesources: [
-                        (IpVersion::IpV4, "A".to_string()),
-                        (IpVersion::IpV4, "B".to_string()),
+                        (IpVersion::Ipv4, "A".to_string()),
+                        (IpVersion::Ipv4, "B".to_string()),
                     ]
                     .into(),
                     poolke: "".into(),
@@ -530,36 +530,36 @@ mod tests {
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
         assert!(
-            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
-                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+            a == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
+                || b == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
         );
         assert!(
-            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
-                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
-        );
-
-        let a = recv.recv().await.unwrap();
-        let b = recv.recv().await.unwrap();
-        assert_ne!(a, b);
-        assert!(
-            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
-                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
-        );
-        assert!(
-            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
-                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+            a == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
+                || b == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
         );
 
         let a = recv.recv().await.unwrap();
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
         assert!(
-            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
-                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+            a == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
+                || b == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
         );
         assert!(
-            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
-                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+            a == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
+                || b == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
+        );
+
+        let a = recv.recv().await.unwrap();
+        let b = recv.recv().await.unwrap();
+        assert_ne!(a, b);
+        assert!(
+            a == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
+                || b == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
+        );
+        assert!(
+            a == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
+                || b == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
         );
 
         assert!(recv.recv().await.is_none())
@@ -578,8 +578,8 @@ mod tests {
                         INDEX.store(1, std::sync::atomic::Ordering::SeqCst);
                         ProbeControlCommand {
                             timesources: [
-                                (IpVersion::IpV4, "A".to_string()),
-                                (IpVersion::IpV4, "B".to_string()),
+                                (IpVersion::Ipv4, "A".to_string()),
+                                (IpVersion::Ipv4, "B".to_string()),
                             ]
                             .into(),
                             poolke: "".into(),
@@ -595,7 +595,7 @@ mod tests {
                     1 => {
                         INDEX.store(2, std::sync::atomic::Ordering::SeqCst);
                         ProbeControlCommand {
-                            timesources: [(IpVersion::IpV4, "B".to_string())].into(),
+                            timesources: [(IpVersion::Ipv4, "B".to_string())].into(),
                             poolke: "".into(),
                             result_endpoint: "".into(),
                             result_batchsize: 1,
@@ -608,8 +608,8 @@ mod tests {
                     }
                     _ => ProbeControlCommand {
                         timesources: [
-                            (IpVersion::IpV4, "B".to_string()),
-                            (IpVersion::IpV4, "C".to_string()),
+                            (IpVersion::Ipv4, "B".to_string()),
+                            (IpVersion::Ipv4, "C".to_string()),
                         ]
                         .into(),
                         poolke: "".into(),
@@ -639,29 +639,29 @@ mod tests {
         let b = recv.recv().await.unwrap();
         assert_ne!(a, b);
         assert!(
-            a == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
-                || b == ((IpVersion::IpV4, "A".into()), (IpVersion::IpV4, "A".into()))
+            a == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
+                || b == ((IpVersion::Ipv4, "A".into()), (IpVersion::Ipv4, "A".into()))
         );
         assert!(
-            a == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
-                || b == ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+            a == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
+                || b == ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
         );
 
         assert_eq!(
             recv.recv().await.unwrap(),
-            ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+            ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
         );
         assert_eq!(
             recv.recv().await.unwrap(),
-            ((IpVersion::IpV4, "C".into()), (IpVersion::IpV4, "C".into()))
+            ((IpVersion::Ipv4, "C".into()), (IpVersion::Ipv4, "C".into()))
         );
         assert_eq!(
             recv.recv().await.unwrap(),
-            ((IpVersion::IpV4, "B".into()), (IpVersion::IpV4, "B".into()))
+            ((IpVersion::Ipv4, "B".into()), (IpVersion::Ipv4, "B".into()))
         );
         assert_eq!(
             recv.recv().await.unwrap(),
-            ((IpVersion::IpV4, "C".into()), (IpVersion::IpV4, "C".into()))
+            ((IpVersion::Ipv4, "C".into()), (IpVersion::Ipv4, "C".into()))
         );
         assert!(recv.recv().await.is_none())
     }

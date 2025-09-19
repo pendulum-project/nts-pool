@@ -2246,6 +2246,7 @@ name = "nts-pool-shared"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "sqlx",
 ]
 
 [[package]]
