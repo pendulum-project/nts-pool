@@ -24,3 +24,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint
+        run: helm lint ./helm-charts/nts-pool
+
+      - name: Package
+        run: helm package ./helm-charts/nts-pool --destination ./helm-charts-output
+
+      - name: Publish
+        run: helm push ./helm-charts-output/nts-pool-*.tgz "oci://ghcr.io/pendulum-project/charts"
