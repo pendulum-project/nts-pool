@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO monitor_samples (time_source_id, protocol, monitor_id, score, raw_sample)\n            SELECT \n                $1 AS time_source_id, \n                $2 AS protocol, \n                $3 AS monitor_id, \n                LEAST(score * 0.95 + $4, $5) AS score,\n                $6 AS raw_sample\n            FROM (\n                (\n                    SELECT score, 0 AS query_idx\n                    FROM monitor_samples \n                    WHERE\n                        time_source_id = $1 AND\n                        protocol = $2 AND\n                        monitor_id = $3\n                    ORDER BY received_at DESC\n                    LIMIT 1\n                ) UNION ALL (\n                    SELECT 0 AS score, 1 AS query_idx\n                )\n                ORDER BY query_idx ASC\n                LIMIT 1\n            )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "ip_protocol",
+            "kind": {
+              "Enum": [
+                "ipv4",
+                "ipv6"
+              ]
+            }
+          }
+        },
+        "Uuid",
+        "Float8",
+        "Float8",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31d4ce07c537f10111af5dd81bdd7db63d70d3c6f962a3313bf7f9d345d28dde"
+}
