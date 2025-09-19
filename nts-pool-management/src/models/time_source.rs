@@ -20,6 +20,8 @@ pub struct TimeSource {
     pub port: Option<Port>,
     pub countries: Vec<String>,
     pub weight: i32,
+    pub ipv4_score: f64,
+    pub ipv6_score: f64,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -76,20 +78,19 @@ pub async fn create(
     conn: impl DbConnLike<'_>,
     owner: UserId,
     new_time_source: NewTimeSource,
-) -> Result<TimeSource, sqlx::Error> {
-    sqlx::query_as!(
-        TimeSource,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
             INSERT INTO time_sources (owner, hostname, port)
             VALUES ($1, $2, $3)
-            RETURNING id, owner, hostname, port AS "port: _", countries, weight
         "#,
         owner as _,
         new_time_source.hostname,
         new_time_source.port as _,
     )
-    .fetch_one(conn)
-    .await
+    .execute(conn)
+    .await?;
+    Ok(())
 }
 
 pub async fn update(
@@ -97,21 +98,20 @@ pub async fn update(
     owner: UserId,
     time_source_id: TimeSourceId,
     time_source: UpdateTimeSourceForm,
-) -> Result<TimeSource, sqlx::Error> {
-    sqlx::query_as!(
-        TimeSource,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
             UPDATE time_sources
             SET weight = $3
             WHERE id = $1 AND owner = $2
-            RETURNING id, owner, hostname, port as "port: _", countries, weight
         "#,
         time_source_id as _,
         owner as _,
         time_source.weight
     )
-    .fetch_one(conn)
-    .await
+    .execute(conn)
+    .await?;
+    Ok(())
 }
 
 pub async fn delete(
@@ -141,8 +141,37 @@ pub async fn by_user(
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, weight
-            FROM time_sources
+            SELECT id, owner, hostname, port AS "port: _", countries, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
+            LEFT JOIN (
+                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
+                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                    FROM monitor_samples
+                    WHERE protocol = 'ipv4'
+                    GROUP BY time_source_id, protocol, monitor_id
+                ) AS ms1
+                LEFT JOIN monitor_samples AS ms2 ON
+                    ms1.time_source_id = ms2.time_source_id AND
+                    ms1.protocol = ms2.protocol AND
+                    ms1.monitor_id = ms2.monitor_id AND
+                    ms1.target_received_at = ms2.received_at
+                GROUP BY
+                    ms2.time_source_id
+            ) AS s4 ON id = s4.time_source_id
+            LEFT JOIN (
+                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv6_score FROM (
+                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                    FROM monitor_samples
+                    WHERE protocol = 'ipv6'
+                    GROUP BY time_source_id, protocol, monitor_id
+                ) AS ms1
+                LEFT JOIN monitor_samples AS ms2 ON
+                    ms1.time_source_id = ms2.time_source_id AND
+                    ms1.protocol = ms2.protocol AND
+                    ms1.monitor_id = ms2.monitor_id AND
+                    ms1.target_received_at = ms2.received_at
+                GROUP BY
+                    ms2.time_source_id
+            ) AS s6 ON id = s6.time_source_id
             WHERE owner = $1 AND deleted = false;
         "#,
         owner as _,
@@ -155,8 +184,37 @@ pub async fn not_deleted(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, s
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, weight
-            FROM time_sources
+            SELECT id, owner, hostname, port AS "port: _", countries, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
+            LEFT JOIN (
+                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
+                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                    FROM monitor_samples
+                    WHERE protocol = 'ipv4'
+                    GROUP BY time_source_id, protocol, monitor_id
+                ) AS ms1
+                LEFT JOIN monitor_samples AS ms2 ON
+                    ms1.time_source_id = ms2.time_source_id AND
+                    ms1.protocol = ms2.protocol AND
+                    ms1.monitor_id = ms2.monitor_id AND
+                    ms1.target_received_at = ms2.received_at
+                GROUP BY
+                    ms2.time_source_id
+            ) AS s4 ON id = s4.time_source_id
+            LEFT JOIN (
+                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv6_score FROM (
+                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                    FROM monitor_samples
+                    WHERE protocol = 'ipv6'
+                    GROUP BY time_source_id, protocol, monitor_id
+                ) AS ms1
+                LEFT JOIN monitor_samples AS ms2 ON
+                    ms1.time_source_id = ms2.time_source_id AND
+                    ms1.protocol = ms2.protocol AND
+                    ms1.monitor_id = ms2.monitor_id AND
+                    ms1.target_received_at = ms2.received_at
+                GROUP BY
+                    ms2.time_source_id
+            ) AS s6 ON id = s6.time_source_id
             WHERE deleted = false;
         "#,
     )
