@@ -1,0 +1,32 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-management
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+  {{- with .Values.ingresses.management.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingresses.management.className }}
+  rules:
+    {{- range .Values.ingresses.management.hosts }}
+    - host: "{{ . }}"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "nts-pool.fullname" $ }}-management
+                port:
+                  number: 3000
+    {{- end }}
+  tls:
+    - hosts: {{ toJson .Values.ingresses.management.hosts }}
+      {{- with .Values.ingresses.management.tlsSecretName }}
+      secretName: {{ . }}
+      {{- end }}

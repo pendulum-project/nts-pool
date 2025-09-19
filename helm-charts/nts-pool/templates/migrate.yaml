@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-migrate
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  annotations:
+    "helm.sh/hook": pre-upgrade,pre-install
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      {{- if .Values.management.databaseCertificate.cert }}
+      volumes:
+        - name: db-cert-volume
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-management-db-cert
+      {{- end }}
+      containers:
+        - name: management-migrate
+          imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.management.image.pullPolicy }}"
+          {{- with default .Values.image.pullSecrets .Values.management.image.pullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ default .Values.image.repository .Values.management.image.repository }}:{{ default .Values.image.tag .Values.management.image.tag }}"
+          command: ["/usr/local/bin/nts-pool-management"]
+          workingDir: "/opt/nts-pool-management"
+          {{- if .Values.management.databaseCertificate.cert }}
+          volumeMounts:
+            - name: db-cert-volume
+              mountPath: {{ .Values.management.databaseCertificate.mountPath }}
+              subPath: db.pem
+          {{- end }}
+          env:
+            - name: NTSPOOL_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- toYaml .Values.management.databaseUrlSecretRef | nindent 18 }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- toYaml .Values.management.databaseUrlSecretRef | nindent 18 }}
+            - name: NTSPOOL_DATABASE_RUN_MIGRATIONS
+              value: "only-migrate"
+            - name: NTSPOOL_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- toYaml .Values.management.jwtKeySecretRef | nindent 18 }}
+            - name: NTSPOOL_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- toYaml .Values.management.cookieSecretRef | nindent 18 }}
+            - name: NTSPOOL_SMTP_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- toYaml .Values.management.smtpUrlSecretRef | nindent 18 }}
+            - name: NTSPOOL_MAIL_FROM_ADDRESS
+              value: "{{ .Values.management.mailFromAddress }}"
+            - name: NTSPOOL_BASE_URL
+              value: "{{ .Values.management.baseUrl }}"
+            - name: NTSPOOL_POOLKE_NAME
+              value: "{{ .Values.management.poolKeName }}"
+            - name: RUST_BACKTRACE
+              value: "1"
