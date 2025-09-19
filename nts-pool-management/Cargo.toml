@@ -15,7 +15,7 @@ askama = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true, features = ["cookie", "cookie-private", "cookie-key-expansion", "typed-header"] }
 headers.workspace = true
-nts-pool-shared.workspace = true
+nts-pool-shared = { workspace = true, features = ["sqlx"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_qs = { workspace = true }
