@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use axum::{Json, extract::State, response::IntoResponse};
 use eyre::Context;
 use nts_pool_shared::{IpVersion, ProbeControlCommand, ProbeResult};
@@ -35,12 +33,12 @@ pub async fn get_work(
             .collect(),
         poolke: state.config.poolke_name,
         result_endpoint: format!("{}/monitoring/submit", state.config.base_url),
-        result_batchsize: 4,
-        result_max_waittime: Duration::from_secs(60),
-        update_interval: Duration::from_secs(60),
-        probe_interval: Duration::from_secs(4),
-        nts_timeout: Duration::from_secs(1),
-        ntp_timeout: Duration::from_secs(1),
+        result_batchsize: state.config.monitor_result_batchsize,
+        result_max_waittime: state.config.monitor_result_batchtime,
+        update_interval: state.config.monitor_update_interval,
+        probe_interval: state.config.monitor_probe_interval,
+        nts_timeout: state.config.monitor_nts_timeout,
+        ntp_timeout: state.config.monitor_ntp_timeout,
     }))
 }
 
