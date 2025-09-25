@@ -85,8 +85,19 @@ spec:
             value: "{{ .Values.management.baseUrl }}"
           - name: NTSPOOL_POOLKE_NAME
             value: "{{ .Values.ke.domainName }}"
+          - name: NTSPOOL_MONITOR_RESULT_BATCHSIZE
+            value: "{{ .Values.monitor.resultBatchsize }}"
+          - name: NTSPOOL_MONITOR_RESULT_BATCHTIME
+            value: "{{ .Values.monitor.resultBatchtime }}"
+          - name: NTSPOOL_MONITOR_UPDATE_INTERVAL
+            value: "{{ .Values.monitor.updateInterval }}"
+          - name: NTSPOOL_MONITOR_PROBE_INTERVAL
+            value: "{{ .Values.monitor.probeInterval }}"
+          - name: NTSPOOL_MONITOR_NTS_TIMEOUT
+            value: "{{ .Values.monitor.ntsTimeout }}"
+          - name: NTSPOOL_MONITOR_NTP_TIMEOUT
+            value: "{{ .Values.monitor.ntpTimeout }}"
           - name: RUST_BACKTRACE
             value: "1"
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.management.restartBump}}"
-
