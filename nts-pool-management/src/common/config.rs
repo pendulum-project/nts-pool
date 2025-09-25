@@ -8,6 +8,7 @@ pub struct AppConfig {
     // Base website configuration
     pub base_url: BaseUrl,
     pub assets_path: String,
+    pub geolocation_db: std::path::PathBuf,
     // Database config
     pub database_url: String,
     pub database_run_migrations: RunDatabaseMigrations,
@@ -42,6 +43,9 @@ impl AppConfig {
                 .wrap_err("NTSPOOL_BASE_URL not set in environment")?,
         );
         let assets_path = std::env::var("NTSPOOL_ASSETS_DIR").unwrap_or("./assets".into());
+        let geolocation_db = std::env::var("NTSPOOL_GEOLOCATION_DB")
+            .wrap_err("NTSPOOL_GEOLOCATION_DB not set in environment")?
+            .into();
 
         // Database configuration
         let database_url = std::env::var("NTSPOOL_DATABASE_URL")
@@ -108,6 +112,7 @@ impl AppConfig {
         Ok(Self {
             base_url,
             assets_path,
+            geolocation_db,
             database_url,
             database_run_migrations,
             jwt_secret,
@@ -136,6 +141,7 @@ impl Default for AppConfig {
             cookie_secret: "UNSAFE_SECRET".into(),
             mail_from_address: "noreply@example.com".into(),
             mail_smtp_url: "smtp://localhost:25".into(),
+            geolocation_db: "../nts-pool-ke/testdata/GeoLite2-Country-Test.mmdb".into(),
             assets_path: "./assets".into(),
             monitor_result_batchsize: 4,
             monitor_result_batchtime: Duration::from_secs(60),

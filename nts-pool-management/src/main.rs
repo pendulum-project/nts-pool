@@ -1,12 +1,18 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
 use axum::{extract::FromRef, middleware};
 use axum_extra::extract::cookie;
+use eyre::Context;
+use notify::Watcher;
 use sqlx::PgPool;
 use tracing::info;
 
 use crate::{
     common::config::RunDatabaseMigrations,
+    common::error::AppError,
     config::AppConfig,
     email::{MailTransport, Mailer},
 };
@@ -29,6 +35,7 @@ pub struct AppState {
     private_cookie_key: cookie::Key,
     mailer: Mailer,
     config: AppConfig,
+    geodb: Arc<RwLock<Arc<maxminddb::Reader<Vec<u8>>>>>,
 }
 
 pub trait DbConnLike<'a>:
@@ -77,6 +84,61 @@ pub async fn pool_conn(
     }
 }
 
+async fn load_geodb(
+    geodb_path: &std::path::Path,
+) -> Result<Arc<maxminddb::Reader<Vec<u8>>>, AppError> {
+    let geodb_raw = tokio::fs::read(geodb_path)
+        .await
+        .wrap_err("Could not load geolocation database from disk")?;
+
+    Ok(Arc::new(
+        maxminddb::Reader::from_source(geodb_raw).wrap_err("Invalid geolocation database")?,
+    ))
+}
+
+async fn manage_geodb(
+    geodb_path: impl AsRef<std::path::Path> + Send + 'static,
+) -> Result<Arc<RwLock<Arc<maxminddb::Reader<Vec<u8>>>>>, AppError> {
+    let (change_sender, mut change_receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
+    // Use a poll watcher here as INotify can be unreliable in many ways and I don't want to deal with that.
+    let mut watcher = notify::poll::PollWatcher::new(
+        move |event: notify::Result<notify::Event>| {
+            if event.is_ok() {
+                let _ = change_sender.send(());
+            }
+        },
+        notify::Config::default()
+            .with_poll_interval(std::time::Duration::from_secs(60))
+            .with_compare_contents(true),
+    )
+    .wrap_err("Could not setup watcher for changes in geolocation database")?;
+
+    watcher
+        .watch(geodb_path.as_ref(), notify::RecursiveMode::NonRecursive)
+        .wrap_err("Could not watch geolocation database for changes")?;
+
+    let geodb = Arc::new(RwLock::new(load_geodb(geodb_path.as_ref()).await?));
+    let geodb_cloned = geodb.clone();
+
+    tokio::spawn(async move {
+        // keep the watcher alive
+        let _w = watcher;
+        loop {
+            change_receiver.recv().await;
+            match load_geodb(geodb_path.as_ref()).await {
+                Ok(new_geodb) => {
+                    *geodb.write().unwrap() = new_geodb;
+                }
+                Err(e) => {
+                    tracing::error!("Could not refresh geolocation database: {e}");
+                }
+            }
+        }
+    });
+
+    Ok(geodb_cloned)
+}
+
 #[tokio::main]
 async fn main() {
     let config = AppConfig::from_env().expect("Failed to load configuration");
@@ -122,6 +184,10 @@ async fn main() {
 
     let serve_dir_service = tower_http::services::ServeDir::new(&config.assets_path);
 
+    let geodb = manage_geodb(config.geolocation_db.clone())
+        .await
+        .expect("Unable to initialize geolocation database");
+
     // construct the application state
     let state = AppState {
         db,
@@ -130,6 +196,7 @@ async fn main() {
         private_cookie_key,
         mailer,
         config,
+        geodb,
     };
 
     // setup routes

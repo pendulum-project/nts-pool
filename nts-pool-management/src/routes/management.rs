@@ -51,10 +51,12 @@ pub async fn create_time_source(
     flash: FlashMessageService,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let flash = match time_source::create(&state.db, user.id, new_time_source.try_into()?).await {
-        Ok(_) => flash.success("Time source added successfully".to_string()),
-        Err(_) => flash.error("Could not add time source".to_string()),
-    };
+    let geodb = state.geodb.read().unwrap().clone();
+    let flash =
+        match time_source::create(&state.db, user.id, new_time_source.try_into()?, &geodb).await {
+            Ok(_) => flash.success("Time source added successfully".to_string()),
+            Err(_) => flash.error("Could not add time source".to_string()),
+        };
 
     Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }

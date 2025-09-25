@@ -43,6 +43,9 @@ COPY --from=builder /build/artifacts/nts-pool-management /usr/local/bin/nts-pool
 COPY --from=builder /build/artifacts/nts-pool-monitor /usr/local/bin/nts-pool-monitor
 COPY --from=builder /build/nts-pool-management/assets /opt/nts-pool-management/assets
 
+# Temporarily copy test geodb, until we actually implement proper loading of the geolocation database.
+COPY --from=builder /build/nts-pool-ke/testdata/GeoLite2-Country-Test.mmdb /opt/nts-pool-management/GeoLite2-Country-Test.mmdb
+
 # Set a default assets directory
 ENV NTSPOOL_ASSETS_DIR=/opt/nts-pool-management/assets
 
