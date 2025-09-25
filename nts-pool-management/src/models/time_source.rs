@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 use eyre::Context;
+use phf::phf_map;
 use serde::Deserialize;
 
 use crate::{
@@ -8,6 +11,16 @@ use crate::{
         user::UserId,
         util::{port::Port, uuid},
     },
+};
+
+static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
+    "AF" => "AFRICA",
+    "AN" => "ANTARCTICA",
+    "AS" => "ASIA",
+    "EU" => "EUROPE",
+    "NA" => "NORTH-AMERICA",
+    "OC" => "OCEANIA",
+    "SA" => "SOUTH_AMERICA",
 };
 
 uuid!(TimeSourceId);
@@ -74,19 +87,66 @@ impl TryFrom<NewTimeSourceForm> for NewTimeSource {
     }
 }
 
+pub async fn infer_regions(
+    hostname: impl AsRef<str>,
+    geodb: &maxminddb::Reader<impl AsRef<[u8]>>,
+) -> Vec<String> {
+    // Note: port doesn't matter but is needed for the lookup_host interface
+    let addresses = match tokio::net::lookup_host((hostname.as_ref(), 4460)).await {
+        Ok(addresses) => addresses,
+        Err(e) => {
+            if e.raw_os_error().is_some() {
+                // Definitely an issue
+                tracing::error!("Could not resolve hostname of time source: {e}");
+            }
+            return vec![];
+        }
+    };
+
+    let mut result = HashSet::new();
+    for addr in addresses {
+        let Some(lookup) = (match geodb.lookup::<maxminddb::geoip2::Country>(addr.ip()) {
+            Ok(lookup) => lookup,
+            Err(e) => {
+                tracing::error!("Failure during geoip lookup: {e}");
+                None
+            }
+        }) else {
+            continue;
+        };
+
+        if let Some(continent) = lookup
+            .continent
+            .and_then(|v| v.code)
+            .and_then(|c| CONTINENTS.get(c))
+        {
+            result.insert((*continent).to_owned());
+        }
+        if let Some(country) = lookup.country.and_then(|v| v.iso_code) {
+            result.insert(country.to_owned());
+        }
+    }
+
+    result.into_iter().collect()
+}
+
 pub async fn create(
     conn: impl DbConnLike<'_>,
     owner: UserId,
     new_time_source: NewTimeSource,
+    geodb: &maxminddb::Reader<impl AsRef<[u8]>>,
 ) -> Result<(), sqlx::Error> {
+    let regions = infer_regions(&new_time_source.hostname, geodb).await;
+
     sqlx::query!(
         r#"
-            INSERT INTO time_sources (owner, hostname, port)
-            VALUES ($1, $2, $3)
+            INSERT INTO time_sources (owner, hostname, port, countries)
+            VALUES ($1, $2, $3, $4)
         "#,
         owner as _,
         new_time_source.hostname,
         new_time_source.port as _,
+        regions.as_slice(),
     )
     .execute(conn)
     .await?;

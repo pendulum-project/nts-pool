@@ -101,3 +101,5 @@ spec:
             value: "1"
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.management.restartBump}}"
+          - name: NTSPOOL_GEOLOCATION_DB
+            value: "/opt/nts-pool-management/GeoLite2-Country-Test.mmdb" # Temporary, until proper loading of geolocation database is implemented
