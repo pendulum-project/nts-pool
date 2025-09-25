@@ -99,6 +99,22 @@ management:
     repository: null
     tag: null
 
+# Configuration for the monitors
+monitor:
+  # Number of probe results to collect before submitting monitoring results. Is overriden by batchTime if that occurs earlier.
+  resultBatchsize: 10
+  # Maximum age of a result before submitting it to the server. Is overriden by Batchsize if more results are collected earlier.
+  resultBatchtime: 60
+  # Amount of time between updating the configuration and list of servers to be monitored
+  updateInterval: 300
+  # Amount of time between probes.
+  # This is 241 on purpose to create a large lcm between this and updateInterval.
+  probeInterval: 241
+  # Timeout for the nts key exchange with the timesource.
+  ntsTimeout: 1000
+  # Timeout for ntp exchanges with timesources.
+  ntpTimeout: 1000
+
 configUpdater:
   # When to run the config updater job
   schedule: "0 * * * *"
