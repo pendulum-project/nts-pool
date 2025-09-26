@@ -25,6 +25,7 @@ pub struct RoundRobinServerManager {
     uuid_lookup: HashMap<String, usize>,
     allowed_protocols: HashSet<ProtocolId>,
     upstream_tls: TlsConnector,
+    base_server_secret: Vec<String>,
     next_start: AtomicUsize,
     timeout: Duration,
 }
@@ -46,6 +47,7 @@ impl RoundRobinServerManager {
             uuid_lookup,
             allowed_protocols: config.allowed_protocols,
             upstream_tls,
+            base_server_secret: config.base_shared_secret,
             next_start: AtomicUsize::new(0),
             timeout: config.timesource_timeout,
         })
@@ -126,6 +128,7 @@ impl Server for RoundRobinServer<'_> {
     > {
         fetch_support_data(
             self.connect(ConnectionType::Either).await?,
+            self.auth_key(),
             &self.owner.allowed_protocols,
             self.owner.timeout,
         )
@@ -143,6 +146,17 @@ impl Server for RoundRobinServer<'_> {
             .upstream_tls
             .connect(self.server.server_name.clone(), io)
             .await?)
+    }
+
+    fn auth_key(&self) -> String {
+        super::calculate_auth_key(
+            self.owner
+                .base_server_secret
+                .get(self.server.base_key_index)
+                .map_or(&[], |v| v.as_bytes()),
+            self.server.uuid.as_bytes(),
+            self.server.randomizer.as_bytes(),
+        )
     }
 }
 
@@ -193,6 +207,8 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -203,6 +219,8 @@ mod tests {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -212,6 +230,7 @@ mod tests {
             .into(),
             uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
+            base_server_secret: vec![],
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
             timeout: Duration::from_secs(1),
@@ -232,6 +251,8 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -242,6 +263,8 @@ mod tests {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -251,6 +274,7 @@ mod tests {
             .into(),
             uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
+            base_server_secret: vec![],
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
             timeout: Duration::from_secs(1),
@@ -273,6 +297,8 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -283,6 +309,8 @@ mod tests {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -292,6 +320,7 @@ mod tests {
             .into(),
             uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
+            base_server_secret: vec![],
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
             timeout: Duration::from_secs(1),
@@ -314,6 +343,8 @@ mod tests {
                     domain: "a.test".into(),
                     server_name: ServerName::try_from("a.test").unwrap(),
                     connection_address: ("a.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -324,6 +355,8 @@ mod tests {
                     domain: "b.test".into(),
                     server_name: ServerName::try_from("b.test").unwrap(),
                     connection_address: ("b.test".into(), 4460),
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     weight: 1,
                     regions: vec![],
                     ipv4_capable: true,
@@ -333,6 +366,7 @@ mod tests {
             .into(),
             uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             upstream_tls: upstream_tls_config(),
+            base_server_secret: vec![],
             allowed_protocols: HashSet::new(),
             next_start: 0.into(),
             timeout: Duration::from_secs(1),

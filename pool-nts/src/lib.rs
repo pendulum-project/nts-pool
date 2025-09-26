@@ -180,7 +180,7 @@ impl<'a> ClientRequest<'a> {
                     algorithms = Some(algorithm_ids)
                 }
                 NtsRecord::NtpServerDeny { denied } => denied_servers.push(denied),
-                NtsRecord::Authentication { key } => {
+                NtsRecord::AuthenticationToken { key } => {
                     if authentication_key.is_some() {
                         return Err(NtsError::Invalid);
                     }
@@ -267,7 +267,7 @@ impl<'a> ClientRequest<'a> {
                 key,
                 uuid,
             } => {
-                NtsRecord::Authentication { key }
+                NtsRecord::AuthenticationToken { key }
                     .serialize(&mut writer)
                     .await?;
                 NtsRecord::UUIDRequest { uuid }
@@ -291,11 +291,16 @@ impl<'a> ClientRequest<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ServerInformationRequest;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ServerInformationRequest<'a> {
+    pub key: Cow<'a, str>,
+}
 
-impl ServerInformationRequest {
+impl ServerInformationRequest<'_> {
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin + Send) -> Result<(), Error> {
+        NtsRecord::AuthenticationToken { key: self.key }
+            .serialize(&mut writer)
+            .await?;
         NtsRecord::SupportedAlgorithmList {
             supported_algorithms: [].as_slice().into(),
         }
@@ -361,7 +366,7 @@ impl<'a> ServerInformationResponse<'a> {
                 | NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
                 | NtsRecord::Port { .. }
-                | NtsRecord::Authentication { .. } => {}
+                | NtsRecord::AuthenticationToken { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::NextProtocol { .. }
@@ -386,6 +391,7 @@ impl<'a> ServerInformationResponse<'a> {
 }
 
 pub struct FixedKeyRequest<'a> {
+    pub key: Cow<'a, str>,
     pub c2s: Cow<'a, [u8]>,
     pub s2c: Cow<'a, [u8]>,
     pub protocol: ProtocolId,
@@ -394,6 +400,9 @@ pub struct FixedKeyRequest<'a> {
 
 impl<'a> FixedKeyRequest<'a> {
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin + Send) -> Result<(), Error> {
+        NtsRecord::AuthenticationToken { key: self.key }
+            .serialize(&mut writer)
+            .await?;
         NtsRecord::FixedKeyRequest {
             c2s: self.c2s,
             s2c: self.s2c,
@@ -418,6 +427,7 @@ impl<'a> FixedKeyRequest<'a> {
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
+        let mut authentication_key = None;
         let mut c2s = None;
         let mut s2c = None;
         let mut algorithm = None;
@@ -453,6 +463,13 @@ impl<'a> FixedKeyRequest<'a> {
 
                     protocol = Some(protocol_ids.iter().next().unwrap());
                 }
+                NtsRecord::AuthenticationToken { key } => {
+                    if authentication_key.is_some() {
+                        return Err(NtsError::Invalid);
+                    }
+
+                    authentication_key = Some(key)
+                }
                 // Error
                 NtsRecord::Error { errorcode } => return Err(NtsError::Error(errorcode)),
                 // Warning
@@ -467,8 +484,7 @@ impl<'a> FixedKeyRequest<'a> {
                 NtsRecord::KeepAlive
                 | NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
-                | NtsRecord::Port { .. }
-                | NtsRecord::Authentication { .. } => {}
+                | NtsRecord::Port { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedNextProtocolList { .. }
@@ -478,10 +494,11 @@ impl<'a> FixedKeyRequest<'a> {
             }
         }
 
-        if let (Some(algorithm), Some(protocol), Some(c2s), Some(s2c)) =
-            (algorithm, protocol, c2s, s2c)
+        if let (Some(algorithm), Some(protocol), Some(c2s), Some(s2c), Some(key)) =
+            (algorithm, protocol, c2s, s2c, authentication_key)
         {
             Ok(Self {
+                key,
                 c2s,
                 s2c,
                 protocol,
@@ -558,7 +575,7 @@ impl<'a> KeyExchangeResponse<'a> {
                 // Ignored
                 NtsRecord::Unknown { .. }
                 | NtsRecord::KeepAlive
-                | NtsRecord::Authentication { .. } => {}
+                | NtsRecord::AuthenticationToken { .. } => {}
                 // Not allowed
                 NtsRecord::NtpServerDeny { .. }
                 | NtsRecord::FixedKeyRequest { .. }
@@ -765,7 +782,7 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0x4F, 0, 0, 3, b'k', b'e', b'y', 0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 1, 0,
+                0x40, 5, 0, 3, b'k', b'e', b'y', 0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 1, 0,
                 4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0x80, 0, 0, 0
             ]
         );
@@ -884,7 +901,7 @@ mod tests {
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let mut arr5 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Ordinary {
             algorithms,
@@ -934,7 +951,7 @@ mod tests {
     #[test]
     fn test_client_request_uuid_basic() {
         let mut arr = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
             b'c', b'd', 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Uuid {
@@ -959,7 +976,7 @@ mod tests {
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr1).is_err());
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'c', b'd', 0x4F, 0, 0, 2,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'c', b'd', 0x40, 5, 0, 2,
             b'a', b'b',
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr2).is_err());
@@ -968,7 +985,7 @@ mod tests {
     #[test]
     fn test_client_request_uuid_ignores_non_problematic() {
         let mut arr1 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
             b'c', b'd', 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Uuid {
@@ -986,7 +1003,7 @@ mod tests {
         assert_eq!(uuid, "cd");
 
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
             b'c', b'd', 0x80, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Uuid {
@@ -1007,62 +1024,62 @@ mod tests {
     #[test]
     fn test_client_request_uuid_reject_problematic() {
         let mut arr1 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 1, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr1).is_err());
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 2, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr2).is_err());
         let mut arr3 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 3, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr3).is_err());
         let mut arr4 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 4, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr4).is_err());
         let mut arr5 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 5, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr5).is_err());
         let mut arr6 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0xC0, 4, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr6).is_err());
         let mut arr7 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0xC0, 1, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr7).is_err());
         let mut arr8 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0xC0, 5, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr8).is_err());
         let mut arr9 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr9).is_err());
         let mut arr10 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x40, 3, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr10).is_err());
         let mut arr11 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x4F, 0, 0, 2, 5, 6, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0x40, 5, 0, 2, 5, 6, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr11).is_err());
         let mut arr12 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x4F, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0xCF, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr12).is_err());
@@ -1074,12 +1091,17 @@ mod tests {
         assert!(
             swrap(
                 ServerInformationRequest::serialize,
-                ServerInformationRequest,
+                ServerInformationRequest { key: "abcd".into() },
                 &mut buf
             )
             .is_ok()
         );
-        assert_eq!(buf, [0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x80, 0, 0, 0]);
+        assert_eq!(
+            buf,
+            [
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x80, 0, 0, 0
+            ]
+        );
     }
 
     #[test]
@@ -1242,6 +1264,7 @@ mod tests {
             swrap(
                 FixedKeyRequest::serialize,
                 FixedKeyRequest {
+                    key: "abcd".into(),
                     c2s: [1, 2].as_slice().into(),
                     s2c: [3, 4].as_slice().into(),
                     protocol: 1,
@@ -1254,7 +1277,8 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0, 1, 0x80, 4, 0, 2, 0, 2, 0x80, 0, 0, 0
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
+                1, 0x80, 4, 0, 2, 0, 2, 0x80, 0, 0, 0
             ]
         );
     }

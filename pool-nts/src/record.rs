@@ -276,7 +276,7 @@ pub enum NtsRecord<'a> {
     },
 
     /// Internal pool NTS records
-    Authentication {
+    AuthenticationToken {
         key: Cow<'a, str>,
     },
     UUIDRequest {
@@ -309,7 +309,7 @@ impl<'a> NtsRecord<'a> {
             0x4001 => Self::parse_supported_algorithm_list(body),
             0x4002 => Self::parse_fixed_key_request(body),
             0x4003 => Self::parse_ntp_server_deny(body),
-            0x4F00 => Self::parse_authentication(body).await,
+            0x4005 => Self::parse_authentication_token(body).await,
             0x4F01 => Self::parse_uuid_request(body).await,
             _ => {
                 let mut data = vec![0; size.into()];
@@ -416,8 +416,8 @@ impl<'a> NtsRecord<'a> {
         })
     }
 
-    async fn parse_authentication(body: &'a [u8]) -> Result<Self, Error> {
-        Ok(Self::Authentication {
+    async fn parse_authentication_token(body: &'a [u8]) -> Result<Self, Error> {
+        Ok(Self::AuthenticationToken {
             key: str::from_utf8(body)
                 .map_err(|_| Error::from(ErrorKind::InvalidData))?
                 .into(),
@@ -469,7 +469,7 @@ impl<'a> NtsRecord<'a> {
                 writer.write_all(s2c).await?
             }
             NtsRecord::NtpServerDeny { denied } => writer.write_all(denied.as_bytes()).await?,
-            NtsRecord::Authentication { key } => writer.write_all(key.as_bytes()).await?,
+            NtsRecord::AuthenticationToken { key } => writer.write_all(key.as_bytes()).await?,
             NtsRecord::UUIDRequest { uuid } => writer.write_all(uuid.as_bytes()).await?,
         }
         Ok(())
@@ -497,7 +497,7 @@ impl<'a> NtsRecord<'a> {
             NtsRecord::SupportedAlgorithmList { .. } => 0x4001 | CRITICAL_BIT,
             NtsRecord::FixedKeyRequest { .. } => 0x4002 | CRITICAL_BIT,
             NtsRecord::NtpServerDeny { .. } => 0x4003,
-            NtsRecord::Authentication { .. } => 0x4F00,
+            NtsRecord::AuthenticationToken { .. } => 0x4005,
             NtsRecord::UUIDRequest { .. } => 0x4F01 | CRITICAL_BIT,
         }
     }
@@ -526,7 +526,7 @@ impl<'a> NtsRecord<'a> {
             } => supported_algorithms.iter().count() * 2 * size_of::<u16>(),
             NtsRecord::FixedKeyRequest { c2s, s2c } => c2s.len() + s2c.len(),
             NtsRecord::NtpServerDeny { denied } => denied.len(),
-            NtsRecord::Authentication { key } => key.len(),
+            NtsRecord::AuthenticationToken { key } => key.len(),
             NtsRecord::UUIDRequest { uuid } => uuid.len(),
         }
     }
@@ -1058,23 +1058,26 @@ mod tests {
 
     #[test]
     fn test_authentication() {
-        let rec = &mut [0x4F, 0, 0, 5, b'h', b'e', b'l', b'l', b'o'];
-        let Ok(NtsRecord::Authentication { key }) = parse(rec) else {
+        let rec = &mut [0x40, 5, 0, 5, b'h', b'e', b'l', b'l', b'o'];
+        let Ok(NtsRecord::AuthenticationToken { key }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(key, "hello");
 
-        let rec = &mut [0xCF, 0, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
-        let Ok(NtsRecord::Authentication { key }) = parse(rec) else {
+        let rec = &mut [0xC0, 5, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
+        let Ok(NtsRecord::AuthenticationToken { key }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(key, "hello");
 
-        assert!(parse(&mut [0x4F, 0, 0, 5, b'h', b'e', b'l']).is_err());
+        assert!(parse(&mut [0x40, 5, 0, 5, b'h', b'e', b'l']).is_err());
 
         let mut buf = vec![];
-        serialize(NtsRecord::Authentication { key: "hi".into() }, &mut buf);
-        assert_eq!(buf, &[0x4F, 0, 0, 2, b'h', b'i']);
+        serialize(
+            NtsRecord::AuthenticationToken { key: "hi".into() },
+            &mut buf,
+        );
+        assert_eq!(buf, &[0x40, 5, 0, 2, b'h', b'i']);
     }
 
     #[test]

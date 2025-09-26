@@ -12,6 +12,10 @@ pub struct KeyExchangeServer {
     #[serde(default)]
     pub weight: Option<usize>,
     #[serde(default)]
+    pub base_key_index: usize,
+    #[serde(default)]
+    pub randomizer: String,
+    #[serde(default)]
     pub regions: Vec<String>,
     #[serde(default)]
     pub ipv4_capable: Option<bool>,
