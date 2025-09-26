@@ -29,6 +29,7 @@ fuzz = []
 [dependencies]
 nts-pool-shared.workspace = true
 pool-nts.workspace = true
+sha3.workspace = true
 tokio = { workspace = true, default-features = false, features = [
     "rt-multi-thread",
     "io-util",

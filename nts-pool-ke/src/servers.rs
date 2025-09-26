@@ -13,6 +13,7 @@ use pool_nts::{
 };
 use rustls::{pki_types::pem::PemObject, version::TLS13};
 use rustls_platform_verifier::Verifier;
+use sha3::Digest;
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
@@ -104,6 +105,8 @@ pub trait Server: Sync + Send {
         &'a self,
         connection_type: ConnectionType,
     ) -> impl Future<Output = Result<Self::Connection<'a>, PoolError>> + Send;
+
+    fn auth_key(&self) -> String;
 }
 
 pub trait ServerConnection: AsyncRead + AsyncWrite + Unpin + Send {
@@ -134,8 +137,32 @@ async fn resolve_with_type<T: tokio::net::ToSocketAddrs>(
     Err(std::io::ErrorKind::NotFound.into())
 }
 
+fn calculate_auth_key(
+    base_shared_secret: &[u8],
+    server_uuid: &[u8],
+    server_randomizer: &[u8],
+) -> String {
+    struct HashOutput<'a>(&'a [u8]);
+    impl<'a> std::fmt::Display for HashOutput<'a> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            for el in self.0 {
+                write!(f, "{:2x}", el)?;
+            }
+            Ok(())
+        }
+    }
+
+    let mut hasher = sha3::Sha3_256::new();
+    hasher.update(base_shared_secret);
+    hasher.update(server_uuid);
+    hasher.update(server_randomizer);
+    let hash = hasher.finalize();
+    format!("{}", HashOutput(hash.as_slice()))
+}
+
 async fn fetch_support_data(
     mut connection: impl ServerConnection,
+    key: String,
     allowed_protocols: &HashSet<ProtocolId>,
     timeout: Duration,
 ) -> Result<
@@ -146,7 +173,9 @@ async fn fetch_support_data(
     PoolError,
 > {
     match tokio::time::timeout(timeout, async {
-        ServerInformationRequest.serialize(&mut connection).await?;
+        ServerInformationRequest { key: key.into() }
+            .serialize(&mut connection)
+            .await?;
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let support_info = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
             &mut connection,
@@ -337,10 +366,14 @@ mod tests {
             ],
         };
 
-        let (protocols, algorithms) =
-            fetch_support_data(connection, &HashSet::from([0, 1]), Duration::from_secs(1))
-                .await
-                .unwrap();
+        let (protocols, algorithms) = fetch_support_data(
+            connection,
+            "abcd".into(),
+            &HashSet::from([0, 1]),
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
         assert!(protocols.contains(&0));
         assert!(protocols.contains(&1));
         assert_eq!(protocols.len(), 2);
