@@ -1,0 +1,21 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-geolocation-loader
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+data:
+  geolocation-loader.sh: |
+    #!/bin/sh
+    while true; do
+      curl --fail -o geolite2.tar.gz -z "${TARGET}" -u "${USERID}:${LICENSE_KEY}" -L "${URL}"
+      if [ $? -eq 0 ] && [ -f geolite2.tar.gz ]; then
+        tar -xf geolite2.tar.gz --wildcards --strip-components 1 \*/GeoLite2-Country.mmdb
+        mv GeoLite2-Country.mmdb "${TARGET}"
+        touch "${TARGET}"
+      fi
+      rm -f geolite2.tar.gz
+      sleep "$PERIOD"
+    done

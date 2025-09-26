@@ -31,12 +31,59 @@ spec:
         app.kubernetes.io/component: management
         {{- include "nts-pool.selectorLabels" . | nindent 8 }}
     spec:
-      {{- if .Values.management.databaseCertificate.cert }}
       volumes:
+        - name: geolocation-script
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-geolocation-loader
+            items:
+              - key: "geolocation-loader.sh"
+                path: "geolocation-loader.sh"
+                mode: 0755
+        - name: geolocation
+          emptyDir: {}
+        {{- if .Values.management.databaseCertificate.cert }}
         - name: db-cert-volume
           configMap:
             name: {{ include "nts-pool.fullname" . }}-management-db-cert
-      {{- end }}
+        {{- end }}
+      initContainers:
+      - name: geolocation
+        imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.management.image.pullPolicy }}"
+        {{- with default .Values.image.pullSecrets .Values.management.image.pullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        image: "{{ default .Values.image.repository .Values.management.image.repository }}:{{ default .Values.image.tag .Values.management.image.tag }}"
+        command: ["/opt/geodb/geolocation-loader.sh"]
+        workingDir: "/opt/geodb/"
+        volumeMounts:
+          - name: geolocation
+            mountPath: "/opt/geodb"
+          - name: geolocation-script
+            mountPath: "/opt/geodb/scripts/"
+            readonly: true
+        restartPolicy: always
+        startupProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - test -e /opt/geodb/geodb.mmdb
+        env:
+          - name: USERID
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.geolocation.maxmindUserIdSecretRef | nindent 16 }}
+          - name: LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.geolocation.maxmindLicenseKeySecretRef | nindent 16 }}
+          - name: URL
+            value: {{ .Values.geolocation.maxmindDatabaseUrl }}
+          - name: TARGET
+            value: "/opt/geodb/geodb.mmdb"
+          - name: PERIOD
+            value: "24h"
       containers:
       - name: management
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.management.image.pullPolicy }}"
@@ -47,8 +94,10 @@ spec:
         image: "{{ default .Values.image.repository .Values.management.image.repository }}:{{ default .Values.image.tag .Values.management.image.tag }}"
         command: ["/usr/local/bin/nts-pool-management"]
         workingDir: "/opt/nts-pool-management"
-        {{- if .Values.management.databaseCertificate.cert }}
         volumeMounts:
+          - name: geolocation
+            mountPath: "/opt/geodb"
+        {{- if .Values.management.databaseCertificate.cert }}
           - name: db-cert-volume
             mountPath: {{ .Values.management.databaseCertificate.mountPath }}
             subPath: db.pem
@@ -102,4 +151,4 @@ spec:
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.management.restartBump}}"
           - name: NTSPOOL_GEOLOCATION_DB
-            value: "/opt/nts-pool-management/GeoLite2-Country-Test.mmdb" # Temporary, until proper loading of geolocation database is implemented
+            value: "/opt/geodb/geodb.mmdb"
