@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     fmt::Display,
+    fs::read_to_string,
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
@@ -95,6 +96,8 @@ struct BareBackendConfig {
     certificate_chain: PathBuf,
     /// Private key used to identify to time sources
     private_key: PathBuf,
+    /// Base shared secret used to identify to time sources
+    base_shared_secret: PathBuf,
     /// Which upstream servers to use.
     key_exchange_servers: PathBuf,
     /// Allowed protocols for time sources
@@ -112,6 +115,7 @@ pub struct BackendConfig {
     pub upstream_cas: Option<PathBuf>,
     pub certificate_chain: PathBuf,
     pub private_key: PathBuf,
+    pub base_shared_secret: Vec<String>,
     pub key_exchange_servers: PathBuf,
     pub allowed_protocols: HashSet<ProtocolId>,
     pub geolocation_db: Option<PathBuf>,
@@ -125,10 +129,24 @@ impl<'de> Deserialize<'de> for BackendConfig {
     {
         let bare = BareBackendConfig::deserialize(deserializer)?;
 
+        let base_shared_secret = read_to_string(bare.base_shared_secret)
+            .map_err(serde::de::Error::custom)?
+            .lines()
+            .filter_map(|v| {
+                let trimmed = v.trim();
+                if !trimmed.is_empty() {
+                    Some(trimmed.to_owned())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         Ok(Self {
             upstream_cas: bare.upstream_cas,
             certificate_chain: bare.certificate_chain,
             private_key: bare.private_key,
+            base_shared_secret,
             key_exchange_servers: bare.key_exchange_servers,
             allowed_protocols: bare.allowed_protocols.into_iter().collect(),
             geolocation_db: bare.geolocation_db,
@@ -213,6 +231,8 @@ pub struct KeyExchangeServer {
     pub domain: String,
     pub server_name: ServerName<'static>,
     pub weight: usize,
+    pub base_key_index: usize,
+    pub randomizer: String,
     pub regions: Vec<String>,
     pub ipv4_capable: bool,
     pub ipv6_capable: bool,
@@ -238,6 +258,8 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
             domain: bare.domain.to_string(),
             server_name,
             weight: bare.weight.unwrap_or(1),
+            base_key_index: bare.base_key_index,
+            randomizer: bare.randomizer,
             regions: bare.regions,
             connection_address: (bare.domain.to_string(), bare.port),
             ipv4_capable: bare.ipv4_capable.unwrap_or(true),
@@ -278,6 +300,7 @@ mod tests {
             upstream-cas = "/foo/bar/ca.pem"
             certificate-chain = "/foo/bar/baz.pem"
             private-key = "spam.der"
+            base-shared-secret = "/foo/bar/secret"
             allowed-protocols = [ 0, 1 ]
             key-exchange-servers = "servers.json"
             "#,
@@ -311,6 +334,7 @@ mod tests {
             certificate-chain = "testdata/end.fullchain.pem"
             allowed-protocols = [ 0, 1 ]
             private-key = "testdata/end.key"
+            base-shared-secret = "testdata/end.key"
             key-exchange-servers = "servers.json"
             "#,
         )
@@ -345,6 +369,8 @@ mod tests {
                     domain: String::from("foo.bar"),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     weight: 1,
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     connection_address: (String::from("foo.bar"), 1234),
                     regions: vec![],
                     ipv4_capable: true,
@@ -355,6 +381,8 @@ mod tests {
                     domain: String::from("bar.foo"),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     weight: 2,
+                    base_key_index: 0,
+                    randomizer: "".into(),
                     connection_address: (String::from("bar.foo"), 4321),
                     regions: vec![],
                     ipv4_capable: true,
