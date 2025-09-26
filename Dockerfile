@@ -34,7 +34,7 @@ FROM debian:bookworm-slim AS runner
 # Install CA certificates for the runner
 RUN apt update \
     && apt install -y --no-install-recommends \
-        ca-certificates \
+        ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # Copy compiled binaries from the builder stage
@@ -42,9 +42,6 @@ COPY --from=builder /build/artifacts/nts-pool-ke /usr/local/bin/nts-pool-ke
 COPY --from=builder /build/artifacts/nts-pool-management /usr/local/bin/nts-pool-management
 COPY --from=builder /build/artifacts/nts-pool-monitor /usr/local/bin/nts-pool-monitor
 COPY --from=builder /build/nts-pool-management/assets /opt/nts-pool-management/assets
-
-# Temporarily copy test geodb, until we actually implement proper loading of the geolocation database.
-COPY --from=builder /build/nts-pool-ke/testdata/GeoLite2-Country-Test.mmdb /opt/nts-pool-management/GeoLite2-Country-Test.mmdb
 
 # Set a default assets directory
 ENV NTSPOOL_ASSETS_DIR=/opt/nts-pool-management/assets
