@@ -37,6 +37,7 @@ notify = "8.2.0"
 phf = { version = "0.12.1", features = ["macros"] }
 rand = "0.9.1"
 reqwest = { version = "0.12.15", default-features = false }
+sha3 = "0.10.8"
 serde = { version = "1.0.194" }
 serde_json = "1.0.140"
 serde_qs = "0.15.0"

@@ -307,6 +307,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             .perform_upstream_key_exchange(
                 &mut upstream_buffer,
                 FixedKeyRequest {
+                    key: pick.auth_key().into(),
                     c2s: c2s.into(),
                     s2c: s2c.into(),
                     protocol,
@@ -660,6 +661,10 @@ mod tests {
                 written: self.written,
                 read_data: self.read_data,
             })
+        }
+
+        fn auth_key(&self) -> String {
+            "abcdefghi".into()
         }
     }
 
@@ -1090,7 +1095,7 @@ mod tests {
             .unwrap();
 
         conn.write_all(&[
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b't', b'e', b's', b't', 0xCF,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x40, 5, 0, 4, b't', b'e', b's', b't', 0xCF,
             1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
         ])
         .await
@@ -1179,7 +1184,7 @@ mod tests {
             .unwrap();
 
         conn.write_all(&[
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b't', b'e', b's', b't', 0xCF,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x40, 5, 0, 4, b't', b'e', b's', b't', 0xCF,
             1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
         ])
         .await
@@ -1257,7 +1262,7 @@ mod tests {
             .unwrap();
 
         conn.write_all(&[
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x4F, 0, 0, 4, b'n', b'o', b'n', b'e', 0xCF,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x40, 5, 0, 4, b'n', b'o', b'n', b'e', 0xCF,
             1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 0, 0, 0,
         ])
         .await

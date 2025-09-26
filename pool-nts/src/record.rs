@@ -309,7 +309,7 @@ impl<'a> NtsRecord<'a> {
             0x4001 => Self::parse_supported_algorithm_list(body),
             0x4002 => Self::parse_fixed_key_request(body),
             0x4003 => Self::parse_ntp_server_deny(body),
-            0x4F00 => Self::parse_authentication(body).await,
+            0x4005 => Self::parse_authentication(body).await,
             0x4F01 => Self::parse_uuid_request(body).await,
             _ => {
                 let mut data = vec![0; size.into()];
@@ -497,7 +497,7 @@ impl<'a> NtsRecord<'a> {
             NtsRecord::SupportedAlgorithmList { .. } => 0x4001 | CRITICAL_BIT,
             NtsRecord::FixedKeyRequest { .. } => 0x4002 | CRITICAL_BIT,
             NtsRecord::NtpServerDeny { .. } => 0x4003,
-            NtsRecord::Authentication { .. } => 0x4F00,
+            NtsRecord::Authentication { .. } => 0x4005,
             NtsRecord::UUIDRequest { .. } => 0x4F01 | CRITICAL_BIT,
         }
     }
@@ -1058,23 +1058,23 @@ mod tests {
 
     #[test]
     fn test_authentication() {
-        let rec = &mut [0x4F, 0, 0, 5, b'h', b'e', b'l', b'l', b'o'];
+        let rec = &mut [0x40, 5, 0, 5, b'h', b'e', b'l', b'l', b'o'];
         let Ok(NtsRecord::Authentication { key }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(key, "hello");
 
-        let rec = &mut [0xCF, 0, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
+        let rec = &mut [0xC0, 5, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
         let Ok(NtsRecord::Authentication { key }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(key, "hello");
 
-        assert!(parse(&mut [0x4F, 0, 0, 5, b'h', b'e', b'l']).is_err());
+        assert!(parse(&mut [0x40, 5, 0, 5, b'h', b'e', b'l']).is_err());
 
         let mut buf = vec![];
         serialize(NtsRecord::Authentication { key: "hi".into() }, &mut buf);
-        assert_eq!(buf, &[0x4F, 0, 0, 2, b'h', b'i']);
+        assert_eq!(buf, &[0x40, 5, 0, 2, b'h', b'i']);
     }
 
     #[test]
