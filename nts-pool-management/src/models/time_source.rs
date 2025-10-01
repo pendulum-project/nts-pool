@@ -142,7 +142,7 @@ pub fn calculate_auth_key(
     impl<'a> std::fmt::Display for HashOutput<'a> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             for el in self.0 {
-                write!(f, "{:2x}", el)?;
+                write!(f, "{:02x}", el)?;
             }
             Ok(())
         }
