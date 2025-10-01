@@ -46,6 +46,12 @@ spec:
                 path: "tls.crt"
               - key: "tls.key"
                 path: "tls.key"
+        - name: base-shared-secret-volume
+          secret:
+            secretName: {{ .Values.management.baseSharedSecretRef.name }}
+            items:
+              - key: {{ .Values.management.baseSharedSecretRef.key }}
+                path: "base-shared-secret.key"
       containers:
       - name: ke
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
@@ -72,6 +78,8 @@ spec:
           - name: tls-volume
             mountPath: /opt/nts-pool/tls
             readOnly: true
+          - name: base-shared-secret-volume
+            mountPath: /opt/nts-pool/base-shared-secret
         env:
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.ke.restartBump}}"

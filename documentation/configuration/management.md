@@ -17,6 +17,10 @@ The management server is configured primarily through environment variables, whi
 - `NTSPOOL_JWT_SECRET`: Secret used to verify and sign jwts used to login users. (Example: `UNSAFE_SECRET`)
 - `NTSPOOL_COOKIE_SECRET`: Secret used to tamper-proof various internal non-authentication cookies. (Example: `UNSAFE_SECRET`)
 
+## Pool secrets
+- `NTSPOOL_BASE_SHARED_SECRET`: Newest secret used to derive the shared secrets the KELB uses to authenticate to time sources (Example: `UNSAFE_SECRET`)
+- `NTSPOOL_BASE_SECRET_INDEX`: Index number of the secret provided in `NTSPOOL_BASE_SHARED_SECRET`. (Example: 0)
+
 ## Email configuration
 - `NTSPOOL_MAIL_FROM_ADDRESS`: Email address to use as sender address in emails sent from the management system. (Example: `noreply@example.com`)
 - `NTSPOOL_SMTP_URL`: Connection information for the email server to use for sending emails. (Example: `smtp://localhost:25`)

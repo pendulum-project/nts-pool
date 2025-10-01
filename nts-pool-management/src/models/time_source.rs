@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use eyre::Context;
 use phf::phf_map;
 use serde::Deserialize;
+use sha3::Digest;
 
 use crate::{
     DbConnLike,
@@ -32,6 +33,8 @@ pub struct TimeSource {
     pub hostname: String,
     pub port: Option<Port>,
     pub countries: Vec<String>,
+    pub auth_token_randomizer: String,
+    pub base_secret_index: i32,
     pub weight: i32,
     pub ipv4_score: f64,
     pub ipv6_score: f64,
@@ -130,27 +133,53 @@ pub async fn infer_regions(
     result.into_iter().collect()
 }
 
+pub fn calculate_auth_key(
+    base_shared_secret: &[u8],
+    timesource_id: TimeSourceId,
+    auth_token_randomizer: impl AsRef<str>,
+) -> String {
+    struct HashOutput<'a>(&'a [u8]);
+    impl<'a> std::fmt::Display for HashOutput<'a> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            for el in self.0 {
+                write!(f, "{:2x}", el)?;
+            }
+            Ok(())
+        }
+    }
+
+    let mut hasher = sha3::Sha3_256::new();
+    hasher.update(base_shared_secret);
+    hasher.update(timesource_id.to_string().as_bytes());
+    hasher.update(auth_token_randomizer.as_ref().as_bytes());
+    let hash = hasher.finalize();
+    format!("{}", HashOutput(hash.as_slice()))
+}
+
 pub async fn create(
     conn: impl DbConnLike<'_>,
     owner: UserId,
     new_time_source: NewTimeSource,
+    base_secret_index: i32,
     geodb: &maxminddb::Reader<impl AsRef<[u8]>>,
-) -> Result<(), sqlx::Error> {
+) -> Result<TimeSourceId, sqlx::Error> {
     let regions = infer_regions(&new_time_source.hostname, geodb).await;
 
     sqlx::query!(
         r#"
-            INSERT INTO time_sources (owner, hostname, port, countries)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO time_sources (owner, hostname, port, countries, base_secret_index)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
         "#,
         owner as _,
         new_time_source.hostname,
         new_time_source.port as _,
         regions.as_slice(),
+        base_secret_index,
     )
-    .execute(conn)
-    .await?;
-    Ok(())
+    .fetch_one(conn)
+    .await
+    .map(|v| v.id.into())
 }
 
 pub async fn update(
@@ -168,6 +197,29 @@ pub async fn update(
         time_source_id as _,
         owner as _,
         time_source.weight
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn update_auth_token_randomizer(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+    time_source_id: TimeSourceId,
+    auth_token_randomizer: String,
+    base_secret_index: i32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+            UPDATE time_sources
+            SET auth_token_randomizer = $3, base_secret_index = $4
+            WHERE id = $2 AND owner = $1
+        "#,
+        owner as _,
+        time_source_id as _,
+        auth_token_randomizer,
+        base_secret_index,
     )
     .execute(conn)
     .await?;
@@ -201,7 +253,7 @@ pub async fn by_user(
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
+            SELECT id, owner, hostname, port AS "port: _", countries, auth_token_randomizer, base_secret_index, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
             LEFT JOIN (
                 SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
                     SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
@@ -244,7 +296,7 @@ pub async fn not_deleted(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, s
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
+            SELECT id, owner, hostname, port AS "port: _", countries, auth_token_randomizer, base_secret_index, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
             LEFT JOIN (
                 SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
                     SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at

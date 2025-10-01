@@ -2222,6 +2222,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "sha3",
  "sqlx",
  "testcontainers",
  "tokio",

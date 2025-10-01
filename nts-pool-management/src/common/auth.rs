@@ -71,6 +71,16 @@ pub fn generate_monitor_token() -> String {
         .collect()
 }
 
+pub fn generate_pool_token_randomizer() -> String {
+    use rand::{Rng, distr::Alphanumeric};
+
+    rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(22)
+        .map(char::from)
+        .collect()
+}
+
 /// Checks if a password is valid for use in our system.
 pub fn is_valid_password(password: &str) -> bool {
     password.len() >= 8 && !is_too_large_password(password)

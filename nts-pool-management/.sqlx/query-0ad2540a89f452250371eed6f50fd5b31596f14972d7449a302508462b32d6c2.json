@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE time_sources\n            SET auth_token_randomizer = $3, base_secret_index = $4\n            WHERE id = $2 AND owner = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ad2540a89f452250371eed6f50fd5b31596f14972d7449a302508462b32d6c2"
+}

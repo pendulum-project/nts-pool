@@ -15,6 +15,9 @@ pub struct AppConfig {
     // Secrets for authentication and cookies
     pub jwt_secret: String,
     pub cookie_secret: String,
+    // Secrets for pool authentication to time sources
+    pub base_shared_secret: String,
+    pub base_secret_index: i32,
     // Email configuration
     pub mail_from_address: String,
     pub mail_smtp_url: String,
@@ -64,6 +67,13 @@ impl AppConfig {
             .wrap_err("Missing NTSPOOL_JWT_SECRET environment variable")?;
         let cookie_secret = std::env::var("NTSPOOL_COOKIE_SECRET")
             .wrap_err("Missing NTSPOOL_COOKIE_SECRET environment variable")?;
+
+        let base_shared_secret = std::env::var("NTSPOOL_BASE_SHARED_SECRET")
+            .wrap_err("Missing NTSPOOL_BASE_SHARED_SECRET environment variable")?;
+        let base_secret_index: i32 = std::env::var("NTSPOOL_BASE_SECRET_INDEX")
+            .wrap_err("Missing NTSPOOL_BASE_SECRET_INDEX environment variable")?
+            .parse()
+            .wrap_err("NTSPOOL_BASE_SECRET_INDEX should be an integer")?;
 
         // Email configuration
         let mail_from_address = std::env::var("NTSPOOL_MAIL_FROM_ADDRESS")
@@ -117,6 +127,8 @@ impl AppConfig {
             database_run_migrations,
             jwt_secret,
             cookie_secret,
+            base_shared_secret,
+            base_secret_index,
             mail_from_address,
             mail_smtp_url,
             poolke_name,
@@ -139,6 +151,8 @@ impl Default for AppConfig {
             database_run_migrations: RunDatabaseMigrations::No,
             jwt_secret: "UNSAFE_SECRET".into(),
             cookie_secret: "UNSAFE_SECRET".into(),
+            base_shared_secret: "UNSAFE_SECRET".into(),
+            base_secret_index: 0,
             mail_from_address: "noreply@example.com".into(),
             mail_smtp_url: "smtp://localhost:25".into(),
             geolocation_db: "../nts-pool-ke/testdata/GeoLite2-Country-Test.mmdb".into(),
