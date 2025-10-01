@@ -748,7 +748,8 @@ mod tests {
             .unwrap();
         assert_eq!(session.user.id, env.user.id);
 
-        logout(env.user.id, &env.pool, CookieJar::new())
+        // ignore that we get a new cookie and return the previous one again
+        let _ = logout(env.user.id, &env.pool, CookieJar::new())
             .await
             .unwrap();
 
@@ -793,7 +794,8 @@ mod tests {
             .unwrap();
         assert_eq!(session.user.id, env.user.id);
 
-        logout(env.admin.id, &env.pool, CookieJar::new())
+        // ignore that we get a new cookie and send the previous one again
+        let _ = logout(env.admin.id, &env.pool, CookieJar::new())
             .await
             .unwrap();
 
