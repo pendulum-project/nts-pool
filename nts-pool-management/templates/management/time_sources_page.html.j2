@@ -52,6 +52,9 @@
           </div>
         </details>
       </form>
+      <form action="/management/time-sources/{{ ts.id }}/rekey" method="POST">
+        <button type="submit" class="btn-sm">Rekey</button>
+      </form>
     </article>
   {% endfor %}
   </div>

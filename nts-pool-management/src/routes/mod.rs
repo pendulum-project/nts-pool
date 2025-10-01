@@ -59,6 +59,10 @@ pub fn create_router() -> Router<AppState> {
             post(management::update_time_source), // HTML form only supports GET and POST
         )
         .route(
+            "/management/time-sources/{id}/rekey",
+            post(management::rekey_time_source),
+        )
+        .route(
             "/management/time-sources/{id}/delete",
             post(management::delete_time_source), // HTML form only supports GET and POST
         )

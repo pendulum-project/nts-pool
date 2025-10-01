@@ -80,6 +80,10 @@ management:
   cookieSecretRef:
     name: nts-pool-management-cookie-secret
     key: cookie-secret
+  # Secret for generating new server tokens
+  baseSharedSecretRef:
+    name: nts-pool-base-shared-secret
+    key: base-shared-secret
   # SMTP server connection URL secret reference
   smtpUrlSecretRef:
     name: nts-pool-management-smtp-url

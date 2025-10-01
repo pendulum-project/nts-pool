@@ -21,3 +21,4 @@ data:
     certificate-chain = "/opt/nts-pool/tls/tls.crt"
     private-key = "/opt/nts-pool/tls/tls.key"
     key-exchange-servers = "/opt/nts-pool/ke-servers/servers.json"
+    base-shared-secret = "/opt/nts-pool/base-shared-secret/base-shared-secret.key"

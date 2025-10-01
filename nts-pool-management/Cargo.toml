@@ -22,6 +22,7 @@ phf.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_qs = { workspace = true }
+sha3.workspace = true
 sqlx = { workspace = true, features = [
     "runtime-tokio",
     "tls-rustls-aws-lc-rs",

@@ -1,0 +1,13 @@
+{% extends "../layout.html.j2" %}
+
+{% block header %}<h1>Time Source Authentication</h1>{% endblock %}
+
+{% block content %}
+{% if let Some(hostname) = hostname %}
+The timesource {{ hostname }} has been created.
+{% else %}
+A new authentication key has been generated.
+{% endif %}
+
+The authentication key the pool will use to authenticate itself is {{ auth_key }}
+{% endblock %}

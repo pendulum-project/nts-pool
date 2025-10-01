@@ -7,7 +7,7 @@ use axum::{
 
 use crate::{
     AppState,
-    auth::AuthorizedUser,
+    auth::{self, AuthorizedUser},
     context::AppContext,
     error::AppError,
     flash::FlashMessageService,
@@ -45,20 +45,83 @@ pub async fn time_sources(
     Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
 }
 
+#[derive(Template)]
+#[template(path = "management/time_source_key.html.j2")]
+struct TimeSourceKeyTemplate {
+    app: AppContext,
+    hostname: Option<String>,
+    auth_key: String,
+}
+
 pub async fn create_time_source(
     user: AuthorizedUser,
+    app: AppContext,
     State(state): State<AppState>,
     flash: FlashMessageService,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let geodb = state.geodb.read().unwrap().clone();
-    let flash =
-        match time_source::create(&state.db, user.id, new_time_source.try_into()?, &geodb).await {
-            Ok(_) => flash.success("Time source added successfully".to_string()),
-            Err(_) => flash.error("Could not add time source".to_string()),
-        };
 
-    Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
+    match time_source::create(
+        &state.db,
+        user.id,
+        new_time_source.clone().try_into()?,
+        state.config.base_secret_index,
+        &geodb,
+    )
+    .await
+    {
+        Ok(id) => Ok(HtmlTemplate(TimeSourceKeyTemplate {
+            app,
+            hostname: Some(new_time_source.hostname),
+            auth_key: time_source::calculate_auth_key(
+                state.config.base_shared_secret.as_bytes(),
+                id,
+                "",
+            ),
+        })
+        .into_response()),
+        Err(_) => Ok((
+            flash.error("Could not add time source".to_string()),
+            Redirect::to(TIME_SOURCES_ENDPOINT),
+        )
+            .into_response()),
+    }
+}
+
+pub async fn rekey_time_source(
+    user: AuthorizedUser,
+    Path(time_source_id): Path<TimeSourceId>,
+    app: AppContext,
+    State(state): State<AppState>,
+    flash: FlashMessageService,
+) -> Result<impl IntoResponse, AppError> {
+    let new_randomizer = auth::generate_pool_token_randomizer();
+    match time_source::update_auth_token_randomizer(
+        &state.db,
+        user.id,
+        time_source_id,
+        new_randomizer.clone(),
+        state.config.base_secret_index,
+    )
+    .await
+    {
+        Ok(_) => Ok(HtmlTemplate(TimeSourceKeyTemplate {
+            app,
+            hostname: None,
+            auth_key: time_source::calculate_auth_key(
+                state.config.base_shared_secret.as_bytes(),
+                time_source_id,
+                new_randomizer,
+            ),
+        })
+        .into_response()),
+        Err(_) => Ok((
+            flash.error("Could not rekey time source".to_string()),
+            Redirect::to(TIME_SOURCES_ENDPOINT),
+        )
+            .into_response()),
+    }
 }
 
 pub async fn update_time_source(
