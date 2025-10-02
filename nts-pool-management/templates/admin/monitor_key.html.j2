@@ -4,6 +4,15 @@
 {% block header %}<h1>Monitor key</h1>{% endblock %}
 
 {% block content %}
-name: {{ name }}<br/>
-key: {{ key }}<br/>
+  <aside class="success">
+    Monitor key created succesfully. <strong>The key will only be showed once.</strong>
+  </aside>
+  <section>
+    <dl>
+      <dd>Name:</dd>
+      <dt>{{ name }}</dt>
+      <dd>Key:</dd>
+     <dt>{{ key }}</dt>
+    </dl>
+</section>
 {% endblock %}
