@@ -38,11 +38,14 @@
         </form>
         <form class="card-action" action="/management/time-sources/{{ ts.id }}/delete" method="POST">
           <button type="button" class="btn-link" popovertarget="confirmation-popover">Delete</button>
-          <div popover id="confirmation-popover">
+          <dialog popover id="confirmation-popover">
             <p>Are you sure you want to delete <strong> {{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</strong>?
             </p>
-            <button type="submit">Yes, delete</button>
-          </div>
+            <div class="dialog-actions">
+              <button type="submit">Yes, delete</button>
+              <button type="button" popovertarget="confirmation-popover" popovertargetaction="hide" class="btn-alt">Cancel</button>
+            </div>
+          </dialog>
         </form>
         <form action="/management/time-sources/{{ ts.id }}/rekey" method="POST">
           <button type="submit" class="btn-link">Rekey</button>
