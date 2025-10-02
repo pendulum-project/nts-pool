@@ -20,7 +20,7 @@ data:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "nts-pool.fullname" . }}-ke-server-list-updater
+  name: {{ include "nts-pool.fullname" . }}-ke-config-updater
   namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
   labels:
     {{- include "nts-pool.labels" . | nindent 4 }}
@@ -41,7 +41,7 @@ spec:
                     path: "config-updater.sh"
                     mode: 0755
           containers:
-            - name: ke-config-updater
+            - name: ke-server-list-updater
               imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
               {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
               imagePullSecrets:
@@ -65,3 +65,27 @@ spec:
                   value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
                 - name: CONFIGMAP
                   value: "{{ include "nts-pool.fullname" . }}-servers-config"
+            - name: ke-monitor-list-updater
+              imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
+              {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
+              imagePullSecrets:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              image: "{{ default .Values.image.repository .Values.ke.image.repository }}:{{ default .Values.image.tag .Values.ke.image.tag }}"
+              volumeMounts:
+                - name: config-updater-script
+                  mountPath: "/opt/scripts/"
+                  readonly: true
+              command:
+                - /opt/scripts/config-updater.sh
+              env:
+                - name: AUTHTOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      {{- toYaml .Values.management.configUpdaterSecretRef | nindent 22 }}
+                - name: CONFIGURL
+                  value: "http://{{ include "nts-pool.fullname" . }}-management.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}:3000/monitor_keys"
+                - name: NAMESPACE
+                  value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
+                - name: CONFIGMAP
+                  value: "{{ include "nts-pool.fullname" . }}-monitoring-config"
