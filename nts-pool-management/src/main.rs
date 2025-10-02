@@ -212,6 +212,9 @@ async fn main() {
         ))
         .nest_service("/assets", serve_dir_service);
 
+    #[cfg(feature = "livereload")]
+    let router = router.merge(common::livereload::livereload_router());
+
     // start listening for incoming connections
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, router).await.unwrap();
