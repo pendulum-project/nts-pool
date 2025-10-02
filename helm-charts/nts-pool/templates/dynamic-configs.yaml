@@ -1,0 +1,33 @@
+{{- $ns := default .Release.Namespace .Values.namespaceOverride -}}
+{{- $serversConfigName := printf "%s-servers-config" (include "nts-pool.fullname" .) -}}
+{{- $monitoringConfigName := printf "%s-monitoring-config" (include "nts-pool.fullname" .) -}}
+{{- if not (lookup "v1" "ConfigMap" $ns $serversConfigName) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $serversConfigName }}
+  namespace: {{ $ns }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+data:
+  servers.json: |
+    []
+{{- end }}
+{{- if not (lookup "v1" "ConfigMap" $ns $monitoringConfigName) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $monitoringConfigName }}
+  namespace: {{ $ns }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+data:
+  monitoring.json: |
+    []
+{{- end }}
