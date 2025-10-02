@@ -180,6 +180,10 @@ aside {
     border-radius: var(--border-radius);
 }
 
+aside {
+    margin-bottom: var(--space-md);
+}
+
 table {
     table-layout: auto;
     border-collapse: collapse;
@@ -190,6 +194,8 @@ table {
 
     th,
     td {
+    width: 100%;
+        white-space: nowrap;
         padding: var(--space-sm);
     }
 
@@ -206,5 +212,6 @@ table {
         text-align: right;
         display: flex;
         gap: var(--space-xs);
+        white-space: nowrap;
     }
 }
