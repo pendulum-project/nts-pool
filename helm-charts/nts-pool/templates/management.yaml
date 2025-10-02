@@ -98,4 +98,3 @@ spec:
             value: "false"
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.management.restartBump}}"
-

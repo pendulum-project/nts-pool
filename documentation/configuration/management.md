@@ -9,6 +9,9 @@ The management server is configured primarily through environment variables, whi
 - `NTSPOOL_BASE_URL`: The base url at which the server is reached by clients. This should be the full URL including protocol of the root path of the server. (Example: `http://localhost:3000/`)
 - `NTSPOOL_ASSETS_DIR`: The directory with all the static assets for the server. MUST point to (a copy of) the directory `nts-pool-management/assets`. (Default: `./assets`)
 
+## Updater configuration
+- `NTSPOOL_CONFIG_UPDATER_SECRET`: Secret used to authenticate the KELB configuration updater. (Example: `UNSAFE_SECRET`)
+
 ## Database configuration
 - `NTSPOOL_DATABASE_URL`/`DATABASE_URL`: Connection url for the database. (Example: `postgres://nts-pool@localhost:5432/nts-pool`)
 - `NTSPOOL_DATABASE_RUN_MIGRATIONS`: Whether or not to run database migrations on startup. Must be a boolean value (true/false/1/0). (Default: `false`)

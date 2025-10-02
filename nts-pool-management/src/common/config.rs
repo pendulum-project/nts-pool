@@ -9,6 +9,8 @@ pub struct AppConfig {
     pub base_url: BaseUrl,
     pub assets_path: String,
     pub geolocation_db: std::path::PathBuf,
+    // Secret for internal requests
+    pub config_updater_secret: String,
     // Database config
     pub database_url: String,
     pub database_run_migrations: RunDatabaseMigrations,
@@ -49,6 +51,10 @@ impl AppConfig {
         let geolocation_db = std::env::var("NTSPOOL_GEOLOCATION_DB")
             .wrap_err("NTSPOOL_GEOLOCATION_DB not set in environment")?
             .into();
+
+        // Config updater secret
+        let config_updater_secret = std::env::var("NTSPOOL_CONFIG_UPDATER_SECRET")
+            .wrap_err("Missing NTSPOOL_CONFIG_UPDATER_SECRET environment variable")?;
 
         // Database configuration
         let database_url = std::env::var("NTSPOOL_DATABASE_URL")
@@ -123,6 +129,7 @@ impl AppConfig {
             base_url,
             assets_path,
             geolocation_db,
+            config_updater_secret,
             database_url,
             database_run_migrations,
             jwt_secret,
@@ -147,6 +154,7 @@ impl Default for AppConfig {
         Self {
             base_url: BaseUrl::new("http://localhost:3000"),
             poolke_name: "localhost:4460".into(),
+            config_updater_secret: "UNSAFE_SECRET".into(),
             database_url: "postgres://nts-pool@localhost:5432/nts-pool".into(),
             database_run_migrations: RunDatabaseMigrations::No,
             jwt_secret: "UNSAFE_SECRET".into(),

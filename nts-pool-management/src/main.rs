@@ -200,7 +200,7 @@ async fn main() {
     };
 
     // setup routes
-    let router = routes::create_router()
+    let router_external = routes::create_router()
         .with_state(state.clone())
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -211,8 +211,23 @@ async fn main() {
             error::error_middleware,
         ))
         .nest_service("/assets", serve_dir_service);
+    let router_internal = routes::create_internal_router()
+        .with_state(state.clone())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            context::context_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            error::error_middleware,
+        ));
 
     // start listening for incoming connections
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    axum::serve(listener, router).await.unwrap();
+    let listener_external = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener_internal = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
+    tokio::try_join!(
+        axum::serve(listener_external, router_external),
+        axum::serve(listener_internal, router_internal)
+    )
+    .unwrap();
 }
