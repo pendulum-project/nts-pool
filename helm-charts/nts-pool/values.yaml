@@ -11,6 +11,8 @@ image:
 # If not set, the namespace where the chart is deployed will be used
 namespaceOverride: null
 
+clusterDomain: cluster.local
+
 # Override the chart name and fullname
 nameOverride: ""
 fullnameOverride: ""
@@ -68,6 +70,10 @@ management:
   mailFromAddress: null
   # Base URL for the management interface, e.g. https://nts-pool.example.com
   baseUrl: null
+  # Config updater secret
+  configUpdaterSecretRef:
+    name: nts-pool-management-config-updater-secret
+    key: config-updater-secret
   # Database connection URL secret reference
   databaseUrlSecretRef:
     name: nts-pool-management-database-url

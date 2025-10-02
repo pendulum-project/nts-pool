@@ -68,6 +68,7 @@ services:
     stop_grace_period: 500ms
     ports:
       - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     user: "${USER_ID:?USER_ID not set}:${GROUP_ID:?GROUP_ID not set}"
     environment:
       RUST_LOG: debug
@@ -76,6 +77,7 @@ services:
       CARGO_TARGET_DIR: "/app/target-docker"
       NTSPOOL_DATABASE_URL: "postgres://nts-pool@psql:5432/nts-pool"
       DATABASE_URL: "postgres://nts-pool@psql:5432/nts-pool"
+      NTSPOOL_CONFIG_UPDATER_SECRET: "a-secret"
       NTSPOOL_DATABASE_RUN_MIGRATIONS: "false"
       NTSPOOL_ASSETS_DIR: "/app/nts-pool-management/assets"
       NTSPOOL_GEOLOCATION_DB: "/app/nts-pool-ke/testdata/GeoLite2-Country-Test.mmdb"

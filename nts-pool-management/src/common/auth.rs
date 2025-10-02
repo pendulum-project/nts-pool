@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::{
-    DbConnLike, InfallibleUnwrap,
+    AppState, DbConnLike, InfallibleUnwrap,
     error::AppError,
     models::{
         monitor::{self, Monitor},
@@ -560,6 +560,32 @@ where
             Ok(session) if session.role == UserRole::Administrator => Ok(Administrator(session)),
             _ => Err(eyre::eyre!("No administrator user available"))?,
         }
+    }
+}
+
+pub struct AuthenticatedInternal;
+
+impl FromRequestParts<AppState> for AuthenticatedInternal {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let Some(token) = Option::<
+            TypedHeader<headers::Authorization<headers::authorization::Bearer>>,
+        >::from_request_parts(parts, state)
+        .await
+        .ok()
+        .flatten() else {
+            return Err(eyre!("Not authenticated").into());
+        };
+
+        if token.token() != state.config.config_updater_secret {
+            return Err(eyre!("Not authenticated").into());
+        }
+
+        Ok(AuthenticatedInternal)
     }
 }
 

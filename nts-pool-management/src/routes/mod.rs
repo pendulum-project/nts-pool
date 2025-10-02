@@ -10,6 +10,7 @@ use nts_pool_shared::KeyExchangeServer;
 
 use crate::{
     AppState,
+    auth::AuthenticatedInternal,
     context::AppContext,
     error::AppError,
     models,
@@ -69,8 +70,11 @@ pub fn create_router() -> Router<AppState> {
         .route("/management", get(management::dashboard))
         .route("/monitoring/get_work", get(monitoring::get_work))
         .route("/monitoring/submit", post(monitoring::post_results))
-        .route("/poolke_servers", get(poolke_servers))
         .fallback(async |app: AppContext| not_found_page(app))
+}
+
+pub fn create_internal_router() -> Router<AppState> {
+    Router::new().route("/poolke_servers", get(poolke_servers))
 }
 
 #[derive(Template)]
@@ -83,7 +87,10 @@ pub async fn index(app: AppContext) -> impl IntoResponse {
     HtmlTemplate(IndexTemplate { app })
 }
 
-pub async fn poolke_servers(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+pub async fn poolke_servers(
+    State(state): State<AppState>,
+    _authentication: AuthenticatedInternal,
+) -> Result<impl IntoResponse, AppError> {
     let timesources = models::time_source::not_deleted(&state.db).await?;
     Ok(Json(
         timesources
