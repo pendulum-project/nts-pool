@@ -85,11 +85,14 @@ h2 {
     margin-bottom: var(--space-sm);
 }
 
+h3 {
+    color: var(--primary);
+}
+
 .card {
     background-color: var(--white);
     border-radius: var(--border-radius);
-    margin-top: var(--space-md);
-    padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-md);
+    padding: calc((var(--space-md) + var(--space-sm)) / 2) var(--space-md) var(--space-sm) var(--space-md);
 }
 
 dl {
