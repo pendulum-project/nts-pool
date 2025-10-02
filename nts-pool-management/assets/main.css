@@ -175,3 +175,9 @@ details.toast > summary {
     max-width: 8rem;
   }
 }
+
+.time-sources-list {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}

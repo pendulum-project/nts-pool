@@ -17,24 +17,29 @@
       <input name="port" type="text" />
     </fieldset>
     </div>
-    <button type="submit">Add</button>
+    <div>
+      <button type="submit">Add</button>
+    </div>
   </form>
 </section>
 <section>
   <h2>Time source servers</h2>
+  <div class="time-sources-list">
+  {% if time_sources.is_empty() %}
+    <article>No time sources servers added</article>
+  {% endif %}
   {%- for ts in time_sources %}
     <article class="card">
+      <h3>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</h3>
       <form action="/management/time-sources/{{ ts.id }}/update" method="POST">
         <input type="hidden" />
         <dl>
-          <dd>Hostname</dd>
-          <dt>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</dt>
+          <dd>IPv4 score</dd>
+          <dt>{{ ts.ipv4_score | fmt("{:.1}") }}</dt>
+          <dd>IPv6 score</dd>
+          <dt>{{ ts.ipv6_score | fmt("{:.1}") }}</dt>
           <dd>Weight</dd>
           <dt><input type="number" name="weight" value="{{ ts.weight }}" /></dt>
-          <dd>Ipv4 score</dd>
-          <dt>{{ ts.ipv4_score | fmt("{:.1}") }}</dt>
-          <dd>Ipv6 score</dd>
-          <dt>{{ ts.ipv6_score | fmt("{:.1}") }}</dt>
         </dl>
         <button type="submit" class="btn-sm">Save</button>
       </form>
@@ -49,5 +54,6 @@
       </form>
     </article>
   {% endfor %}
+  </div>
 </section>
 {% endblock %}
