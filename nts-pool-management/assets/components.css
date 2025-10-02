@@ -176,7 +176,7 @@ details.confirmation-btn > div {
   }
 }
 
-#confirmation-popover[popover]:popover-open {
+.confirmation[popover]:popover-open {
     border: none;
     border-radius: var(--border-radius);
     padding: var(--space-md);
@@ -186,7 +186,7 @@ details.confirmation-btn > div {
     translate: -50% -50%;
 }
 
-#confirmation-popover[popover]::backdrop {
+.confirmation[popover]::backdrop {
     background-color: rgba(0, 0, 0, 0.5);
 }
 
