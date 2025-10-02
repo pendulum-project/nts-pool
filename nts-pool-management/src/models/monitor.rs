@@ -54,6 +54,21 @@ pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<Monitor>, sqlx::Error
     .await
 }
 
+/// List all monitor keys
+pub async fn list_keys(conn: impl DbConnLike<'_>) -> Result<Vec<String>, sqlx::Error> {
+    Ok(sqlx::query!(
+        r#"
+            SELECT authentication_key
+            FROM monitors
+        "#
+    )
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .map(|v| v.authentication_key)
+    .collect())
+}
+
 #[allow(unused)]
 pub async fn get_by_authentication_key(
     conn: impl DbConnLike<'_>,

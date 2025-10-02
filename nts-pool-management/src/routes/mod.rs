@@ -74,7 +74,9 @@ pub fn create_router() -> Router<AppState> {
 }
 
 pub fn create_internal_router() -> Router<AppState> {
-    Router::new().route("/poolke_servers", get(poolke_servers))
+    Router::new()
+        .route("/poolke_servers", get(poolke_servers))
+        .route("/monitor_keys", get(monitor_keys))
 }
 
 #[derive(Template)]
@@ -108,4 +110,11 @@ pub async fn poolke_servers(
             })
             .collect::<Vec<_>>(),
     ))
+}
+
+pub async fn monitor_keys(
+    State(state): State<AppState>,
+    _authentication: AuthenticatedInternal,
+) -> Result<impl IntoResponse, AppError> {
+    Ok(Json(models::monitor::list_keys(&state.db).await?))
 }
