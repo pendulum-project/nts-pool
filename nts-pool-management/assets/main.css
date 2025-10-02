@@ -88,10 +88,6 @@ section.form form {
   gap: var(--space-md);
   max-width: 33rem;
 
-  input[type="text"],
-  input[type="password"] {
-  }
-
   input[type="checkbox"] {
     margin-right: var(--space-sm);
   }
