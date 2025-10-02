@@ -222,6 +222,9 @@ async fn main() {
             error::error_middleware,
         ));
 
+    #[cfg(feature = "livereload")]
+    let router = router.merge(common::livereload::livereload_router());
+
     // start listening for incoming connections
     let listener_external = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     let listener_internal = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
