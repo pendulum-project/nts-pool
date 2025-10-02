@@ -5,6 +5,7 @@ metadata:
   namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
   annotations:
     "helm.sh/hook": pre-upgrade,pre-install
+    "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   template:
@@ -33,33 +34,6 @@ spec:
               subPath: db.pem
           {{- end }}
           env:
-            - name: NTSPOOL_DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  {{- toYaml .Values.management.databaseUrlSecretRef | nindent 18 }}
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  {{- toYaml .Values.management.databaseUrlSecretRef | nindent 18 }}
+            {{- include "nts-pool.management-env" . | nindent 12 }}
             - name: NTSPOOL_DATABASE_RUN_MIGRATIONS
               value: "only-migrate"
-            - name: NTSPOOL_JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  {{- toYaml .Values.management.jwtKeySecretRef | nindent 18 }}
-            - name: NTSPOOL_COOKIE_SECRET
-              valueFrom:
-                secretKeyRef:
-                  {{- toYaml .Values.management.cookieSecretRef | nindent 18 }}
-            - name: NTSPOOL_SMTP_URL
-              valueFrom:
-                secretKeyRef:
-                  {{- toYaml .Values.management.smtpUrlSecretRef | nindent 18 }}
-            - name: NTSPOOL_MAIL_FROM_ADDRESS
-              value: "{{ .Values.management.mailFromAddress }}"
-            - name: NTSPOOL_BASE_URL
-              value: "{{ .Values.management.baseUrl }}"
-            - name: NTSPOOL_POOLKE_NAME
-              value: "{{ .Values.management.poolKeName }}"
-            - name: RUST_BACKTRACE
-              value: "1"
