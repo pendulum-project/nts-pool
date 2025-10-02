@@ -137,8 +137,8 @@ geolocation:
   maxmindDatabaseUrl: null
 
 configUpdater:
-  # When to run the config updater job
-  schedule: "0 * * * *"
+  # When to run the config updater jobs
+  schedule: "* * * * *"
   # Override global image settings for the config updater
   image:
     pullSecrets: null

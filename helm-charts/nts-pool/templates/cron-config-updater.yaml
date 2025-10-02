@@ -1,9 +1,26 @@
 
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-config-updater
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+data:
+  config-updater.sh: |
+    #!/bin/sh
+    curl --fail -H "Authentication: Bearer ${AUTHTOKEN}" "${CONFIGURL}" |
+    jq '{"op": "replace", "path": "/data/servers.json", "value": "\(.)"}' |
+    curl --fail --cacert "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
+      --binary-data @- -X PATCH -H "Content-Type: application/json-patch+json" \
+      -H "Authentication: Bearer $(cat /var/run/secrets/kubernets.io/serviceaccount/token)" \
+      "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}/api/v1/namespaces/${NAMESPACE}/configmaps/${CONFIGMAP}"
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "nts-pool.fullname" . }}-ke-config-updater
+  name: {{ include "nts-pool.fullname" . }}-ke-server-list-updater
   namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
   labels:
     {{- include "nts-pool.labels" . | nindent 4 }}
@@ -15,6 +32,14 @@ spec:
         spec:
           serviceAccountName: {{ include "nts-pool.fullname" . }}-ke-config-updater
           restartPolicy: Never
+          volumes:
+            - name: config-updater-script
+              configMap:
+                name: {{ include "nts-pool.fullname" . }}-config-updater
+                items:
+                  - key: "config-updater.sh"
+                    path: "config-updater.sh"
+                    mode: 0755
           containers:
             - name: ke-config-updater
               imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
@@ -23,7 +48,20 @@ spec:
                 {{- toYaml . | nindent 16 }}
               {{- end }}
               image: "{{ default .Values.image.repository .Values.ke.image.repository }}:{{ default .Values.image.tag .Values.ke.image.tag }}"
+              volumeMounts:
+                - name: config-updater-script
+                  mountPath: "/opt/scripts/"
+                  readonly: true
               command:
-                - /bin/sh
-                - -c
-                - echo 'Hello from Kubernetes CronJob!'
+                - /opt/scripts/config-updater.sh
+              env:
+                - name: AUTHTOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      {{- toYaml .Values.management.configUpdaterSecretRef | nindent 22 }}
+                - name: CONFIGURL
+                  value: "http://{{ include "nts-pool.fullname" . }}-management.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}:3000/poolke_servers"
+                - name: NAMESPACE
+                  value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
+                - name: CONFIGMAP
+                  value: "{{ include "nts-pool.fullname" . }}-servers-config"
