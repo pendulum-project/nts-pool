@@ -48,7 +48,7 @@ spec:
             mountPath: "/opt/geodb"
           - name: geolocation-script
             mountPath: "/opt/geodb/scripts/"
-            readonly: true
+            readOnly: true
         restartPolicy: always
         startupProbe:
           exec:
