@@ -190,6 +190,11 @@ details.confirmation-btn > div {
     background-color: rgba(0, 0, 0, 0.5);
 }
 
+dialog .dialog-actions {
+    display: flex;
+    gap: var(--space-xs);
+}
+
 .success {
     color: color-mix(in lab, var(--success), var(--black) 50%);
     background-color: color-mix(in lab, var(--success), var(--white) 70%);
