@@ -60,7 +60,7 @@ impl Probe {
         &self,
         uuid: impl AsRef<str>,
         ipprot: IpVersion,
-    ) -> Result<ProbeResult, std::io::Error> {
+    ) -> Result<ProbeResult, eyre::Error> {
         let (keyexchange, next) = self.probe_keyexchange(uuid, ipprot).await?;
 
         let (ntp_with_ke_cookie, next) = match next {
@@ -84,7 +84,7 @@ impl Probe {
         &self,
         uuid: impl AsRef<str>,
         ipprot: IpVersion,
-    ) -> Result<(KeyExchangeProbeResult, Option<NtpInputs>), std::io::Error> {
+    ) -> Result<(KeyExchangeProbeResult, Option<NtpInputs>), eyre::Error> {
         let addr = resolve_as_version((self.poolke.as_str(), 4460), ipprot).await?;
         let io = TcpStream::connect(addr).await?;
 
@@ -100,14 +100,7 @@ impl Probe {
         .await
         {
             Ok(Ok(result)) => result,
-            Ok(Err(NtsError::IO(e))) => return Err(e),
-            Ok(Err(NtsError::Tls(e))) => return Err(std::io::Error::other(e)),
-            Ok(Err(NtsError::Dns(e))) => return Err(std::io::Error::other(e)),
-            Ok(Err(NtsError::UnrecognizedCriticalRecord))
-            | Ok(Err(NtsError::UnknownWarning(_))) => {
-                return Err(std::io::ErrorKind::InvalidData.into());
-            }
-            Ok(Err(_)) => {
+            Ok(Err(NtsError::Invalid | NtsError::Error(_))) => {
                 let end_time = Instant::now();
                 return Ok((
                     KeyExchangeProbeResult {
@@ -119,6 +112,7 @@ impl Probe {
                     None,
                 ));
             }
+            Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
                 let end_time = Instant::now();
                 return Ok((

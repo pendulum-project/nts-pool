@@ -28,6 +28,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use eyre::Context;
 use nts_pool_shared::{ProbeControlCommand, ProbeResult};
 use serde::Serialize;
 use tokio::{
@@ -55,7 +56,7 @@ trait ProbeExecutor {
     fn run_probe(
         self: Arc<Self>,
         timesource: (IpVersion, String),
-    ) -> impl Future<Output = Result<Self::Output, std::io::Error>> + Send;
+    ) -> impl Future<Output = Result<Self::Output, eyre::Error>> + Send;
 }
 
 impl ProbeExecutor for Probe {
@@ -78,7 +79,7 @@ impl ProbeExecutor for Probe {
     async fn run_probe(
         self: Arc<Self>,
         timesource: (IpVersion, String),
-    ) -> Result<Self::Output, std::io::Error> {
+    ) -> Result<Self::Output, eyre::Error> {
         self.probe(timesource.1, timesource.0).await
     }
 }
@@ -87,7 +88,7 @@ impl ProbeExecutor for Probe {
 trait ManagementRequestor {
     fn get_command(
         config: &ProbeControlConfig,
-    ) -> impl Future<Output = Result<ProbeControlCommand, std::io::Error>> + Send;
+    ) -> impl Future<Output = Result<ProbeControlCommand, eyre::Error>> + Send;
 }
 
 async fn run_probing_inner<
@@ -104,7 +105,7 @@ async fn run_probing_inner<
     let command = match M::get_command(&config).await {
         Ok(command) => command,
         Err(e) => {
-            error!("Could not fetch initial command: {}", e);
+            error!("Could not fetch initial command: {:?}", e);
             std::process::exit(crate::exitcode::SOFTWARE);
         }
     };
@@ -311,16 +312,17 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
 struct ReqwestManagementRequestor;
 
 impl ManagementRequestor for ReqwestManagementRequestor {
-    async fn get_command(
-        config: &ProbeControlConfig,
-    ) -> Result<ProbeControlCommand, std::io::Error> {
+    async fn get_command(config: &ProbeControlConfig) -> Result<ProbeControlCommand, eyre::Error> {
         let result = reqwest::Client::new()
             .get(&config.management_interface)
             .bearer_auth(&config.authorization_key)
             .send()
             .await
-            .map_err(std::io::Error::other)?;
-        result.json().await.map_err(std::io::Error::other)
+            .wrap_err("Failed to send probe request/get probe response")?;
+        result
+            .json()
+            .await
+            .wrap_err("Could not convert JSON response to probe command")
     }
 }
 
@@ -371,7 +373,7 @@ mod tests {
         async fn run_probe(
             self: Arc<Self>,
             timesource: (IpVersion, String),
-        ) -> Result<Self::Output, std::io::Error> {
+        ) -> Result<Self::Output, eyre::Error> {
             Ok(timesource)
         }
     }
@@ -497,7 +499,7 @@ mod tests {
         impl ManagementRequestor for BasicCommandRequestor {
             async fn get_command(
                 _config: &ProbeControlConfig,
-            ) -> Result<ProbeControlCommand, std::io::Error> {
+            ) -> Result<ProbeControlCommand, eyre::Error> {
                 Ok(ProbeControlCommand {
                     timesources: [
                         (IpVersion::Ipv4, "A".to_string()),
@@ -571,7 +573,7 @@ mod tests {
         impl ManagementRequestor for SequencedCommandRequestor {
             async fn get_command(
                 _config: &ProbeControlConfig,
-            ) -> Result<ProbeControlCommand, std::io::Error> {
+            ) -> Result<ProbeControlCommand, eyre::Error> {
                 static INDEX: AtomicUsize = AtomicUsize::new(0);
                 Ok(match INDEX.load(std::sync::atomic::Ordering::SeqCst) {
                     0 => {
