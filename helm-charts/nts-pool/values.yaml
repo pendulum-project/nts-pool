@@ -139,6 +139,12 @@ geolocation:
 configUpdater:
   # When to run the config updater jobs
   schedule: "* * * * *"
+  # How many successful job runs to keep in the history
+  successfulJobsHistoryLimit: 3
+  # How many failed job runs to keep in the history
+  failedJobsHistoryLimit: 5
+  # Concurrency policy for the cron job (Allow, Forbid, Replace)
+  concurrencyPolicy: "Forbid"
   # Override global image settings for the config updater
   image:
     pullSecrets: null

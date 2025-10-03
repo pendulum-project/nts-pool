@@ -26,6 +26,9 @@ metadata:
     {{- include "nts-pool.labels" . | nindent 4 }}
 spec:
   schedule: "{{ .Values.configUpdater.schedule }}"
+  successfulJobsHistoryLimit: {{ .Values.configUpdater.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.configUpdater.failedJobsHistoryLimit }}
+  concurrencyPolicy: "{{ .Values.configUpdater.concurrencyPolicy }}"
   jobTemplate:
     spec:
       template:
