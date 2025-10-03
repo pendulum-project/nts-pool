@@ -102,7 +102,7 @@ pub async fn poolke_servers(
                 domain: ts.hostname,
                 port: ts.port.map(|p| p.into()).unwrap_or(4460),
                 base_key_index: 0,
-                randomizer: "".into(),
+                randomizer: ts.auth_token_randomizer,
                 weight: Some(ts.weight.try_into().unwrap_or(1)),
                 regions: vec![],
                 ipv4_capable: Some(ts.ipv4_score > 10.0),
