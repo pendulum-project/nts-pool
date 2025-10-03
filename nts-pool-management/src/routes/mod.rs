@@ -25,6 +25,7 @@ mod monitoring;
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
+        .route("/terms", get(terms))
         .route("/login", get(auth::login).post(auth::login_submit))
         .route("/register", get(auth::register).post(auth::register_submit))
         .route(
@@ -87,6 +88,16 @@ struct IndexTemplate {
 
 pub async fn index(app: AppContext) -> impl IntoResponse {
     HtmlTemplate(IndexTemplate { app })
+}
+
+#[derive(Template)]
+#[template(path = "terms.html.j2")]
+struct TermsTemplate {
+    app: AppContext,
+}
+
+pub async fn terms(app: AppContext) -> impl IntoResponse {
+    HtmlTemplate(TermsTemplate { app })
 }
 
 pub async fn poolke_servers(
