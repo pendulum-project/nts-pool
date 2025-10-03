@@ -78,7 +78,7 @@ impl TryFrom<NewTimeSourceForm> for NewTimeSource {
             || !form
                 .hostname
                 .chars()
-                .all(|c| matches!(c, '0'..='9' | '.' | 'a'..='z' | 'A'..='Z'))
+                .all(|c| matches!(c, '0'..='9' | '.' | '-' | 'a'..='z' | 'A'..='Z'))
         {
             return Err(eyre::eyre!("Invalid domain name").into());
         }
