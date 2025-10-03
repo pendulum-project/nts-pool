@@ -41,7 +41,7 @@ spec:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         image: "{{ default .Values.image.repository .Values.management.image.repository }}:{{ default .Values.image.tag .Values.management.image.tag }}"
-        command: ["/opt/geodb/geolocation-loader.sh"]
+        command: ["/opt/geodb/scripts/geolocation-loader.sh"]
         workingDir: "/opt/geodb/"
         volumeMounts:
           - name: geolocation
