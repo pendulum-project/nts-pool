@@ -13,3 +13,4 @@ allowed-protocols = [0]
 certificate-chain = "./testdata/end.fullchain.pem"
 private-key = "./testdata/end.key"
 key-exchange-servers = "./servers.json"
+base-shared-secret = "./base-shared-secret"
