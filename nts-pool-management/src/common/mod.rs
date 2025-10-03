@@ -5,6 +5,9 @@ pub mod email;
 pub mod error;
 pub mod flash;
 
+#[cfg(feature = "livereload")]
+pub mod livereload;
+
 use std::convert::Infallible;
 
 /// Helper trait to unwrap a Result where the Error is Infallible

@@ -45,3 +45,7 @@ pub fn is_me(
         .map(|u| u.id == user.id)
         .unwrap_or(false))
 }
+
+pub fn livereload_enabled() -> bool {
+    cfg!(feature = "livereload")
+}
