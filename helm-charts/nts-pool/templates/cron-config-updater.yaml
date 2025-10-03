@@ -13,7 +13,7 @@ data:
     curl --fail -H "Authentication: Bearer ${AUTHTOKEN}" "${CONFIGURL}" |
     jq '{"op": "replace", "path": "/data/servers.json", "value": "\(.)"}' |
     curl --fail --cacert "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
-      --binary-data @- -X PATCH -H "Content-Type: application/json-patch+json" \
+      --data-binary @- -X PATCH -H "Content-Type: application/json-patch+json" \
       -H "Authentication: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
       "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}/api/v1/namespaces/${NAMESPACE}/configmaps/${CONFIGMAP}"
 ---
