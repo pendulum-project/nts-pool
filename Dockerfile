@@ -31,10 +31,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/git/db \
 # Setup the final actual runner image stage
 FROM debian:bookworm-slim AS runner
 
-# Install CA certificates for the runner
+# Install system packages for the runner
 RUN apt update \
     && apt install -y --no-install-recommends \
-        ca-certificates curl \
+        ca-certificates \
+        curl \
+        jq \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # Copy compiled binaries from the builder stage
