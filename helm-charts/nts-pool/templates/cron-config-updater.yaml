@@ -33,6 +33,10 @@ spec:
     spec:
       template:
         spec:
+          backoffLimit: 1
+          {{- with .Values.configUpdater.ttlSecondsAfterFinished }}
+          ttlSecondsAfterFinished: {{ . }}
+          {{- end }}
           serviceAccountName: {{ include "nts-pool.fullname" . }}-ke-config-updater
           restartPolicy: Never
           volumes:

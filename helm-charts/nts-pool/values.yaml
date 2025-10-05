@@ -145,6 +145,8 @@ configUpdater:
   failedJobsHistoryLimit: 5
   # Concurrency policy for the cron job (Allow, Forbid, Replace)
   concurrencyPolicy: "Forbid"
+  # Time to live for finished jobs (in seconds)
+  ttlSecondsAfterFinished: null
   # Override global image settings for the config updater
   image:
     pullSecrets: null
