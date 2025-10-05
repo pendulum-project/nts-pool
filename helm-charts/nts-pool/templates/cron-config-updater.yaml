@@ -14,7 +14,7 @@ data:
     jq '{"op": "replace", "path": "/data/servers.json", "value": "\(.)"}' |
     curl --fail --cacert "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
       --data-binary @- -X PATCH -H "Content-Type: application/json-patch+json" \
-      -H "Authentication: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+      -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
       "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT_HTTPS}/api/v1/namespaces/${NAMESPACE}/configmaps/${CONFIGMAP}"
 ---
 apiVersion: batch/v1
@@ -63,7 +63,7 @@ spec:
                     secretKeyRef:
                       {{- toYaml .Values.management.configUpdaterSecretRef | nindent 22 }}
                 - name: CONFIGURL
-                  value: "http://{{ include "nts-pool.fullname" . }}-management.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}:3000/poolke_servers"
+                  value: "http://{{ include "nts-pool.fullname" . }}-management.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}:3001/poolke_servers"
                 - name: NAMESPACE
                   value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
                 - name: CONFIGMAP
@@ -87,7 +87,7 @@ spec:
                     secretKeyRef:
                       {{- toYaml .Values.management.configUpdaterSecretRef | nindent 22 }}
                 - name: CONFIGURL
-                  value: "http://{{ include "nts-pool.fullname" . }}-management.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}:3000/monitor_keys"
+                  value: "http://{{ include "nts-pool.fullname" . }}-management.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}:3001/monitor_keys"
                 - name: NAMESPACE
                   value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
                 - name: CONFIGMAP
