@@ -84,6 +84,21 @@ spec:
               - sh
               - -c
               - test -e /opt/geodb/geodb.mmdb
+        env:
+          - name: USERID
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.geolocation.maxmindUserIdSecretRef | nindent 16 }}
+          - name: LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.geolocation.maxmindLicenseKeySecretRef | nindent 16 }}
+          - name: URL
+            value: {{ .Values.geolocation.maxmindDatabaseUrl }}
+          - name: TARGET
+            value: "/opt/geodb/geodb.mmdb"
+          - name: PERIOD
+            value: "24h"
       containers:
       - name: ke
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
