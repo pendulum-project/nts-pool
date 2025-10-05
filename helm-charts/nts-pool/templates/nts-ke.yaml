@@ -20,6 +20,15 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       volumes:
+        - name: geolocation-script
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-geolocation-loader
+            items:
+              - key: "geolocation-loader.sh"
+                path: "geolocation-loader.sh"
+                mode: 0755
+        - name: geolocation
+          emptyDir: {}
         - name: config-volume
           configMap:
             name: {{ include "nts-pool.fullname" . }}-ke-config
@@ -53,6 +62,29 @@ spec:
               - key: {{ .Values.management.baseSharedSecretRef.key }}
                 path: "base-shared-secret.key"
       containers:
+      initContainers:
+      - name: geolocation
+        imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.management.image.pullPolicy }}"
+        {{- with default .Values.image.pullSecrets .Values.management.image.pullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        image: "{{ default .Values.image.repository .Values.management.image.repository }}:{{ default .Values.image.tag .Values.management.image.tag }}"
+        command: ["/opt/geodb/scripts/geolocation-loader.sh"]
+        workingDir: "/opt/geodb/"
+        volumeMounts:
+          - name: geolocation
+            mountPath: "/opt/geodb"
+          - name: geolocation-script
+            mountPath: "/opt/geodb/scripts/"
+            readOnly: true
+        restartPolicy: Always
+        startupProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - test -e /opt/geodb/geodb.mmdb
       - name: ke
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
         {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
@@ -66,6 +98,8 @@ spec:
           - containerPort: 4460
             name: nts-tcp
         volumeMounts:
+          - name: geolocation
+            mountPath: "/opt/geodb"
           - name: config-volume
             mountPath: /opt/nts-pool/config
             readOnly: true
