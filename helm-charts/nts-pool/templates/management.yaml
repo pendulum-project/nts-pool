@@ -92,6 +92,8 @@ spec:
         ports:
           - containerPort: 3000
             name: http
+          - containerPort: 3001
+            name: http-internal
         env:
           {{- include "nts-pool.management-env" . | nindent 10 }}
           - name: NTSPOOL_DATABASE_RUN_MIGRATIONS
