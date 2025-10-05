@@ -242,9 +242,21 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         let monitoring_keys = self.monitoring_keys.read().unwrap().clone();
 
         let pick = match &client_request {
-            ClientRequest::Ordinary { denied_servers, .. } => self
+            ClientRequest::Ordinary { denied_servers, .. } => match self
                 .server_manager
-                .assign_server(source_address, denied_servers),
+                .assign_server(source_address, denied_servers)
+            {
+                Some(server) => server,
+                None => {
+                    ErrorResponse {
+                        errorcode: ErrorCode::InternalServerError,
+                    }
+                    .serialize(&mut client_stream)
+                    .await?;
+                    client_stream.shutdown().await?;
+                    return Err(PoolError::NoSuchServer);
+                }
+            },
             ClientRequest::Uuid { key, uuid, .. } if monitoring_keys.contains(key.as_ref()) => {
                 if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
                     server
@@ -592,18 +604,18 @@ mod tests {
             &self,
             address: std::net::SocketAddr,
             denied_servers: &[Cow<'_, str>],
-        ) -> Self::Server<'_> {
+        ) -> Option<Self::Server<'_>> {
             *self.inner.received_denied_servers.lock().unwrap() = denied_servers
                 .iter()
                 .map(|v| v.clone().into_owned())
                 .collect();
             *self.inner.received_addr.lock().unwrap() = Some(address);
-            TestServer {
+            Some(TestServer {
                 name: &self.inner.name,
                 supports: self.inner.supports.clone(),
                 written: &self.inner.written,
                 read_data: &self.inner.response,
-            }
+            })
         }
 
         fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {

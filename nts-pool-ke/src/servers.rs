@@ -71,7 +71,7 @@ pub trait ServerManager: Sync + Send {
         &self,
         address: SocketAddr,
         denied_servers: &[Cow<'_, str>],
-    ) -> Self::Server<'_>;
+    ) -> Option<Self::Server<'_>>;
 
     /// Select a server with given UUID. This is used for making KE connections
     /// in the monitoring.

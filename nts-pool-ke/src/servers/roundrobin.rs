@@ -64,7 +64,11 @@ impl ServerManager for RoundRobinServerManager {
         &self,
         _address: SocketAddr,
         denied_servers: &[Cow<'_, str>],
-    ) -> Self::Server<'_> {
+    ) -> Option<Self::Server<'_>> {
+        if self.servers.is_empty() {
+            return None;
+        }
+
         use std::sync::atomic::Ordering;
         let start_index = self.next_start.fetch_add(1, Ordering::Relaxed);
 
@@ -78,18 +82,18 @@ impl ServerManager for RoundRobinServerManager {
                 continue;
             }
 
-            return RoundRobinServer {
+            return Some(RoundRobinServer {
                 server,
                 owner: self,
-            };
+            });
         }
 
         debug!("All servers denied. Falling back to denied server");
 
-        RoundRobinServer {
+        Some(RoundRobinServer {
             server: &self.servers[start_index % self.servers.len()],
             owner: self,
-        }
+        })
     }
 
     fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
@@ -236,8 +240,12 @@ mod tests {
             timeout: Duration::from_secs(1),
         };
 
-        let first_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
-        let second_server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+        let first_server = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+            .unwrap();
+        let second_server = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+            .unwrap();
         assert_ne!(first_server.name(), second_server.name());
     }
 
@@ -326,10 +334,14 @@ mod tests {
             timeout: Duration::from_secs(1),
         };
 
-        let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
+        let server = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
+            .unwrap();
         assert_ne!(server.name(), "a.test");
 
-        let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
+        let server = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
+            .unwrap();
         assert_ne!(server.name(), "a.test");
     }
 
@@ -372,14 +384,18 @@ mod tests {
             timeout: Duration::from_secs(1),
         };
 
-        let first = manager.assign_server(
-            "127.0.0.1:4460".parse().unwrap(),
-            &["a.test".into(), "b.test".into()],
-        );
-        let second = manager.assign_server(
-            "127.0.0.1:4460".parse().unwrap(),
-            &["a.test".into(), "b.test".into()],
-        );
+        let first = manager
+            .assign_server(
+                "127.0.0.1:4460".parse().unwrap(),
+                &["a.test".into(), "b.test".into()],
+            )
+            .unwrap();
+        let second = manager
+            .assign_server(
+                "127.0.0.1:4460".parse().unwrap(),
+                &["a.test".into(), "b.test".into()],
+            )
+            .unwrap();
         assert_ne!(first.name(), second.name());
     }
 }
