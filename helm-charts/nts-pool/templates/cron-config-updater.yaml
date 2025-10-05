@@ -11,7 +11,7 @@ data:
   config-updater.sh: |
     #!/bin/sh
     curl --fail -H "Authorization: Bearer ${AUTHTOKEN}" "${CONFIGURL}" |
-    jq '{"op": "replace", "path": "/data/servers.json", "value": "\(.)"}' |
+    jq "[{\"op\": \"replace\", \"path\": \"/data/${FILENAME}\", \"value\": \"\(.)\"}]" |
     curl --fail --cacert "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
       --data-binary @- -X PATCH -H "Content-Type: application/json-patch+json" \
       -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
@@ -68,6 +68,8 @@ spec:
                   value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
                 - name: CONFIGMAP
                   value: "{{ include "nts-pool.fullname" . }}-servers-config"
+                - name: FILENAME
+                  value: "servers.json"
             - name: ke-monitor-list-updater
               imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
               {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
@@ -92,3 +94,5 @@ spec:
                   value: "{{ default .Release.Namespace .Values.namespaceOverride }}"
                 - name: CONFIGMAP
                   value: "{{ include "nts-pool.fullname" . }}-monitoring-config"
+                - name: FILENAME
+                  value: "monitoring.json"
