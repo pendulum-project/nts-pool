@@ -61,7 +61,6 @@ spec:
             items:
               - key: {{ .Values.management.baseSharedSecretRef.key }}
                 path: "base-shared-secret.key"
-      containers:
       initContainers:
       - name: geolocation
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.management.image.pullPolicy }}"
@@ -85,6 +84,7 @@ spec:
               - sh
               - -c
               - test -e /opt/geodb/geodb.mmdb
+      containers:
       - name: ke
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.ke.image.pullPolicy }}"
         {{- with default .Values.image.pullSecrets .Values.ke.image.pullSecrets }}
