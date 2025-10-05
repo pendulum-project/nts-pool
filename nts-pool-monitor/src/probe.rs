@@ -100,6 +100,9 @@ impl Probe {
         .await
         {
             Ok(Ok(result)) => result,
+            Ok(Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer))) => {
+                return Err(eyre::eyre!("Server not known (yet)"));
+            }
             Ok(Err(NtsError::Invalid | NtsError::Error(_))) => {
                 let end_time = Instant::now();
                 return Ok((
