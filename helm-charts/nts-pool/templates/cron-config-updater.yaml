@@ -10,7 +10,7 @@ metadata:
 data:
   config-updater.sh: |
     #!/bin/sh
-    curl --fail -H "Authentication: Bearer ${AUTHTOKEN}" "${CONFIGURL}" |
+    curl --fail -H "Authorization: Bearer ${AUTHTOKEN}" "${CONFIGURL}" |
     jq '{"op": "replace", "path": "/data/servers.json", "value": "\(.)"}' |
     curl --fail --cacert "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" \
       --data-binary @- -X PATCH -H "Content-Type: application/json-patch+json" \
