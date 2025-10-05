@@ -63,7 +63,7 @@ Create the name of the service account to use
 
 {{- define "nts-pool.management-env" -}}
 - name: NTSPOOL_CONFIG_UPDATER_SECRET
-  ValueFrom:
+  valueFrom:
     secretKeyRef:
       {{- toYaml .Values.management.configUpdaterSecretRef | nindent 6 }}
 - name: NTSPOOL_DATABASE_URL
