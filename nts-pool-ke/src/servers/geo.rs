@@ -263,7 +263,7 @@ impl ServerManager for GeographicServerManager {
         &self,
         address: std::net::SocketAddr,
         denied_servers: &[Cow<'_, str>],
-    ) -> Self::Server<'_> {
+    ) -> Option<Self::Server<'_>> {
         let inner = self.inner.read().unwrap().clone();
         let regions = if address.is_ipv4() {
             &inner.regions_ipv4
@@ -287,6 +287,10 @@ impl ServerManager for GeographicServerManager {
                 None
             }
             .unwrap_or_else(|| regions.get(GLOBAL).unwrap());
+
+        if region.is_empty() {
+            return None;
+        }
 
         let total_weight = region.last().map(|v| v.total_weight_including).unwrap();
         struct Skip {
@@ -336,12 +340,12 @@ impl ServerManager for GeographicServerManager {
                 });
                 skips.sort_by(|a, b| a.above.cmp(&b.above))
             } else {
-                return GeographicServer {
+                return Some(GeographicServer {
                     upstream_tls: self.upstream_tls.clone(),
                     index: region[pick].index,
                     inner,
                     config: self.config.clone(),
-                };
+                });
             }
         }
     }
@@ -531,12 +535,16 @@ mod tests {
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
-        let first = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+        let first = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+            .unwrap();
 
         let mut ok = false;
         // Assignment is probabilistic, but getting the same server 128 times in a row is exceedingly unlikely.
         for _ in 0..128 {
-            let second = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+            let second = manager
+                .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+                .unwrap();
             if second.name() != first.name() {
                 ok = true;
                 break;
@@ -624,10 +632,14 @@ mod tests {
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
-        let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
+        let server = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
+            .unwrap();
         assert_ne!(server.name(), "a.test");
 
-        let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()]);
+        let server = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
+            .unwrap();
         assert_ne!(server.name(), "a.test");
     }
 
@@ -710,10 +722,12 @@ mod tests {
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
-        let first = manager.assign_server(
-            "127.0.0.1:4460".parse().unwrap(),
-            &["a.test".into(), "b.test".into()],
-        );
+        let first = manager
+            .assign_server(
+                "127.0.0.1:4460".parse().unwrap(),
+                &["a.test".into(), "b.test".into()],
+            )
+            .unwrap();
         assert!(first.name() == "a.test" || first.name() == "b.test");
     }
 
@@ -833,13 +847,19 @@ mod tests {
         };
 
         // GB
-        let server = manager.assign_server("81.2.69.193:4460".parse().unwrap(), &[]);
+        let server = manager
+            .assign_server("81.2.69.193:4460".parse().unwrap(), &[])
+            .unwrap();
         assert_eq!(server.name(), "gb.test");
         // SE
-        let server = manager.assign_server("89.160.20.113:4460".parse().unwrap(), &[]);
+        let server = manager
+            .assign_server("89.160.20.113:4460".parse().unwrap(), &[])
+            .unwrap();
         assert_eq!(server.name(), "eu.test");
         // US
-        let server = manager.assign_server("50.114.0.1:4460".parse().unwrap(), &[]);
+        let server = manager
+            .assign_server("50.114.0.1:4460".parse().unwrap(), &[])
+            .unwrap();
         assert_eq!(server.name(), "global.test");
     }
 
@@ -938,10 +958,14 @@ mod tests {
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
         };
 
-        let ipv4 = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+        let ipv4 = manager
+            .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+            .unwrap();
         assert!(ipv4.inner.servers[ipv4.index].ipv4_capable);
 
-        let ipv6 = manager.assign_server("[::]:4460".parse().unwrap(), &[]);
+        let ipv6 = manager
+            .assign_server("[::]:4460".parse().unwrap(), &[])
+            .unwrap();
         assert!(ipv6.inner.servers[ipv6.index].ipv6_capable);
     }
 
@@ -1092,7 +1116,9 @@ mod tests {
         // 500 trials, about 166 should be server with UUID-a as id
         let mut count_0 = 0;
         for _ in 0..500 {
-            let server = manager.assign_server("127.0.0.1:4460".parse().unwrap(), &[]);
+            let server = manager
+                .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+                .unwrap();
             if server.index == 0 {
                 count_0 += 1;
             }
@@ -1197,8 +1223,9 @@ mod tests {
         // 500 trials, about 166 should be server with UUID-a as id
         let mut count_0 = 0;
         for _ in 0..500 {
-            let server =
-                manager.assign_server("127.0.0.1:4460".parse().unwrap(), &["c.test".into()]);
+            let server = manager
+                .assign_server("127.0.0.1:4460".parse().unwrap(), &["c.test".into()])
+                .unwrap();
             if server.index == 0 {
                 count_0 += 1;
             }
