@@ -49,6 +49,11 @@ a.btn:hover,
     padding: var(--space-xs) var(--space-sm);
 }
 
+main a,
+main a:visited {
+    color: var(--link);
+}
+
 input[type="text"],
 input[type="email"],
 input[type="number"],
@@ -89,14 +94,22 @@ h3 {
     color: var(--primary);
 }
 
+p {
+    margin-bottom: var(--space-sm);
+}
+
 .card {
     background-color: var(--white);
     border-radius: var(--border-radius);
     padding: calc((var(--space-md) + var(--space-sm)) / 2) var(--space-md) var(--space-sm) var(--space-md);
 }
 
+.card-action {
+    margin-top: var(--space-sm);
+}
+
 dl {
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
 }
 
 dd {
@@ -161,6 +174,20 @@ details.confirmation-btn > div {
     opacity: 1;
     transform: translatey(0);
   }
+}
+
+#confirmation-popover[popover]:popover-open {
+    border: none;
+    border-radius: var(--border-radius);
+    padding: var(--space-md);
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+}
+
+#confirmation-popover[popover]::backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
 }
 
 .success {
