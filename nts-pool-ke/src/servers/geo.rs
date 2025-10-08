@@ -411,11 +411,16 @@ impl Server for GeographicServer {
         &'a self,
         connection_type: ConnectionType,
     ) -> Result<Self::Connection<'a>, crate::error::PoolError> {
+        debug!(
+            "Looking up name {:?}",
+            self.inner.servers[self.index].connection_address
+        );
         let addr = resolve_with_type(
             &self.inner.servers[self.index].connection_address,
             connection_type,
         )
         .await?;
+        debug!("Connecting to {addr:?}");
         let io = TcpStream::connect(addr).await?;
         let upstream_tls = self.upstream_tls.read().unwrap().clone();
         Ok(upstream_tls
