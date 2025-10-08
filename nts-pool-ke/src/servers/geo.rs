@@ -12,6 +12,7 @@ use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
 use rand::Rng;
 use tokio::{net::TcpStream, task::spawn_blocking};
 use tokio_rustls::{TlsConnector, client::TlsStream};
+use tracing::debug;
 
 use crate::{
     config::{BackendConfig, KeyExchangeServer},
@@ -264,6 +265,7 @@ impl ServerManager for GeographicServerManager {
         address: std::net::SocketAddr,
         denied_servers: &[Cow<'_, str>],
     ) -> Option<Self::Server<'_>> {
+        debug!("Assigning server through geolocation");
         let inner = self.inner.read().unwrap().clone();
         let regions = if address.is_ipv4() {
             &inner.regions_ipv4
@@ -272,11 +274,13 @@ impl ServerManager for GeographicServerManager {
         };
         let region =
             if let Ok(Some(location)) = inner.geodb.lookup::<geoip2::Country>(address.ip()) {
+                debug!("Geolocation lookup for {:?}", location);
                 location
                     .country
                     .and_then(|v| v.iso_code)
                     .and_then(|v| regions.get(v))
                     .or_else(|| {
+                        debug!("Falling back to continent, country zone does not exist");
                         location
                             .continent
                             .and_then(|v| v.code)
@@ -286,9 +290,13 @@ impl ServerManager for GeographicServerManager {
             } else {
                 None
             }
-            .unwrap_or_else(|| regions.get(GLOBAL).unwrap());
+            .unwrap_or_else(|| {
+                debug!("Falling back to global, continent and country zone does not exist");
+                regions.get(GLOBAL).unwrap()
+            });
 
         if region.is_empty() {
+            debug!("Selected region is empty");
             return None;
         }
 
@@ -351,6 +359,7 @@ impl ServerManager for GeographicServerManager {
     }
 
     fn get_server_by_uuid(&self, uuid: impl AsRef<str>) -> Option<Self::Server<'_>> {
+        debug!("Getting server {} by uuid", uuid.as_ref());
         let inner = self.inner.read().unwrap().clone();
 
         let index = inner.uuid_lookup.get(uuid.as_ref()).copied();

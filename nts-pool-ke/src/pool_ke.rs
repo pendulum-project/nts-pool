@@ -237,7 +237,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             Err(e) => return Err(e.into()),
         };
 
-        debug!("Recevied request from client");
+        debug!("Recevied request from client: {:?}", client_request);
 
         let monitoring_keys = self.monitoring_keys.read().unwrap().clone();
 
