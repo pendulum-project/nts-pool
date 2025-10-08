@@ -209,8 +209,11 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         if self.config.use_proxy_protocol
             && let Some(addr) = parse_haproxy_header(&mut client_stream).await?
         {
+            info!("Proxy protocol used, change address from {source_address:?} to {addr:?}");
             source_address = addr;
         }
+
+        debug!("Handling client with source address {}", source_address);
 
         // handle the initial client to pool
         let server_tls = self.server_tls.read().unwrap().clone();
@@ -409,7 +412,10 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         client_request: &ClientRequest<'_>,
         server: &S::Server<'_>,
     ) -> Result<Option<(ProtocolId, AlgorithmDescription)>, PoolError> {
-        let (supported_protocols, supported_algorithms) = server.support().await?;
+        let (supported_protocols, supported_algorithms) = server.support().await.map_err(|e| {
+            debug!("Error querying protocol support: {e}");
+            e
+        })?;
         let mut protocol = None;
         for candidate_protocol in client_request.protocols().iter() {
             if supported_protocols.contains(&candidate_protocol) {
