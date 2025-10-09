@@ -69,6 +69,23 @@ pub async fn list_keys(conn: impl DbConnLike<'_>) -> Result<Vec<String>, sqlx::E
     .collect())
 }
 
+pub async fn get_by_id(
+    conn: impl DbConnLike<'_>,
+    monitor_id: MonitorId,
+) -> Result<Monitor, sqlx::Error> {
+    sqlx::query_as!(
+        Monitor,
+        r#"
+            SELECT id, name, created_at, updated_at
+            FROM monitors
+            WHERE id = $1
+        "#,
+        *monitor_id,
+    )
+    .fetch_one(conn)
+    .await
+}
+
 #[allow(unused)]
 pub async fn get_by_authentication_key(
     conn: impl DbConnLike<'_>,

@@ -48,6 +48,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/admin/users/{id}/login-as", post(admin::login_as))
         .route("/admin/monitors", get(admin::monitors))
         .route("/admin/monitors/new", post(admin::create_monitor))
+        .route("/admin/monitors/{id}", get(admin::monitor))
         .route(
             "/admin/monitors/{id}/regenerate_key",
             post(admin::rekey_monitor),
