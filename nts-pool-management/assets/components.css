@@ -96,6 +96,13 @@ h3 {
 
 p {
     margin-bottom: var(--space-sm);
+code {
+    display: block;
+    padding: var(--space-sm)  var(--space-md);
+    background-color: var(--white);
+    border-radius: var(--border-radius);
+    margin: var(--space-sm) 0;
+    width: fit-content;
 }
 
 .card {
