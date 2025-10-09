@@ -30,7 +30,7 @@
     <tbody>
       {%- for monitor in monitors %}
         <tr>
-          <td>{{ monitor.name }}</td>
+          <td><a href="/admin/monitors/{{ monitor.id }}">{{ monitor.name }}</a></td>
           <td>{{ monitor.created_at.format("%Y-%m-%d %H:%M") }}</td>
           <td>{{ monitor.updated_at.format("%Y-%m-%d %H:%M") }}</td>
           <td class="actions">
