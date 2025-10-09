@@ -96,6 +96,9 @@ h3 {
 
 p {
     margin-bottom: var(--space-sm);
+    max-width: 80ch;
+}
+
 code {
     display: block;
     padding: var(--space-sm)  var(--space-md);
