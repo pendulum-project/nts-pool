@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/assets/main.css" />
     <link rel="stylesheet" href="/assets/components.css" />
     {% block head %}{% endblock %}
+    {% if filters::livereload_enabled() %}<script src="/livereload/poll.js"></script>{% endif %}
   </head>
   <body>
     <div class="appcontainer">
