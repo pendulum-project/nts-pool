@@ -66,6 +66,22 @@ pub async fn monitors(
 }
 
 #[derive(Template)]
+#[template(path = "admin/monitor.html.j2")]
+struct MonitorTemplate {
+    app: AppContext,
+    monitor: Monitor,
+}
+pub async fn monitor(
+    _admin: Administrator,
+    app: AppContext,
+    State(state): State<AppState>,
+    Path(id): Path<MonitorId>,
+) -> Result<impl IntoResponse, AppError> {
+    let monitor = monitor::get_by_id(&state.db, id).await?;
+    Ok(HtmlTemplate(MonitorTemplate { app, monitor }))
+}
+
+#[derive(Template)]
 #[template(path = "admin/monitor_key.html.j2")]
 struct MonitorKeyTemplate {
     app: AppContext,
