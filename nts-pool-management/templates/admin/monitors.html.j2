@@ -6,41 +6,45 @@
 {% block header %}<h1>Monitors</h1>{% endblock %}
 
 {% block content %}
-<section class="form">
-  <h2>Add a monitor</h2>
-  <form action="/admin/monitors/new" method="POST">
-    <fieldset class="monitor-name">
-      <label for="name">Name</label>
-      <input name="name" type="text" />
-    </fieldset>
-    <div>
-      <button type="submit">Add</button>
-    </div>
-  </form>
-</section>
-<section>
-  <h2>Monitors</h2>
-  <table>
-    <thead>
-      <th>Name</th>
-      <th>Created</th>
-      <th>Updated</th>
-      <td><!-- Actions --></td>
-    </thead>
-    <tbody>
-      {%- for monitor in monitors %}
-        <tr>
-          <td>{{ monitor.name }}</td>
-          <td>{{ monitor.created_at.format("%Y-%m-%d %H:%M") }}</td>
-          <td>{{ monitor.updated_at.format("%Y-%m-%d %H:%M") }}</td>
-          <td class="actions">
-            <form action="/admin/monitors/{{ monitor.id }}/regenerate_key" method="POST">
-              <button class="btn-sm btn-alt" type="submit">Rekey</button>
-            </form>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+  <section class="form">
+    <h2>Add a monitor</h2>
+    <form action="/admin/monitors/new" method="POST">
+      <fieldset class="monitor-name">
+        <label for="name">Name</label>
+        <input name="name" type="text" />
+      </fieldset>
+      <div>
+        <button type="submit">Add</button>
+      </div>
+    </form>
+  </section>
+  <section>
+    <h2>Monitors</h2>
+    {% if monitors.is_empty() %}
+      No monitors added
+    {% else %}
+      <table>
+        <thead>
+          <th>Name</th>
+          <th>Created</th>
+          <th>Updated</th>
+          <td><!-- Actions --></td>
+        </thead>
+        <tbody>
+          {%- for monitor in monitors %}
+            <tr>
+              <td>{{ monitor.name }}</td>
+              <td>{{ monitor.created_at.format("%Y-%m-%d %H:%M") }}</td>
+              <td>{{ monitor.updated_at.format("%Y-%m-%d %H:%M") }}</td>
+              <td class="actions">
+                <form action="/admin/monitors/{{ monitor.id }}/regenerate_key" method="POST">
+                  <button class="btn-sm btn-alt" type="submit">Rekey</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
 {% endblock %}

@@ -43,6 +43,6 @@ p, h1, h2, h3, h4, h5, h6 {
   overflow-wrap: break-word;
 }
 
-a, a:visited {
+a, a.btn, a:visited, a.btn:visited {
   color: inherit;
 }
