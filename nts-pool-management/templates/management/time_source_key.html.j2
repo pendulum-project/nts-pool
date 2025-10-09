@@ -4,10 +4,18 @@
 
 {% block content %}
 {% if let Some(hostname) = hostname %}
+  <aside class="success">
 The timesource {{ hostname }} has been created.
+</aside>
 {% else %}
 A new authentication key has been generated.
 {% endif %}
 
-The authentication key the pool will use to authenticate itself is {{ auth_key }}
+The authentication key the pool will use to authenticate itself:
+<code>{{ auth_key }}</code>
+
+{% if let Some(hostname) = hostname %}
+  <a class="btn" href="/management/time-sources">Back</a>
+{% endif %}
+
 {% endblock %}

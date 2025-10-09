@@ -22,7 +22,7 @@ html {
 
 body {
   /* Add accessible line-height */
-  line-height: 1.5;
+  line-height: 1.6;
   /* Improve text rendering */
   -webkit-font-smoothing: antialiased;
 }
@@ -43,6 +43,6 @@ p, h1, h2, h3, h4, h5, h6 {
   overflow-wrap: break-word;
 }
 
-a, a:visited {
+a, a.btn, a:visited, a.btn:visited {
   color: inherit;
 }
