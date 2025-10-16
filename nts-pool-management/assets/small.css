@@ -1,0 +1,36 @@
+nav ul {
+  display: none;
+}
+
+nav menu:has(not(".mobile-nav")) {
+  display: none;
+
+}
+
+nav.mobile-nav {
+  box-sizing: border-box;
+  border: none;
+  position: relative;
+  top: calc(var(--nav-height) + var(--space-xs));
+  margin: var(--space-xs);
+  border-radius: var(--border-radius);
+  width: calc(100vw - 2 * var(--space-xs));
+
+  ul {
+    padding: 0;
+    display: block;
+    width: 100%;
+
+    li {
+      display: block;
+
+      a {
+        width: 100%;
+      }
+    }}
+}
+
+nav.mobile-nav:popover-open {
+  display: block;
+  height: inherit;
+}

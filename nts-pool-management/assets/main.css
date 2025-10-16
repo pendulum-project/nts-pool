@@ -37,6 +37,7 @@ nav {
   align-items: center;
   flex: 0;
   padding: 0 var(--space-md);
+  /* height: var(--nav-height); */
 
   menu {
     display: flex;
@@ -44,7 +45,7 @@ nav {
     box-sizing: content-box;
 
     a {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       height: 2rem;
       gap: var(--space-sm);
@@ -63,7 +64,12 @@ nav {
       border-bottom: 4px solid var(--primary);
     }
   }
-  
+
+  ul li {
+    display: inline;
+
+  }
+
   li {
     list-style: none;
   }
@@ -176,4 +182,8 @@ details.toast > summary {
   display: flex;
   gap: var(--space-md);
   flex-wrap: wrap;
+}
+
+nav.mobile-nav {
+  display: none;
 }

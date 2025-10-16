@@ -1,23 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>NTS Pool</title>
     <link rel="icon" type="image/svg+xml" href="/assets/nts-pool.svg" />
     <link rel="stylesheet" href="/assets/reset.css" />
     <link rel="stylesheet" href="/assets/variables.css" />
     <link rel="stylesheet" href="/assets/main.css" />
     <link rel="stylesheet" href="/assets/components.css" />
+    <!-- Served to screens that are at most 768px wide -->
+    <link rel="stylesheet" href="/assets/small.css" media="(max-width: 768px)" />
     {% block head %}{% endblock %}
-    {% if filters::livereload_enabled() %}<script src="/livereload/poll.js"></script>{% endif %}
+    {% if filters::livereload_enabled() %}<script src="/assets/poll.js"></script>{% endif %}
   </head>
   <body>
     <div class="appcontainer">
       <nav>
         <menu>
-          <li>
-            <a href="/"><img src="/assets/nts-pool.svg" /><strong>NTS Pool</strong></a>
-          </li>
+          <a href="/"><img src="/assets/nts-pool.svg" /><strong>NTS Pool</strong></a>
         {% if app.user|is_logged_in %}
+          <ul>
           <li>
             <a {% block nav_dashboard %}{% endblock %} href="/management">Dashboard</a>
           </li>
@@ -34,6 +36,7 @@
             <li>
                 <a {% block nav_monitors %}{% endblock %} href="/admin/monitors">Monitors</a>
             </li>
+            </ul>
           {% endif %}
         {% endif %}
         </menu>
@@ -49,6 +52,7 @@
           {% endif %}
         </div>
       </nav>
+      <button popovertarget="mobile-nav">menu</button>
       <header>
         {% block header %}{% endblock %}
       </header>
@@ -71,5 +75,34 @@
         {% endblock %}
       </footer>
     </div>
+
+    <nav id="mobile-nav" class="mobile-nav" popover>
+      <menu>
+          <ul>
+            <li>
+        <a href="/"><img src="/assets/nts-pool.svg" /><strong>NTS Pool</strong></a>
+        </li>
+        {% if app.user|is_logged_in %}
+            <li>
+              <a {% block nav_dashboard %}{% endblock %} href="/management">Dashboard</a>
+            </li>
+            <li>
+              <a {% block nav_time_sources %}{% endblock %} href="/management/time-sources">Time sources</a>
+            </li>
+            {% if app.user|is_administrator %}
+              <li>
+                <a {% block nav_overview %}{% endblock %} href="/admin">Admin Overview</a>
+              </li>
+            <li>
+              <a {% block nav_users %}{% endblock %} href="/admin/users">Users</a>
+            </li>
+            <li>
+              <a {% block nav_monitors %}{% endblock %} href="/admin/monitors">Monitors</a>
+            </li>
+          </ul>
+        {% endif %}
+      {% endif %}
+      </menu>
+    </nav>
   </body>
 </html>
