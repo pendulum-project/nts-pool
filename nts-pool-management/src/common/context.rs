@@ -19,6 +19,7 @@ use super::flash::{FlashMessageService, MessageType, extract_flash_message};
 #[derive(Clone, Debug)]
 pub struct AppContext {
     pub path: String,
+    pub ke_domain: String,
     pub user: Option<UnsafeLoggedInUser>,
     pub parent_user: Option<Administrator>,
     pub flash_message: Option<(MessageType, String)>,
@@ -29,6 +30,7 @@ impl Default for AppContext {
     fn default() -> Self {
         Self {
             path: "/".to_string(),
+            ke_domain: "ke.example.com".into(),
             user: Default::default(),
             parent_user: Default::default(),
             flash_message: Default::default(),
@@ -97,6 +99,7 @@ async fn extract_context(
             parent_user,
             flash_message,
             base_url: state.config.base_url.clone(),
+            ke_domain: state.config.poolke_name.clone(),
         },
     ))
 }
