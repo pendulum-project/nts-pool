@@ -1,12 +1,13 @@
 use askama::Template;
 use axum::{
-    Json, Router,
+    Form, Json, Router,
     extract::State,
     response::IntoResponse,
     routing::{get, post},
 };
 use management::TIME_SOURCES_ENDPOINT;
 use nts_pool_shared::KeyExchangeServer;
+use serde::Deserialize;
 
 use crate::{
     AppState,
@@ -26,6 +27,8 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route("/terms", get(terms))
+        .route("/use", get(use_get))
+        .route("/use", post(use_post))
         .route("/login", get(auth::login).post(auth::login_submit))
         .route("/register", get(auth::register).post(auth::register_submit))
         .route(
@@ -99,6 +102,32 @@ struct TermsTemplate {
 
 pub async fn terms(app: AppContext) -> impl IntoResponse {
     HtmlTemplate(TermsTemplate { app })
+}
+
+#[derive(Template)]
+#[template(path = "use.html.j2")]
+struct UseTemplate {
+    app: AppContext,
+    accepts_terms: bool,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct UseForm {
+    pub accept: Option<String>,
+}
+
+pub async fn use_post(app: AppContext, Form(formdata): Form<UseForm>) -> impl IntoResponse {
+    HtmlTemplate(UseTemplate {
+        app,
+        accepts_terms: formdata.accept == Some("true".into()),
+    })
+}
+
+pub async fn use_get(app: AppContext) -> impl IntoResponse {
+    HtmlTemplate(UseTemplate {
+        app,
+        accepts_terms: false,
+    })
 }
 
 pub async fn poolke_servers(
