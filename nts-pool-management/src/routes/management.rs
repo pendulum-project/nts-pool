@@ -9,8 +9,8 @@ use crate::{
     AppState,
     auth::{self, AuthorizedUser},
     context::AppContext,
+    cookies::CookieService,
     error::AppError,
-    flash::FlashMessageService,
     models::time_source::{
         self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
     },
@@ -57,7 +57,7 @@ pub async fn create_time_source(
     user: AuthorizedUser,
     app: AppContext,
     State(state): State<AppState>,
-    flash: FlashMessageService,
+    mut cookies: CookieService,
     Form(new_time_source): Form<NewTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let geodb = state.geodb.read().unwrap().clone();
@@ -82,7 +82,7 @@ pub async fn create_time_source(
         })
         .into_response()),
         Err(_) => Ok((
-            flash.error("Could not add time source".to_string()),
+            cookies.flash_error("Could not add time source".to_string()),
             Redirect::to(TIME_SOURCES_ENDPOINT),
         )
             .into_response()),
@@ -94,7 +94,7 @@ pub async fn rekey_time_source(
     Path(time_source_id): Path<TimeSourceId>,
     app: AppContext,
     State(state): State<AppState>,
-    flash: FlashMessageService,
+    mut cookies: CookieService,
 ) -> Result<impl IntoResponse, AppError> {
     let new_randomizer = auth::generate_pool_token_randomizer();
     match time_source::update_auth_token_randomizer(
@@ -117,7 +117,7 @@ pub async fn rekey_time_source(
         })
         .into_response()),
         Err(_) => Ok((
-            flash.error("Could not rekey time source".to_string()),
+            cookies.flash_error("Could not rekey time source".to_string()),
             Redirect::to(TIME_SOURCES_ENDPOINT),
         )
             .into_response()),
@@ -128,27 +128,27 @@ pub async fn update_time_source(
     user: AuthorizedUser,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
-    flash: FlashMessageService,
+    mut cookies: CookieService,
     Form(time_source): Form<UpdateTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let flash = match time_source::update(&state.db, user.id, time_source_id, time_source).await {
-        Ok(_) => flash.success("Time source updated successfully".to_string()),
-        Err(_) => flash.error("Could not update time source".to_string()),
+    match time_source::update(&state.db, user.id, time_source_id, time_source).await {
+        Ok(_) => cookies.flash_success("Time source updated successfully".to_string()),
+        Err(_) => cookies.flash_error("Could not update time source".to_string()),
     };
 
-    Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
+    Ok((cookies, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }
 
 pub async fn delete_time_source(
     user: AuthorizedUser,
     Path(time_source_id): Path<TimeSourceId>,
     State(state): State<AppState>,
-    flash: FlashMessageService,
+    mut cookies: CookieService,
 ) -> Result<impl IntoResponse, AppError> {
-    let flash = match time_source::delete(&state.db, user.id, time_source_id).await {
-        Ok(_) => flash.success("Time source deleted successfully".to_string()),
-        Err(_) => flash.error("Could not delete time source".to_string()),
+    match time_source::delete(&state.db, user.id, time_source_id).await {
+        Ok(_) => cookies.flash_success("Time source deleted successfully".to_string()),
+        Err(_) => cookies.flash_error("Could not delete time source".to_string()),
     };
 
-    Ok((flash, Redirect::to(TIME_SOURCES_ENDPOINT)))
+    Ok((cookies, Redirect::to(TIME_SOURCES_ENDPOINT)))
 }

@@ -14,13 +14,15 @@ use crate::{
     error::AppError,
 };
 
-use super::flash::{FlashMessageService, MessageType, extract_flash_message};
+use super::cookies::{CookieService, MessageType, UserContext};
 
 #[derive(Clone, Debug)]
 pub struct AppContext {
     pub path: String,
+    pub ke_domain: String,
     pub user: Option<UnsafeLoggedInUser>,
     pub parent_user: Option<Administrator>,
+    pub user_context: UserContext,
     pub flash_message: Option<(MessageType, String)>,
     pub base_url: BaseUrl,
 }
@@ -29,9 +31,11 @@ impl Default for AppContext {
     fn default() -> Self {
         Self {
             path: "/".to_string(),
+            ke_domain: "ke.example.com".into(),
             user: Default::default(),
             parent_user: Default::default(),
             flash_message: Default::default(),
+            user_context: Default::default(),
             base_url: "http://localhost:3000".into(),
         }
     }
@@ -85,18 +89,22 @@ async fn extract_context(
         .unzip();
     let parent_user = parent_user.flatten();
 
-    let flash_message_service = FlashMessageService::from_request_parts(parts, state)
+    let mut cookie_service = CookieService::from_request_parts(parts, state)
         .await
         .wrap_err("Cannot extract cookie jar")?;
-    let (flash_message_service, flash_message) = extract_flash_message(flash_message_service.0)?;
+    let flash_message = cookie_service.flash_message()?;
+    let user_context = cookie_service.user_context();
+
     Ok((
-        flash_message_service,
+        cookie_service.jar(),
         AppContext {
             path,
             user,
             parent_user,
             flash_message,
+            user_context,
             base_url: state.config.base_url.clone(),
+            ke_domain: state.config.poolke_name.clone(),
         },
     ))
 }

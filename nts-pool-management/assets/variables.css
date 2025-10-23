@@ -16,6 +16,7 @@
   --link: #0a57f0;
 
   /* spacing */
+  --space-xxs: 0.25rem;
   --space-xs: 0.5rem;
   --space-sm: 1rem;
   --space-md: 2.5rem;

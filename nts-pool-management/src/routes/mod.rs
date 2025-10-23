@@ -2,16 +2,18 @@ use askama::Template;
 use axum::{
     Json, Router,
     extract::State,
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
     routing::{get, post},
 };
 use management::TIME_SOURCES_ENDPOINT;
 use nts_pool_shared::KeyExchangeServer;
+use serde::Deserialize;
 
 use crate::{
     AppState,
     auth::AuthenticatedInternal,
     context::AppContext,
+    cookies::CookieService,
     error::AppError,
     models,
     templates::{HtmlTemplate, filters, not_found_page},
@@ -26,6 +28,8 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route("/terms", get(terms))
+        .route("/use", get(use_get))
+        .route("/use", post(use_post))
         .route("/login", get(auth::login).post(auth::login_submit))
         .route("/register", get(auth::register).post(auth::register_submit))
         .route(
@@ -99,6 +103,26 @@ struct TermsTemplate {
 
 pub async fn terms(app: AppContext) -> impl IntoResponse {
     HtmlTemplate(TermsTemplate { app })
+}
+
+#[derive(Template)]
+#[template(path = "use.html.j2")]
+struct UseTemplate {
+    app: AppContext,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct UseForm {
+    pub accept: Option<String>,
+}
+
+pub async fn use_post(mut cookie_service: CookieService) -> impl IntoResponse {
+    cookie_service.accept_terms();
+    (cookie_service, Redirect::to("/use"))
+}
+
+pub async fn use_get(app: AppContext) -> impl IntoResponse {
+    HtmlTemplate(UseTemplate { app })
 }
 
 pub async fn poolke_servers(
