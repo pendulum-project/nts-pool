@@ -36,7 +36,7 @@ mode = "nts"
 address = "3.{{ app.ke_domain }}"</code-block>
   {% else %}
     <form action = "/use" method="POST">
-      <p> I confirm I have read and accept the <a href="/terms">terms and conditions</a>:</p>
+      <p> I confirm I have read and accept the <a href="/terms">terms and conditions</a>. In particular, I accept that this pool is experimental, may fail at any time for any reason, and I will not use this information to configure the pool for third parties.</p>
       <button type="submit" name="accept" value="true">Accept</button>
     </form>
   {% endif %}
