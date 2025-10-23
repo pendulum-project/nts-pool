@@ -1,8 +1,8 @@
 use askama::Template;
 use axum::{
-    Form, Json, Router,
+    Json, Router,
     extract::State,
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
     routing::{get, post},
 };
 use management::TIME_SOURCES_ENDPOINT;
@@ -13,6 +13,7 @@ use crate::{
     AppState,
     auth::AuthenticatedInternal,
     context::AppContext,
+    cookies::CookieService,
     error::AppError,
     models,
     templates::{HtmlTemplate, filters, not_found_page},
@@ -108,7 +109,6 @@ pub async fn terms(app: AppContext) -> impl IntoResponse {
 #[template(path = "use.html.j2")]
 struct UseTemplate {
     app: AppContext,
-    accepts_terms: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -116,18 +116,13 @@ pub struct UseForm {
     pub accept: Option<String>,
 }
 
-pub async fn use_post(app: AppContext, Form(formdata): Form<UseForm>) -> impl IntoResponse {
-    HtmlTemplate(UseTemplate {
-        app,
-        accepts_terms: formdata.accept == Some("true".into()),
-    })
+pub async fn use_post(mut cookie_service: CookieService) -> impl IntoResponse {
+    cookie_service.accept_terms();
+    (cookie_service, Redirect::to("/use"))
 }
 
 pub async fn use_get(app: AppContext) -> impl IntoResponse {
-    HtmlTemplate(UseTemplate {
-        app,
-        accepts_terms: false,
-    })
+    HtmlTemplate(UseTemplate { app })
 }
 
 pub async fn poolke_servers(
