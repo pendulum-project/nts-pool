@@ -5,13 +5,15 @@
 {% block header %}<h1>NTS Pool</h1>{% endblock %}
 
 {% block content %}
-  <p>Welcome to the NTS Pool Management System.</p>
+  <section class="contained">
+    <p>Welcome to the NTS Pool Management System.</p>
 
-  <p>The <a href="/use">usage instructions</a> provide instructions on how to use the NTS pool to synchronize the time on your computer.</p>
+    <p>The <a href="/use">usage instructions</a> provide instructions on how to use the NTS pool to synchronize the time on your computer.</p>
 
-  {% if !(app.user|is_logged_in) %}
-    <p role="alert">
-      You are not logged in. To manage your servers, please <a href="/login">log in</a> to access the pool management system. You can also <a href="/register">register</a> for a new account.
-    </p>
-  {% endif %}
+    {% if !(app.user|is_logged_in) %}
+      <p role="alert">
+        You are not logged in. To manage your servers, please <a href="/login">log in</a> to access the pool management system. You can also <a href="/register">register</a> for a new account.
+      </p>
+    {% endif %}
+  </section>
 {% endblock %}
