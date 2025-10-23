@@ -1,9 +1,9 @@
 pub mod auth;
 pub mod config;
 pub mod context;
+pub mod cookies;
 pub mod email;
 pub mod error;
-pub mod flash;
 
 #[cfg(feature = "livereload")]
 pub mod livereload;
