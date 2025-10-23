@@ -4,27 +4,22 @@
 
 {% block content %}
 {% if accepts_terms %}
-<p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
+  <section class="contained">
+    <p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
 
-<h2>NTPSec</h2>
-<code>
-server 0.{{ app.ke_domain }} iburst nts
+    <h2>NTPSec</h2>
+    <code-block>server 0.{{ app.ke_domain }} iburst nts
 server 1.{{ app.ke_domain }} iburst nts
 server 2.{{ app.ke_domain }} iburst nts
-server 3.{{ app.ke_domain }} iburst nts
-</code>
-
-<h2>Chrony</h2>
-<code>
-server 0.{{ app.ke_domain }} iburst nts
+server 3.{{ app.ke_domain }} iburst nts</code-block>
+    <h2>Chrony</h2>
+    <code-block>server 0.{{ app.ke_domain }} iburst nts
 server 1.{{ app.ke_domain }} iburst nts
 server 2.{{ app.ke_domain }} iburst nts
-server 3.{{ app.ke_domain }} iburst nts
-</code>
+server 3.{{ app.ke_domain }} iburst nts</code-block>
 
-<h2>NTPD-rs</h2>
-<code>
-[[source]]
+    <h2>NTPD-rs</h2>
+    <code-block>[[source]]
 mode = "nts"
 address = "0.{{ app.ke_domain }}"
 
@@ -38,12 +33,12 @@ address = "2.{{ app.ke_domain }}"
 
 [[source]]
 mode = "nts"
-address = "3.{{ app.ke_domain }}"
-</code>
-{% else %}
-<form action = "/use" method="POST">
-<p> I confirm I have read and accept the <a href="/terms">terms and conditions</a>:</p>
-<button type="submit" name="accept" value="true">Accept</button>
-</post>
-{% endif %}
+address = "3.{{ app.ke_domain }}"</code-block>
+  {% else %}
+    <form action = "/use" method="POST">
+      <p> I confirm I have read and accept the <a href="/terms">terms and conditions</a>:</p>
+      <button type="submit" name="accept" value="true">Accept</button>
+    </form>
+  {% endif %}
+</section>
 {% endblock %}

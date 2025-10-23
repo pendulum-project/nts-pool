@@ -50,7 +50,7 @@ nav {
       gap: var(--space-sm);
       text-decoration: none;
       color: inherit;
-      padding: var(--space-sm);
+      padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
       transition: border-bottom-color 150ms ease-in-out, transform 150ms ease;
       border-bottom: 4px solid var(--secondary);
 

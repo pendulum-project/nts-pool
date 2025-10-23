@@ -94,18 +94,31 @@ h3 {
     color: var(--primary);
 }
 
-p {
+section > p {
     margin-bottom: var(--space-sm);
+}
+
+section.contained {
     max-width: 80ch;
 }
 
-code {
-    display: block;
-    padding: var(--space-sm)  var(--space-md);
+code,
+code-block {
+    font-family: monospace;
+    white-space: pre;
     background-color: var(--white);
-    border-radius: var(--border-radius);
+}
+
+code {
+    padding: var(--space-xxs) var(--space-xs);
+}
+
+code-block {
+    white-space: pre;
+    display: block;
+    width: 100%;
     margin: var(--space-sm) 0;
-    width: fit-content;
+    padding: var(--space-xs) var(--space-xs);
 }
 
 .card {
