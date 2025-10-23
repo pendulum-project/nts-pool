@@ -43,20 +43,24 @@ nav {
     padding: 0;
     box-sizing: content-box;
 
-    a {
+    li a {
       display: flex;
       align-items: center;
       height: 2rem;
       gap: var(--space-sm);
       text-decoration: none;
       color: inherit;
-      padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
+      padding: var(--space-sm);
       transition: border-bottom-color 150ms ease-in-out, transform 150ms ease;
       border-bottom: 4px solid var(--secondary);
 
       img {
         height: 2rem;
       }
+    }
+
+    li:first-child a {
+        padding-left: 0;
     }
 
     a[aria-current="page"] {
