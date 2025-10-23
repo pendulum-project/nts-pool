@@ -3,7 +3,7 @@
 {% block header %}<h1>Using the NTS pool for time synchronization</h1>{% endblock %}
 
 {% block content %}
-{% if accepts_terms %}
+{% if accepts_terms || app.user|is_logged_in %}
   <section class="contained">
     <p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
 
