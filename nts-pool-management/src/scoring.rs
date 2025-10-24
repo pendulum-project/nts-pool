@@ -142,6 +142,7 @@ mod tests {
     fn test_keyexchange_result() -> KeyExchangeProbeResult {
         KeyExchangeProbeResult {
             status: KeyExchangeStatus::Success,
+            description: String::new(),
             exchange_start: 0,
             exchange_duration: 0.1,
             num_cookies: 0,
@@ -154,6 +155,7 @@ mod tests {
             score_sample(&ProbeResult {
                 keyexchange: KeyExchangeProbeResult {
                     status: KeyExchangeStatus::Success,
+                    description: String::new(),
                     exchange_start: 0,
                     exchange_duration: 0.1,
                     num_cookies: 8,
@@ -174,6 +176,7 @@ mod tests {
             score_sample(&ProbeResult {
                 keyexchange: KeyExchangeProbeResult {
                     status: KeyExchangeStatus::Failed,
+                    description: String::new(),
                     exchange_start: 0,
                     exchange_duration: 0.1,
                     num_cookies: 0,
@@ -191,6 +194,7 @@ mod tests {
             score_sample(&ProbeResult {
                 keyexchange: KeyExchangeProbeResult {
                     status: KeyExchangeStatus::Timeout,
+                    description: String::new(),
                     exchange_start: 0,
                     exchange_duration: 2.0,
                     num_cookies: 0,
@@ -589,6 +593,7 @@ mod tests {
             score_sample(&ProbeResult {
                 keyexchange: KeyExchangeProbeResult {
                     status: KeyExchangeStatus::Success,
+                    description: String::new(),
                     exchange_start: 0,
                     exchange_duration: 0.1,
                     num_cookies: 8,
@@ -610,6 +615,7 @@ mod tests {
             score_sample(&ProbeResult {
                 keyexchange: KeyExchangeProbeResult {
                     status: KeyExchangeStatus::Success,
+                    description: String::new(),
                     exchange_start: 0,
                     exchange_duration: 0.1,
                     num_cookies: 8,
@@ -631,6 +637,7 @@ mod tests {
             score_sample(&ProbeResult {
                 keyexchange: KeyExchangeProbeResult {
                     status: KeyExchangeStatus::Success,
+                    description: String::new(),
                     exchange_start: 0,
                     exchange_duration: 0.1,
                     num_cookies: 8,

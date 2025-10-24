@@ -103,11 +103,27 @@ impl Probe {
             Ok(Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer))) => {
                 return Err(eyre::eyre!("Server not known (yet)"));
             }
-            Ok(Err(NtsError::Invalid | NtsError::Error(_))) => {
+            Ok(Err(NtsError::Error(
+                pool_nts::ErrorCode::BadRequest | pool_nts::ErrorCode::InternalServerError,
+            ))) => {
+                return Err(eyre::eyre!("KELB could not succesfully handle our request"));
+            }
+            Ok(Err(e @ NtsError::Invalid | e @ NtsError::Error(_))) => {
                 let end_time = Instant::now();
                 return Ok((
                     KeyExchangeProbeResult {
                         status: KeyExchangeStatus::Failed,
+                        description: match e {
+                            NtsError::Invalid => {
+                                "Time source's response was invalid but well-structured".into()
+                            }
+                            NtsError::Error(e) => e.to_string(),
+                            _ => {
+                                return Err(eyre::eyre!(
+                                    "Unexpected branch taken in error description"
+                                ));
+                            }
+                        },
                         exchange_start,
                         exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
                         num_cookies: 0,
@@ -121,6 +137,7 @@ impl Probe {
                 return Ok((
                     KeyExchangeProbeResult {
                         status: KeyExchangeStatus::Timeout,
+                        description: String::new(),
                         exchange_start,
                         exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
                         num_cookies: 0,
@@ -134,6 +151,7 @@ impl Probe {
         Ok((
             KeyExchangeProbeResult {
                 status: KeyExchangeStatus::Success,
+                description: String::new(),
                 exchange_start,
                 exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
                 num_cookies: ke_result.cookies.len(),
