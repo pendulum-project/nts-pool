@@ -24,7 +24,7 @@ pub struct ProbeControlCommand {
     pub ntp_timeout: Duration,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProbeResult {
     pub keyexchange: KeyExchangeProbeResult,
     pub ntp_with_ke_cookie: SecuredNtpProbeResult,
@@ -38,9 +38,10 @@ pub enum KeyExchangeStatus {
     Timeout,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeyExchangeProbeResult {
     pub status: KeyExchangeStatus,
+    pub description: String,
     pub exchange_start: u64,
     pub exchange_duration: f64,
     pub num_cookies: usize,
