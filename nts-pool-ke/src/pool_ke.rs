@@ -294,7 +294,15 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 }
                 Err(e) => {
                     ErrorResponse {
-                        errorcode: ErrorCode::InternalServerError,
+                        errorcode: match e {
+                            PoolError::IO(_) | PoolError::Rustls(_) => {
+                                ErrorCode::CouldNotConnectDownstream
+                            }
+                            _ if matches!(&client_request, ClientRequest::Uuid { .. }) => {
+                                ErrorCode::CouldNotGetDownstreamCapabilities
+                            }
+                            _ => ErrorCode::InternalServerError,
+                        },
                     }
                     .serialize(&mut client_stream)
                     .await?;
@@ -333,13 +341,17 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             )
             .await
         {
-            // These errors indicate the pool did something weird
+            // These errors indicate the pool did something weird or the time source is misconfigured
             Err(e @ PoolError::NtsError(NtsError::Error(ErrorCode::BadRequest)))
             | Err(
                 e @ PoolError::NtsError(NtsError::Error(ErrorCode::UnrecognizedCriticalRecord)),
             ) => {
                 ErrorResponse {
-                    errorcode: ErrorCode::InternalServerError,
+                    errorcode: if matches!(client_request, ClientRequest::Uuid { .. }) {
+                        ErrorCode::CouldNotGetDownstreamCookies
+                    } else {
+                        ErrorCode::InternalServerError
+                    },
                 }
                 .serialize(&mut client_stream)
                 .await?;
@@ -352,10 +364,15 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     .await?;
                 Err(e)
             }
-            // All other errors indicate we are doing something strange
+            // All other errors indicate we are doing something strange or cant connect to the time source
             Err(e) => {
                 ErrorResponse {
-                    errorcode: ErrorCode::InternalServerError,
+                    errorcode: match e {
+                        PoolError::IO(_) | PoolError::Rustls(_) => {
+                            ErrorCode::CouldNotConnectDownstream
+                        }
+                        _ => ErrorCode::InternalServerError,
+                    },
                 }
                 .serialize(&mut client_stream)
                 .await?;

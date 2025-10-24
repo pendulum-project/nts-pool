@@ -31,6 +31,9 @@ pub enum ErrorCode {
     BadRequest,
     InternalServerError,
     NoSuchServer,
+    CouldNotConnectDownstream,
+    CouldNotGetDownstreamCapabilities,
+    CouldNotGetDownstreamCookies,
     Unknown(u16),
 }
 
@@ -41,6 +44,15 @@ impl Display for ErrorCode {
             ErrorCode::BadRequest => f.write_str("Bad request"),
             ErrorCode::InternalServerError => f.write_str("Internal server error"),
             ErrorCode::NoSuchServer => f.write_str("Requested server doesn't exist"),
+            ErrorCode::CouldNotConnectDownstream => {
+                f.write_str("Could not connect to downstream time source")
+            }
+            ErrorCode::CouldNotGetDownstreamCapabilities => f.write_str(
+                "Could not get downstream time source supported protocols and algorithms",
+            ),
+            ErrorCode::CouldNotGetDownstreamCookies => {
+                f.write_str("Could not get cookies from downstream time source")
+            }
             ErrorCode::Unknown(id) => write!(f, "Unknown({id})"),
         }
     }
@@ -54,6 +66,9 @@ impl ErrorCode {
             1 => Self::BadRequest,
             2 => Self::InternalServerError,
             0xF000 => Self::NoSuchServer,
+            0xF001 => Self::CouldNotConnectDownstream,
+            0xF002 => Self::CouldNotGetDownstreamCapabilities,
+            0xF003 => Self::CouldNotGetDownstreamCookies,
             _ => Self::Unknown(code),
         })
     }
@@ -64,6 +79,9 @@ impl ErrorCode {
             ErrorCode::BadRequest => writer.write_u16(1).await,
             ErrorCode::InternalServerError => writer.write_u16(2).await,
             ErrorCode::NoSuchServer => writer.write_u16(0xF000).await,
+            ErrorCode::CouldNotConnectDownstream => writer.write_u16(0xF001).await,
+            ErrorCode::CouldNotGetDownstreamCapabilities => writer.write_u16(0xF002).await,
+            ErrorCode::CouldNotGetDownstreamCookies => writer.write_u16(0xF003).await,
             ErrorCode::Unknown(code) => writer.write_u16(code).await,
         }
     }
@@ -701,6 +719,49 @@ mod tests {
 
             result
         }};
+    }
+
+    #[test]
+    fn test_error_codes() {
+        for error_code in [
+            ErrorCode::BadRequest,
+            ErrorCode::InternalServerError,
+            ErrorCode::UnrecognizedCriticalRecord,
+            ErrorCode::NoSuchServer,
+            ErrorCode::CouldNotConnectDownstream,
+            ErrorCode::CouldNotGetDownstreamCapabilities,
+            ErrorCode::CouldNotGetDownstreamCookies,
+        ] {
+            let mut buf = vec![];
+            assert!(swrap(ErrorCode::serialize, &error_code, &mut buf).is_ok());
+
+            let Poll::Ready(result) = pin!(ErrorCode::parse(buf.as_slice()))
+                .poll(&mut Context::from_waker(Waker::noop()))
+            else {
+                panic!("Future stalled unexpectedly");
+            };
+
+            assert_eq!(error_code, result.unwrap());
+        }
+
+        for i in 0..=u16::MAX {
+            let Poll::Ready(result) = pin!(ErrorCode::parse(i.to_le_bytes().as_slice()))
+                .poll(&mut Context::from_waker(Waker::noop()))
+            else {
+                panic!("Future stalled unexpectedly");
+            };
+            let e = result.unwrap();
+            let mut buf = vec![];
+            assert!(swrap(ErrorCode::serialize, &e, &mut buf).is_ok());
+            assert_eq!(i, u16::from_le_bytes(buf.try_into().unwrap()));
+            let Poll::Ready(result) = pin!(ErrorCode::parse(i.to_le_bytes().as_slice()))
+                .poll(&mut Context::from_waker(Waker::noop()))
+            else {
+                panic!("Future stalled unexpectedly");
+            };
+            let e2 = result.unwrap();
+            assert_eq!(e, e2);
+        }
     }
 
     #[test]
