@@ -30,6 +30,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/terms", get(terms))
         .route("/use", get(use_get))
         .route("/use", post(use_post))
+        .route("/join", get(join))
         .route("/login", get(auth::login).post(auth::login_submit))
         .route("/register", get(auth::register).post(auth::register_submit))
         .route(
@@ -123,6 +124,16 @@ pub async fn use_post(mut cookie_service: CookieService) -> impl IntoResponse {
 
 pub async fn use_get(app: AppContext) -> impl IntoResponse {
     HtmlTemplate(UseTemplate { app })
+}
+
+#[derive(Template)]
+#[template(path = "join.html.j2")]
+struct JoinTemplate {
+    app: AppContext,
+}
+
+pub async fn join(app: AppContext) -> impl IntoResponse {
+    HtmlTemplate(JoinTemplate { app })
 }
 
 pub async fn poolke_servers(
