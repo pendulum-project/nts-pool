@@ -1,0 +1,20 @@
+{% extends "layout.html.j2" %}
+
+{% block header %}<h1>Using the NTS pool for time synchronization</h1>{% endblock %}
+
+{% block content %}
+  <section class="contained">
+    <p>When running a compatible NTS server, you can join the pool. {% if !(app.user|is_logged_in) %} To do so, you will have to <a href="/login">log in</a> or <a href="/register">register</a> for an account. {% endif %} Your server must have a proper domain name, and use a generally accepted TLS certificate.</p>
+
+    <p>New servers can be added on the <a href="/management/time-sources">Time sources</a> page. For this, use the add a time source form at the top of the page, providing the domain name at which your NTS server is reachable.</p>
+
+    <p>After registering your NTS server, you will receive an authentication token. This token is used by the pool to authenticate itself to your time server. Depending on the software you use, you must configure it to accept this token. To configure this, refer to your NTS server's documentation, linked to below</p>
+
+    <p>Your server will now be shown on your <a href="/management/time-sources">Time sources</a> page after logging in. If it is functioning correctly, it's score will start increasing after about 15 minutes. If not, please check the domain name is correct, the server is reachable on that domain name, and that the pool authentication token has been correctly configured.</p>
+
+    <h2>Supported server software<h2>
+    <ul>
+      <li><a href="https://docs.ntpd-rs.pendulum-project.org/guide/nts-pool/">ntpd-rs version 1.7.0-alpha.20251003 or newer</a></li>
+    </ul>
+  </section>
+{% endblock %}
