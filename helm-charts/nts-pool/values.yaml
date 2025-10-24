@@ -5,7 +5,11 @@ image:
   pullPolicy: IfNotPresent
   repository: ghcr.io/pendulum-project/nts-pool
   tag: test
-
+nginxImage:
+  pullSecrets: null
+  pullPolicy: IfNotPresent
+  repository: nginx
+  tag: mainline
 
 # Override the namespace where resources will be deployed
 # If not set, the namespace where the chart is deployed will be used
@@ -59,6 +63,20 @@ ke:
   restartBump: 1
   # Override global image settings for the key exchange service
   image:
+    pullSecrets: null
+    pullPolicy: null
+    repository: null
+    tag: null
+
+# Configuration for the geodb cache
+geodbCache:
+  # Override global image settings for the geodb cache
+  image:
+    pullSecrets: null
+    pullPolicy: null
+    repository: null
+    tag: null
+  nginxImage:
     pullSecrets: null
     pullPolicy: null
     repository: null

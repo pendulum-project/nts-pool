@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: geolocation-script
           configMap:
-            name: {{ include "nts-pool.fullname" . }}-geolocation-loader
+            name: {{ include "nts-pool.fullname" . }}-geolocation-internal
             items:
               - key: "geolocation-loader.sh"
                 path: "geolocation-loader.sh"
@@ -85,16 +85,8 @@ spec:
               - -c
               - test -e /opt/geodb/geodb.mmdb
         env:
-          - name: USERID
-            valueFrom:
-              secretKeyRef:
-                {{- toYaml .Values.geolocation.maxmindUserIdSecretRef | nindent 16 }}
-          - name: LICENSE_KEY
-            valueFrom:
-              secretKeyRef:
-                {{- toYaml .Values.geolocation.maxmindLicenseKeySecretRef | nindent 16 }}
           - name: URL
-            value: {{ .Values.geolocation.maxmindDatabaseUrl }}
+            value: "http://{{ include "nts-pool.fullname" . }}-geodb-cache.{{ default .Release.Namespace .Values.namespaceOverride }}.svc.{{ .Values.clusterDomain }}/geodb.mmdb"
           - name: TARGET
             value: "/opt/geodb/geodb.mmdb"
           - name: PERIOD

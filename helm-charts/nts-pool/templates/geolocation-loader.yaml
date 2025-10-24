@@ -19,3 +19,122 @@ data:
       rm -f geolite2.tar.gz
       sleep "$PERIOD"
     done
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-geolocation-internal
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+data:
+  geolocation-loader.sh: |
+    #!/bin/sh
+    while true; do
+      curl --fail -o "${TARGET}" -z "${TARGET}" -L "${URL}"
+      sleep "$PERIOD"
+    done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-geodb-cache
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+  {{- with .Values.services.management.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: geodb-cache
+    {{- include "nts-pool.selectorLabels" . | nindent 4 }}
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nts-pool.fullname" . }}-geodb-cache
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+  labels:
+    {{- include "nts-pool.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: geodb-cache
+      {{- include "nts-pool.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: geodb-cache
+        {{- include "nts-pool.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: geolocation-script
+          configMap:
+            name: {{ include "nts-pool.fullname" . }}-geolocation-loader
+            items:
+              - key: "geolocation-loader.sh"
+                path: "geolocation-loader.sh"
+                mode: 0755
+        - name: geolocation
+          emptyDir: {}
+      initContainers:
+      - name: geolocation
+        imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.geodbCache.image.pullPolicy }}"
+        {{- with default .Values.image.pullSecrets .Values.geodbCache.image.pullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        image: "{{ default .Values.image.repository .Values.geodbCache.image.repository }}:{{ default .Values.image.tag .Values.geodbCache.image.tag }}"
+        command: ["/opt/geodb/scripts/geolocation-loader.sh"]
+        workingDir: "/opt/geodb/"
+        volumeMounts:
+          - name: geolocation
+            mountPath: "/opt/geodb"
+          - name: geolocation-script
+            mountPath: "/opt/geodb/scripts/"
+            readOnly: true
+        restartPolicy: Always
+        startupProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - test -e /opt/geodb/geodb.mmdb
+        env:
+          - name: USERID
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.geolocation.maxmindUserIdSecretRef | nindent 16 }}
+          - name: LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.geolocation.maxmindLicenseKeySecretRef | nindent 16 }}
+          - name: URL
+            value: {{ .Values.geolocation.maxmindDatabaseUrl }}
+          - name: TARGET
+            value: "/opt/geodb/geodb.mmdb"
+          - name: PERIOD
+            value: "24h"
+      containers:
+      - name: geodb-cache
+        imagePullPolicy: "{{ default .Values.nginxImage.pullPolicy .Values.geodbCache.nginxImage.pullPolicy }}"
+        {{- with default .Values.nginxImage.pullSecrets .Values.geodbCache.nginxImage.pullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        image: "{{ default .Values.nginxImage.repository .Values.geodbCache.nginxImage.repository }}:{{ default .Values.nginxImage.tag .Values.geodbCache.nginxImage.tag }}"
+        volumeMounts:
+          - name: geolocation
+            mountPath: "/usr/share/nginx/html"
+            readOnly: true
+        ports:
+          - containerPort: 80
+            name: http
