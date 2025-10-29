@@ -197,9 +197,12 @@ async fn run_probing_inner<
                             warn!("Overloaded, skipping probe");
                         }
                         work.push_back((Instant::now() + command.probe_interval, work_item.1));
+                    } else {
+                        tracing::debug!("Stopping probing of {:?}", work_item.1);
                     }
                 }
                 Task::Update => {
+                    tracing::debug!("Requesting configuration update");
                     let command = command.clone();
                     let config = config.clone();
                     let new_work_sender = new_work_sender.clone();
@@ -235,6 +238,7 @@ async fn run_probing_inner<
                             .difference(&old_command.timesources)
                             .enumerate()
                         {
+                            tracing::debug!("Added new timesource {:?} for probing", &ts);
                             // Don't care if receiver no longer exists.
                             let _ = new_work_sender.send((
                                 start_time
@@ -277,6 +281,11 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
                     .as_mut()
                     .reset(Instant::now() + settings.read().unwrap().result_max_waittime)
             }
+            tracing::debug!(
+                "Got results for {:?}, cache now size {}",
+                result.0,
+                cache.len() + 1
+            );
             cache.push(result);
             if cache.len() >= settings.read().unwrap().result_batchsize {
                 task = Task::Send
@@ -287,6 +296,7 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
 
         if matches!(task, Task::Stop | Task::Send) {
             let send_target = settings.read().unwrap().result_endpoint.clone();
+            tracing::debug!("Sending {} results to management website", cache.len());
             match reqwest::Client::new()
                 .post(send_target)
                 .bearer_auth(&config.authorization_key)
@@ -304,6 +314,7 @@ async fn run_result_reporter<T: Send + Serialize + 'static>(
         }
 
         if matches!(task, Task::Stop) {
+            tracing::debug!("Result sender done, exiting");
             break;
         }
     }

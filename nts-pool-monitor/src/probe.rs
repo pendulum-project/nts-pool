@@ -61,17 +61,24 @@ impl Probe {
         uuid: impl AsRef<str>,
         ipprot: IpVersion,
     ) -> Result<ProbeResult, eyre::Error> {
+        let uuid = uuid.as_ref();
+        tracing::debug!("Probing {}", uuid);
         let (keyexchange, next) = self.probe_keyexchange(uuid, ipprot).await?;
+        tracing::debug!("Keyexchange result: {:?}", keyexchange);
 
         let (ntp_with_ke_cookie, next) = match next {
             None => (Default::default(), None),
             Some(inputs) => self.probe_ntp(inputs).await?,
         };
+        tracing::debug!("First ntp result: {:?}", ntp_with_ke_cookie);
 
         let ntp_with_ntp_cookie = match next {
             None => Default::default(),
             Some(inputs) => self.probe_ntp(inputs).await?.0,
         };
+        tracing::debug!("Second ntp result: {:?}", ntp_with_ke_cookie);
+
+        tracing::debug!("Finished probe of {}", uuid);
 
         Ok(ProbeResult {
             keyexchange,
@@ -257,6 +264,7 @@ impl Probe {
             };
 
             if incoming.is_kiss() && incoming.valid_server_response(request_id, false) {
+                tracing::debug!("Received kiss response: {:?}", incoming);
                 if incoming.is_kiss_deny() || incoming.is_kiss_rstr() {
                     have_deny = true;
                     if incoming.valid_server_response(request_id, true) {
@@ -285,6 +293,10 @@ impl Probe {
             }
 
             if !incoming.valid_server_response(request_id, true) {
+                tracing::debug!(
+                    "Received response not corresponding to request: {:?}",
+                    incoming
+                );
                 continue;
             }
 
