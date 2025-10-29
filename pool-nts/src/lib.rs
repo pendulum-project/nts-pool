@@ -137,7 +137,7 @@ impl Display for NtsError {
 
 impl core::error::Error for NtsError {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ClientRequest<'a> {
     Ordinary {
         algorithms: AlgorithmList<'a>,
@@ -150,6 +150,35 @@ pub enum ClientRequest<'a> {
         key: Cow<'a, str>,
         uuid: Cow<'a, str>,
     },
+}
+
+impl std::fmt::Debug for ClientRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ordinary {
+                algorithms,
+                protocols,
+                denied_servers,
+            } => f
+                .debug_struct("Ordinary")
+                .field("algorithms", algorithms)
+                .field("protocols", protocols)
+                .field("denied_servers", denied_servers)
+                .finish(),
+            Self::Uuid {
+                algorithms,
+                protocols,
+                key: _key,
+                uuid,
+            } => f
+                .debug_struct("Uuid")
+                .field("algorithms", algorithms)
+                .field("protocols", protocols)
+                .field("key", &"<HIDDEN>")
+                .field("uuid", uuid)
+                .finish(),
+        }
+    }
 }
 
 impl ClientRequest<'_> {
@@ -309,9 +338,17 @@ impl<'a> ClientRequest<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ServerInformationRequest<'a> {
     pub key: Cow<'a, str>,
+}
+
+impl std::fmt::Debug for ServerInformationRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerInformationRequest")
+            .field("key", &"<HIDDEN>")
+            .finish()
+    }
 }
 
 impl ServerInformationRequest<'_> {
@@ -414,6 +451,18 @@ pub struct FixedKeyRequest<'a> {
     pub s2c: Cow<'a, [u8]>,
     pub protocol: ProtocolId,
     pub algorithm: AlgorithmId,
+}
+
+impl std::fmt::Debug for FixedKeyRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FixedKeyRequest")
+            .field("key", &"<HIDDEN>")
+            .field("c2s", &"<HIDDEN>")
+            .field("s2c", &"<HIDDEN>")
+            .field("protocol", &self.protocol)
+            .field("algorithm", &self.algorithm)
+            .finish()
+    }
 }
 
 impl<'a> FixedKeyRequest<'a> {
@@ -528,6 +577,7 @@ impl<'a> FixedKeyRequest<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct KeyExchangeResponse<'a> {
     pub protocol: ProtocolId,
     pub algorithm: AlgorithmId,
@@ -644,6 +694,7 @@ impl<'a> KeyExchangeResponse<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct NoAgreementResponse;
 
 impl NoAgreementResponse {
@@ -659,6 +710,7 @@ impl NoAgreementResponse {
     }
 }
 
+#[derive(Debug)]
 pub struct ErrorResponse {
     pub errorcode: ErrorCode,
 }

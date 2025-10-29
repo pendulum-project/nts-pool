@@ -228,7 +228,7 @@ impl<'a> From<Vec<AlgorithmDescription>> for AlgorithmDescriptionList<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum NtsRecord<'a> {
     /// Standard NTS records
     EndOfMessage,
@@ -282,6 +282,78 @@ pub enum NtsRecord<'a> {
     UUIDRequest {
         uuid: Cow<'a, str>,
     },
+}
+
+impl std::fmt::Debug for NtsRecord<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EndOfMessage => write!(f, "EndOfMessage"),
+            Self::NextProtocol { protocol_ids } => f
+                .debug_struct("NextProtocol")
+                .field("protocol_ids", protocol_ids)
+                .finish(),
+            Self::Error { errorcode } => f
+                .debug_struct("Error")
+                .field("errorcode", errorcode)
+                .finish(),
+            Self::Warning { warningcode } => f
+                .debug_struct("Warning")
+                .field("warningcode", warningcode)
+                .finish(),
+            Self::AeadAlgorithm { algorithm_ids } => f
+                .debug_struct("AeadAlgorithm")
+                .field("algorithm_ids", algorithm_ids)
+                .finish(),
+            Self::NewCookie { cookie_data } => f
+                .debug_struct("NewCookie")
+                .field("cookie_data", cookie_data)
+                .finish(),
+            Self::Server { name } => f.debug_struct("Server").field("name", name).finish(),
+            Self::Port { port } => f.debug_struct("Port").field("port", port).finish(),
+            Self::Unknown {
+                record_type,
+                critical,
+                data,
+            } => f
+                .debug_struct("Unknown")
+                .field("record_type", record_type)
+                .field("critical", critical)
+                .field("data", data)
+                .finish(),
+            Self::KeepAlive => write!(f, "KeepAlive"),
+            Self::SupportedNextProtocolList {
+                supported_protocols,
+            } => f
+                .debug_struct("SupportedNextProtocolList")
+                .field("supported_protocols", supported_protocols)
+                .finish(),
+            Self::SupportedAlgorithmList {
+                supported_algorithms,
+            } => f
+                .debug_struct("SupportedAlgorithmList")
+                .field("supported_algorithms", supported_algorithms)
+                .finish(),
+            Self::FixedKeyRequest {
+                c2s: _c2s,
+                s2c: _s2c,
+            } => f
+                .debug_struct("FixedKeyRequest")
+                .field("c2s", &"<HIDDEN>")
+                .field("s2c", &"<HIDDEN>")
+                .finish(),
+            Self::NtpServerDeny { denied } => f
+                .debug_struct("NtpServerDeny")
+                .field("denied", denied)
+                .finish(),
+            Self::AuthenticationToken { key: _key } => f
+                .debug_struct("AuthenticationToken")
+                .field("key", &"<HIDDEN>")
+                .finish(),
+            Self::UUIDRequest { uuid } => {
+                f.debug_struct("UUIDRequest").field("uuid", uuid).finish()
+            }
+        }
+    }
 }
 
 impl<'a> NtsRecord<'a> {
