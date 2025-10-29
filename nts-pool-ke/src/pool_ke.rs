@@ -284,32 +284,34 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             }
         };
 
-        let (protocol, algorithm) =
-            match self.select_protocol_algorithm(&client_request, &pick).await {
-                Ok(Some(result)) => result,
-                Ok(None) => {
-                    NoAgreementResponse.serialize(&mut client_stream).await?;
-                    client_stream.shutdown().await?;
-                    return Ok(());
+        let (protocol, algorithm) = match self
+            .select_protocol_algorithm(source_address.into(), &client_request, &pick)
+            .await
+        {
+            Ok(Some(result)) => result,
+            Ok(None) => {
+                NoAgreementResponse.serialize(&mut client_stream).await?;
+                client_stream.shutdown().await?;
+                return Ok(());
+            }
+            Err(e) => {
+                ErrorResponse {
+                    errorcode: match e {
+                        PoolError::IO(_) | PoolError::Rustls(_) => {
+                            ErrorCode::CouldNotConnectDownstream
+                        }
+                        _ if matches!(&client_request, ClientRequest::Uuid { .. }) => {
+                            ErrorCode::CouldNotGetDownstreamCapabilities
+                        }
+                        _ => ErrorCode::InternalServerError,
+                    },
                 }
-                Err(e) => {
-                    ErrorResponse {
-                        errorcode: match e {
-                            PoolError::IO(_) | PoolError::Rustls(_) => {
-                                ErrorCode::CouldNotConnectDownstream
-                            }
-                            _ if matches!(&client_request, ClientRequest::Uuid { .. }) => {
-                                ErrorCode::CouldNotGetDownstreamCapabilities
-                            }
-                            _ => ErrorCode::InternalServerError,
-                        },
-                    }
-                    .serialize(&mut client_stream)
-                    .await?;
-                    client_stream.shutdown().await?;
-                    return Err(e);
-                }
-            };
+                .serialize(&mut client_stream)
+                .await?;
+                client_stream.shutdown().await?;
+                return Err(e);
+            }
+        };
         let (c2s, s2c) = match self.extract_keys(client_stream.get_ref().1, protocol, algorithm) {
             Ok(result) => result,
             Err(e) => {
@@ -426,13 +428,15 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn select_protocol_algorithm(
         &self,
+        connection_type: ConnectionType,
         client_request: &ClientRequest<'_>,
         server: &S::Server<'_>,
     ) -> Result<Option<(ProtocolId, AlgorithmDescription)>, PoolError> {
-        let (supported_protocols, supported_algorithms) = server.support().await.map_err(|e| {
-            debug!("Error querying protocol support: {e}");
-            e
-        })?;
+        let (supported_protocols, supported_algorithms) =
+            server.support(connection_type).await.map_err(|e| {
+                debug!("Error querying protocol support: {e}");
+                e
+            })?;
         let mut protocol = None;
         for candidate_protocol in client_request.protocols().iter() {
             if supported_protocols.contains(&candidate_protocol) {
@@ -678,6 +682,7 @@ mod tests {
 
         async fn support(
             &self,
+            _connection_type: ConnectionType,
         ) -> Result<
             (
                 std::collections::HashSet<ProtocolId>,

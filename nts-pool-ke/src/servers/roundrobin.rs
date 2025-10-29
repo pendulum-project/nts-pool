@@ -123,6 +123,7 @@ impl Server for RoundRobinServer<'_> {
 
     async fn support(
         &self,
+        connection_type: ConnectionType,
     ) -> Result<
         (
             HashSet<ProtocolId>,
@@ -131,7 +132,7 @@ impl Server for RoundRobinServer<'_> {
         PoolError,
     > {
         fetch_support_data(
-            self.connect(ConnectionType::Either).await?,
+            self.connect(connection_type).await?,
             self.auth_key(),
             &self.owner.allowed_protocols,
             self.owner.timeout,

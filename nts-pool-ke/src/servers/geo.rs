@@ -391,6 +391,7 @@ impl Server for GeographicServer {
 
     async fn support(
         &self,
+        connection_type: ConnectionType,
     ) -> Result<
         (
             std::collections::HashSet<ProtocolId>,
@@ -399,7 +400,7 @@ impl Server for GeographicServer {
         crate::error::PoolError,
     > {
         fetch_support_data(
-            self.connect(ConnectionType::Either).await?,
+            self.connect(connection_type).await?,
             self.auth_key(),
             &self.config.allowed_protocols,
             self.config.timesource_timeout,

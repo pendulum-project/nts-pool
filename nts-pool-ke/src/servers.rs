@@ -90,6 +90,7 @@ pub trait Server: Sync + Send {
     /// Fetch which protocols and algorithms a server supports.
     fn support(
         &self,
+        connection_type: ConnectionType,
     ) -> impl Future<
         Output = Result<
             (
