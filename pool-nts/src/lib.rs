@@ -203,6 +203,7 @@ impl<'a> ClientRequest<'a> {
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
+        tracing::trace!("Parsing client request");
         let mut algorithms = None;
         let mut protocols = None;
         let mut denied_servers = vec![];
@@ -211,6 +212,7 @@ impl<'a> ClientRequest<'a> {
 
         loop {
             let record = NtsRecord::parse(reader).await?;
+            tracing::trace!("Received record {:?}", record);
 
             match record {
                 NtsRecord::EndOfMessage => break,
@@ -258,6 +260,8 @@ impl<'a> ClientRequest<'a> {
                 | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
+
+        tracing::trace!("Finished receiving records");
 
         if let (Some(algorithms), Some(protocols)) = (algorithms, protocols) {
             if let (Some(key), Some(uuid)) = (authentication_key, given_uuid) {
@@ -382,11 +386,13 @@ impl<'a> ServerInformationResponse<'a> {
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
+        tracing::trace!("Parsing ServerInformationResponse");
         let mut supported_algorithms = None;
         let mut supported_protocols = None;
 
         loop {
             let record = NtsRecord::parse(reader).await?;
+            tracing::trace!("Received record {:?}", record);
 
             match record {
                 NtsRecord::EndOfMessage => break,
@@ -431,6 +437,7 @@ impl<'a> ServerInformationResponse<'a> {
                 | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
+        tracing::trace!("Finished receiving records");
 
         if let (Some(supported_algorithms), Some(supported_protocols)) =
             (supported_algorithms, supported_protocols)
@@ -494,6 +501,7 @@ impl<'a> FixedKeyRequest<'a> {
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
+        tracing::trace!("Parsing FixedKeyRequest");
         let mut authentication_key = None;
         let mut c2s = None;
         let mut s2c = None;
@@ -502,6 +510,7 @@ impl<'a> FixedKeyRequest<'a> {
 
         loop {
             let record = NtsRecord::parse(reader).await?;
+            tracing::trace!("Received record {:?}", record);
 
             match record {
                 NtsRecord::EndOfMessage => break,
@@ -560,6 +569,7 @@ impl<'a> FixedKeyRequest<'a> {
                 | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
+        tracing::trace!("Finished receiving records");
 
         if let (Some(algorithm), Some(protocol), Some(c2s), Some(s2c), Some(key)) =
             (algorithm, protocol, c2s, s2c, authentication_key)
@@ -590,6 +600,7 @@ impl<'a> KeyExchangeResponse<'a> {
     pub async fn parse(
         reader: &mut BufferBorrowingReader<'a, impl AsyncRead + Unpin>,
     ) -> Result<Self, NtsError> {
+        tracing::trace!("Parsing KeyExchangeResponse");
         let mut protocol = None;
         let mut algorithm = None;
         let mut cookies = vec![];
@@ -598,6 +609,7 @@ impl<'a> KeyExchangeResponse<'a> {
 
         loop {
             let record = NtsRecord::parse(reader).await?;
+            tracing::trace!("Received record {:?}", record);
 
             match record {
                 NtsRecord::EndOfMessage => break,
@@ -652,6 +664,7 @@ impl<'a> KeyExchangeResponse<'a> {
                 | NtsRecord::UUIDRequest { .. } => return Err(NtsError::Invalid),
             }
         }
+        tracing::trace!("Finished receiving records");
 
         if let (Some(protocol), Some(algorithm)) = (protocol, algorithm) {
             Ok(KeyExchangeResponse {
