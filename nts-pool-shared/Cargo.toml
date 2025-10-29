@@ -15,4 +15,4 @@ sqlx = ["dep:sqlx"]
 
 [dependencies]
 serde.workspace = true
-sqlx = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, default-features = false, features = ["macros"] }
