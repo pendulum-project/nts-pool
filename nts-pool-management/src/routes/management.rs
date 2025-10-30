@@ -12,7 +12,7 @@ use crate::{
     cookies::CookieService,
     error::AppError,
     models::time_source::{
-        self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
+        self, LogRow, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
     },
     templates::{HtmlTemplate, filters},
 };
@@ -43,6 +43,25 @@ pub async fn time_sources(
 ) -> Result<impl IntoResponse, AppError> {
     let time_sources = time_source::by_user(&state.db, user.id).await?;
     Ok(HtmlTemplate(TimeSourcesPageTemplate { app, time_sources }))
+}
+
+#[derive(Template)]
+#[template(path = "management/logs.html.j2")]
+struct LogsTemplate {
+    app: AppContext,
+    name: String,
+    log: Vec<LogRow>,
+}
+
+pub async fn time_source_logs(
+    user: AuthorizedUser,
+    Path(time_source_id): Path<TimeSourceId>,
+    app: AppContext,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let name = time_source::source_name(&state.db, user.id, time_source_id).await?;
+    let log = time_source::logs(&state.db, user.id, time_source_id, 0, 200).await?;
+    Ok(HtmlTemplate(LogsTemplate { app, name, log }))
 }
 
 #[derive(Template)]

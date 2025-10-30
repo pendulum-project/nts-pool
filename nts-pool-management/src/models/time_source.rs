@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use eyre::Context;
+use nts_pool_shared::IpVersion;
 use phf::phf_map;
 use serde::Deserialize;
 use sha3::Digest;
@@ -9,6 +10,7 @@ use crate::{
     DbConnLike,
     error::AppError,
     models::{
+        monitor::MonitorId,
         user::UserId,
         util::{port::Port, uuid},
     },
@@ -245,6 +247,71 @@ pub async fn delete(
     .await?;
 
     Ok(())
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct LogRow {
+    score: f64,
+    protocol: IpVersion,
+    monitor: MonitorId,
+    sample: sqlx::types::JsonValue,
+}
+
+impl std::fmt::Display for LogRow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sample = serde_json::to_string(&self.sample)
+            .unwrap_or_else(|_| format!("Formatting error on {:?}", self.sample));
+        write!(
+            f,
+            "Sample from {} for {} giving new score {:.1}: {}",
+            self.monitor, self.protocol, self.score, sample
+        )
+    }
+}
+
+pub async fn logs(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+    time_source_id: TimeSourceId,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<LogRow>, sqlx::Error> {
+    sqlx::query_as!(
+        LogRow,
+        r#"
+            SELECT score, protocol as "protocol: IpVersion", monitor_id as monitor, raw_sample AS sample
+            FROM monitor_samples
+            JOIN time_sources ON monitor_samples.time_source_id = time_sources.id
+            WHERE time_sources.owner = $1 AND time_sources.id = $2
+            ORDER BY monitor_samples.received_at DESC
+            OFFSET $3
+            LIMIT $4
+        "#,
+        owner as _,
+        time_source_id as _,
+        offset,
+        limit,
+    )
+    .fetch_all(conn)
+    .await
+}
+
+pub async fn source_name(
+    conn: impl DbConnLike<'_>,
+    owner: UserId,
+    time_source_id: TimeSourceId,
+) -> Result<String, sqlx::Error> {
+    Ok(sqlx::query!(
+        r#"
+            SELECT hostname FROM time_sources
+            WHERE owner = $1 AND id = $2
+        "#,
+        owner as _,
+        time_source_id as _,
+    )
+    .fetch_one(conn)
+    .await?
+    .hostname)
 }
 
 pub async fn by_user(
