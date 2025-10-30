@@ -14,8 +14,8 @@ pub enum IpVersion {
 impl std::fmt::Display for IpVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IpVersion::Ipv4 => write!(f, "IpV4"),
-            IpVersion::Ipv6 => write!(f, "IpV6"),
+            IpVersion::Ipv4 => write!(f, "IPv4"),
+            IpVersion::Ipv6 => write!(f, "IPv6"),
         }
     }
 }

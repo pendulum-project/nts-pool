@@ -51,6 +51,7 @@ struct LogsTemplate {
     app: AppContext,
     name: String,
     log: Vec<LogRow>,
+    time_source_id: TimeSourceId,
 }
 
 pub async fn time_source_logs(
@@ -61,7 +62,8 @@ pub async fn time_source_logs(
 ) -> Result<impl IntoResponse, AppError> {
     let name = time_source::source_name(&state.db, user.id, time_source_id).await?;
     let log = time_source::logs(&state.db, user.id, time_source_id, 0, 200).await?;
-    Ok(HtmlTemplate(LogsTemplate { app, name, log }))
+
+    Ok(HtmlTemplate(LogsTemplate { app, name, log, time_source_id, }))
 }
 
 #[derive(Template)]
