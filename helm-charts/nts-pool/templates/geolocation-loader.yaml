@@ -77,17 +77,19 @@ spec:
   - metadata:
       name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
     spec:
-      accessMode: ["ReadWriteOnce"]
+      accessModes: ["ReadWriteOnce"]
       storageClassName: sbs-default
       resources:
         requests:
-          storage: 100Mi
+          storage: 1Gi
   template:
     metadata:
       labels:
         app.kubernetes.io/component: geodb-cache
         {{- include "nts-pool.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        fsGroup: 10001
       volumes:
         - name: geolocation-script
           configMap:
@@ -104,13 +106,13 @@ spec:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         image: "{{ default .Values.image.repository .Values.geodbCache.image.repository }}:{{ default .Values.image.tag .Values.geodbCache.image.tag }}"
-        command: ["/opt/geodb/scripts/geolocation-loader.sh"]
+        command: ["/opt/geodb-scripts/geolocation-loader.sh"]
         workingDir: "/opt/geodb/"
         volumeMounts:
           - name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
             mountPath: "/opt/geodb"
           - name: geolocation-script
-            mountPath: "/opt/geodb/scripts/"
+            mountPath: "/opt/geodb-scripts/"
             readOnly: true
         restartPolicy: Always
         startupProbe:
@@ -143,7 +145,7 @@ spec:
         {{- end }}
         image: "{{ default .Values.nginxImage.repository .Values.geodbCache.nginxImage.repository }}:{{ default .Values.nginxImage.tag .Values.geodbCache.nginxImage.tag }}"
         volumeMounts:
-          - name: geolocation
+          - name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
             mountPath: "/usr/share/nginx/html"
             readOnly: true
         ports:
