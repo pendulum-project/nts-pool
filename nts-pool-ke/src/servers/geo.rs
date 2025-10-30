@@ -40,9 +40,18 @@ struct ServerLookup {
     index: usize,
 }
 
+struct ServerSupportCacheEntry {
+    age: tokio::time::Instant,
+    data: (
+        std::collections::HashSet<ProtocolId>,
+        HashMap<AlgorithmId, AlgorithmDescription>,
+    ),
+}
+
 #[derive(Clone)]
 pub struct GeographicServerManager {
     inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
+    server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
     config: Arc<BackendConfig>,
     upstream_tls: Arc<RwLock<TlsConnector>>,
     // Kept around for their effect on drop.
@@ -50,6 +59,8 @@ pub struct GeographicServerManager {
     tls_updater: Arc<AbortingJoinHandle<()>>,
     #[allow(unused)]
     server_list_updater: Arc<AbortingJoinHandle<()>>,
+    #[allow(unused)]
+    cache_invalidator: Arc<AbortingJoinHandle<()>>,
 }
 
 struct GeographicServerManagerInner {
@@ -64,6 +75,7 @@ impl GeographicServerManager {
     pub async fn new(config: BackendConfig) -> std::io::Result<Self> {
         let upstream_tls = Arc::new(RwLock::new(load_upstream_tls(&config).await?));
         let config = Arc::new(config);
+        let server_support_cache = Arc::new(scc::HashMap::new());
         let tls_updater = Arc::new(
             tls_config_updater(upstream_tls.clone(), config.clone())
                 .await?
@@ -84,16 +96,42 @@ impl GeographicServerManager {
                 .await?
                 .into(),
         );
+        let cache_invalidator =
+            Arc::new(Self::cache_invalidator(server_support_cache.clone(), config.clone()).into());
 
         let result = Self {
             inner,
+            server_support_cache,
             upstream_tls,
             config,
             tls_updater,
             server_list_updater,
+            cache_invalidator,
         };
 
         Ok(result)
+    }
+
+    fn cache_invalidator(
+        server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
+        config: Arc<BackendConfig>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            loop {
+                server_support_cache
+                    .iter_mut_async(|entry| {
+                        if entry.1.age + config.server_support_cache_validity
+                            < tokio::time::Instant::now()
+                        {
+                            // delete old entry
+                            let _ = entry.consume();
+                        }
+                        true
+                    })
+                    .await;
+                tokio::time::sleep(config.server_support_cache_validity).await;
+            }
+        })
     }
 
     async fn server_list_updater(
@@ -158,7 +196,9 @@ impl GeographicServerManager {
             let mut regions_ipv6: HashMap<String, Vec<ServerLookup>> = HashMap::new();
             let mut uuid_lookup = HashMap::new();
             for (index, server) in servers.iter().enumerate() {
-                uuid_lookup.insert(server.uuid.clone(), index);
+                if uuid_lookup.insert(server.uuid.clone(), index).is_some() {
+                    return Err(std::io::ErrorKind::InvalidData.into());
+                }
                 if server.ipv4_capable {
                     for region in &server.regions {
                         if let Some(region_list) = regions_ipv4.get_mut(region) {
@@ -349,6 +389,7 @@ impl ServerManager for GeographicServerManager {
                 skips.sort_by(|a, b| a.above.cmp(&b.above))
             } else {
                 return Some(GeographicServer {
+                    server_support_cache: self.server_support_cache.clone(),
                     upstream_tls: self.upstream_tls.clone(),
                     index: region[pick].index,
                     inner,
@@ -365,6 +406,7 @@ impl ServerManager for GeographicServerManager {
         let index = inner.uuid_lookup.get(uuid.as_ref()).copied();
         index.map(move |index| GeographicServer {
             inner,
+            server_support_cache: self.server_support_cache.clone(),
             upstream_tls: self.upstream_tls.clone(),
             config: self.config.clone(),
             index,
@@ -374,6 +416,7 @@ impl ServerManager for GeographicServerManager {
 
 pub struct GeographicServer {
     inner: Arc<GeographicServerManagerInner>,
+    server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
     upstream_tls: Arc<RwLock<TlsConnector>>,
     config: Arc<BackendConfig>,
     index: usize,
@@ -399,13 +442,34 @@ impl Server for GeographicServer {
         ),
         crate::error::PoolError,
     > {
-        fetch_support_data(
-            self.connect(connection_type).await?,
-            self.auth_key(),
-            &self.config.allowed_protocols,
-            self.config.timesource_timeout,
-        )
-        .await
+        let entry = self
+            .server_support_cache
+            .entry_async((connection_type, self.inner.servers[self.index].uuid.clone()))
+            .await;
+        match entry {
+            scc::hash_map::Entry::Occupied(occupied_entry)
+                if occupied_entry.age + self.config.server_support_cache_validity
+                    > tokio::time::Instant::now() =>
+            {
+                Ok(occupied_entry.data.clone())
+            }
+            _ => {
+                let data = fetch_support_data(
+                    self.connect(connection_type).await?,
+                    self.auth_key(),
+                    &self.config.allowed_protocols,
+                    self.config.timesource_timeout,
+                )
+                .await?;
+                Ok(entry
+                    .insert_entry(ServerSupportCacheEntry {
+                        age: tokio::time::Instant::now(),
+                        data,
+                    })
+                    .data
+                    .clone())
+            }
+        }
     }
 
     async fn connect<'a>(
@@ -535,6 +599,7 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -545,9 +610,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let first = manager
@@ -632,6 +699,7 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -642,9 +710,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let server = manager
@@ -722,6 +792,7 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -732,9 +803,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let first = manager
@@ -846,6 +919,7 @@ mod tests {
                     ("UUID-gb".into(), 2),
                 ]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -856,9 +930,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         // GB
@@ -958,6 +1034,7 @@ mod tests {
                     ("UUID-ipv6".into(), 2),
                 ]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -968,9 +1045,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         let ipv4 = manager
@@ -1002,6 +1081,7 @@ mod tests {
             geolocation_db: Some("testdata/GeoLite2-Country-Test.mmdb".into()),
             allowed_protocols: HashSet::new(),
             timesource_timeout: Duration::from_secs(1),
+            server_support_cache_validity: Duration::from_secs(300),
         })
         .await
         .unwrap();
@@ -1113,6 +1193,7 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -1123,9 +1204,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         // 500 trials, about 166 should be server with UUID-a as id
@@ -1220,6 +1303,7 @@ mod tests {
                 .unwrap(),
                 uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
+            server_support_cache: Arc::new(scc::HashMap::new()),
             upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
             config: Arc::new(BackendConfig {
                 upstream_cas: None,
@@ -1230,9 +1314,11 @@ mod tests {
                 allowed_protocols: HashSet::new(),
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
+            cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
         // 500 trials, about 166 should be server with UUID-a as id
@@ -1249,5 +1335,103 @@ mod tests {
         // failure by chance.
         assert!(count_0 >= 102);
         assert!(count_0 <= 235);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_support_caching() {
+        let server_support_cache = scc::HashMap::new();
+        assert!(
+            server_support_cache
+                .insert_async(
+                    (ConnectionType::IpV4, "UUID-a".to_owned()),
+                    ServerSupportCacheEntry {
+                        age: tokio::time::Instant::now(),
+                        data: (HashSet::new(), HashMap::new())
+                    }
+                )
+                .await
+                .is_ok()
+        );
+
+        let server = GeographicServer {
+            inner: Arc::new(GeographicServerManagerInner {
+                servers: [
+                    KeyExchangeServer {
+                        uuid: "UUID-a".into(),
+                        domain: "a.test".into(),
+                        server_name: ServerName::try_from("a.test").unwrap(),
+                        connection_address: ("127.0.0.1".into(), 0),
+                        base_key_index: 0,
+                        randomizer: "".into(),
+                        weight: 1,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                    KeyExchangeServer {
+                        uuid: "UUID-b".into(),
+                        domain: "b.test".into(),
+                        server_name: ServerName::try_from("b.test").unwrap(),
+                        connection_address: ("127.0.0.1".into(), 0),
+                        base_key_index: 0,
+                        randomizer: "".into(),
+                        weight: 1,
+                        regions: vec![],
+                        ipv4_capable: true,
+                        ipv6_capable: true,
+                    },
+                ]
+                .into(),
+                regions_ipv4: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                regions_ipv6: HashMap::from([(
+                    "@".into(),
+                    vec![
+                        ServerLookup {
+                            total_weight_including: 1,
+                            index: 0,
+                        },
+                        ServerLookup {
+                            total_weight_including: 2,
+                            index: 1,
+                        },
+                    ],
+                )]),
+                geodb: Reader::from_source(
+                    include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
+                )
+                .unwrap(),
+                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+            }),
+            server_support_cache: Arc::new(server_support_cache),
+            upstream_tls: Arc::new(RwLock::new(upstream_tls_config())),
+            config: Arc::new(BackendConfig {
+                upstream_cas: None,
+                certificate_chain: "/".into(),
+                private_key: "/".into(),
+                base_shared_secret: vec![],
+                key_exchange_servers: "/".into(),
+                allowed_protocols: HashSet::new(),
+                geolocation_db: None,
+                timesource_timeout: Duration::from_secs(1),
+                server_support_cache_validity: Duration::from_secs(300),
+            }),
+            index: 0,
+        };
+
+        assert!(server.support(ConnectionType::IpV4).await.is_ok());
+        tokio::time::sleep(Duration::from_secs(600)).await;
+        assert!(server.support(ConnectionType::IpV4).await.is_err());
     }
 }

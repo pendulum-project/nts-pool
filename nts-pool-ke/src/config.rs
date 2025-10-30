@@ -108,6 +108,9 @@ struct BareBackendConfig {
     /// Timeout for requests for information to upstream timesource
     #[serde(default = "default_timesource_timeout")]
     timesource_timeout: u64,
+    /// Validity duration for server support statements in seconds
+    #[serde(default = "default_server_support_cache_validity")]
+    server_support_cache_validity: u64,
 }
 
 #[derive(Clone)]
@@ -120,6 +123,7 @@ pub struct BackendConfig {
     pub allowed_protocols: HashSet<ProtocolId>,
     pub geolocation_db: Option<PathBuf>,
     pub timesource_timeout: Duration,
+    pub server_support_cache_validity: Duration,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -151,6 +155,9 @@ impl<'de> Deserialize<'de> for BackendConfig {
             allowed_protocols: bare.allowed_protocols.into_iter().collect(),
             geolocation_db: bare.geolocation_db,
             timesource_timeout: std::time::Duration::from_millis(bare.timesource_timeout),
+            server_support_cache_validity: std::time::Duration::from_secs(
+                bare.server_support_cache_validity,
+            ),
         })
     }
 }
@@ -187,6 +194,10 @@ fn default_nts_ke_timeout() -> u64 {
 
 fn default_timesource_timeout() -> u64 {
     500
+}
+
+fn default_server_support_cache_validity() -> u64 {
+    5 * 60
 }
 
 fn default_max_connections() -> usize {
