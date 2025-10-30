@@ -63,6 +63,10 @@ pub fn create_router() -> Router<AppState> {
             get(management::time_sources).post(management::create_time_source),
         )
         .route(
+            "/management/time-sources/{id}/logs",
+            get(management::time_source_logs),
+        )
+        .route(
             "/management/time-sources/{id}/update",
             post(management::update_time_source), // HTML form only supports GET and POST
         )

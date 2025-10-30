@@ -56,6 +56,7 @@
           <form action="/management/time-sources/{{ ts.id }}/rekey" method="POST">
             <button type="submit" class="btn-link">Rekey</button>
           </form>
+          <a href="/management/time-sources/{{ ts.id }}/logs">Monitoring logs</a>
         </article>
       {% endfor %}
     </div>

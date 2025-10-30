@@ -1,0 +1,10 @@
+{% extends "layout.html.j2" %}
+
+{% block header %}<h1>Monitor logs for {{ name }}</h1>{% endblock %}
+
+{% block content %}
+  <section class="contained">
+    <code-block>{% for row in log %}{{ row }}
+{% endfor %}</code-block>  
+  </section>
+{% endblock %}
