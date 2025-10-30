@@ -3,8 +3,22 @@
 {% block header %}<h1>Monitor logs for {{ name }}</h1>{% endblock %}
 
 {% block content %}
-  <section class="contained">
-    <code-block>{% for row in log %}{{ row }}
-{% endfor %}</code-block>  
+  <section>
+    {% if !log.is_empty() %}
+      <div class="grid-table">
+        <div class="grid-table-header">Received at</div>
+        <div class="grid-table-header">Monitor</div>
+        <div class="grid-table-header">Protocol</div>
+        <div class="grid-table-header">New score</div>
+        {% for row in log %}
+          <div title="{{ row.received_at }}">{{ row.received_at.format("%Y-%m-%d %H:%M") }}</div>
+          <div>{{ row.monitor }}</div>
+          <div>{{ row.protocol }}</div>
+          <div title="{{ row.score }}">{{ row.score | fmt("{:.1}") }}</div>
+          <div class="sample">{{ row.sample }}</div>
+        {% endfor %}
+  {% else %}
+    No monitoring logs available for <a href="/management/time-sources/{{ time_source_id }}">{{ name }}</a>.
+  {% endif %}
   </section>
 {% endblock %}

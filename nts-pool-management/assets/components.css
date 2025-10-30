@@ -260,15 +260,12 @@ table {
 
     th,
     td {
-    width: 100%;
+        width: 100%;
         white-space: nowrap;
         padding: var(--space-sm);
     }
 
     tbody {
-        tr {
-        }
-
         tr:nth-child(odd) {
             background-color: var(--white);
         }
@@ -279,5 +276,33 @@ table {
         display: flex;
         gap: var(--space-xs);
         white-space: nowrap;
+    }
+}
+
+.grid-table {
+    display: grid;
+    grid-template-columns: 1fr 3fr 1fr 1fr;
+    justify-content: space-around;
+
+    .sample {
+        grid-column-start: 1;
+        grid-column-end: 5;
+
+        white-space: pre;
+        white-space: nowrap;
+        overflow-x: auto;
+        margin-bottom: var(--space-sm);
+        padding: var(--space-sm);
+        font-family: monospace;
+    }
+
+    .grid-table-header {
+        font-weight: var(--bold);
+
+        margin-bottom: var(--space-sm);
+    }
+
+    div:not(.grid-table-header) {
+        background-color: var(--white);
     }
 }

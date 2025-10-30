@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
 use eyre::Context;
 use nts_pool_shared::IpVersion;
 use phf::phf_map;
@@ -251,10 +252,11 @@ pub async fn delete(
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct LogRow {
-    score: f64,
-    protocol: IpVersion,
-    monitor: MonitorId,
-    sample: sqlx::types::JsonValue,
+    pub score: f64,
+    pub protocol: IpVersion,
+    pub monitor: MonitorId,
+    pub sample: sqlx::types::JsonValue,
+    pub received_at: DateTime<Utc>,
 }
 
 impl std::fmt::Display for LogRow {
@@ -279,7 +281,7 @@ pub async fn logs(
     sqlx::query_as!(
         LogRow,
         r#"
-            SELECT score, protocol as "protocol: IpVersion", monitor_id as monitor, raw_sample AS sample
+            SELECT score, protocol as "protocol: IpVersion", monitor_id as monitor, raw_sample AS sample, received_at
             FROM monitor_samples
             JOIN time_sources ON monitor_samples.time_source_id = time_sources.id
             WHERE time_sources.owner = $1 AND time_sources.id = $2
