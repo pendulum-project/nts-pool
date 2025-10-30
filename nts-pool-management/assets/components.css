@@ -121,6 +121,14 @@ code-block {
     padding: var(--space-xs) var(--space-xs);
 }
 
+.key {
+    display: block;
+    border-radius: var(--border-radius);
+    padding: var(--space-sm) var(--space-sm);
+    margin: var(--space-sm) 0;
+    width: fit-content;
+}
+
 .card {
     background-color: var(--white);
     border-radius: var(--border-radius);
