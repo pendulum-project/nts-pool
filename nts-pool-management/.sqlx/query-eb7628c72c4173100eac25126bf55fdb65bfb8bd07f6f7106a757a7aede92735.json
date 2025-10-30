@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT score, protocol as \"protocol: IpVersion\", monitor_id as monitor, raw_sample AS sample\n            FROM monitor_samples\n            JOIN time_sources ON monitor_samples.time_source_id = time_sources.id\n            WHERE time_sources.owner = $1 AND time_sources.id = $2\n            ORDER BY monitor_samples.received_at DESC\n            OFFSET $3\n            LIMIT $4\n        ",
+  "query": "\n            SELECT score, protocol as \"protocol: IpVersion\", monitor_id as monitor, raw_sample AS sample, received_at\n            FROM monitor_samples\n            JOIN time_sources ON monitor_samples.time_source_id = time_sources.id\n            WHERE time_sources.owner = $1 AND time_sources.id = $2\n            ORDER BY monitor_samples.received_at DESC\n            OFFSET $3\n            LIMIT $4\n        ",
   "describe": {
     "columns": [
       {
@@ -32,6 +32,11 @@
         "ordinal": 3,
         "name": "sample",
         "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "received_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -46,8 +51,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "63e8f998aa73d55c2a0c5d66983f02cc0479e92e4f88e8496ea04198e6c47df5"
+  "hash": "eb7628c72c4173100eac25126bf55fdb65bfb8bd07f6f7106a757a7aede92735"
 }
