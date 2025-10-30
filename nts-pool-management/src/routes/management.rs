@@ -63,7 +63,12 @@ pub async fn time_source_logs(
     let name = time_source::source_name(&state.db, user.id, time_source_id).await?;
     let log = time_source::logs(&state.db, user.id, time_source_id, 0, 200).await?;
 
-    Ok(HtmlTemplate(LogsTemplate { app, name, log, time_source_id, }))
+    Ok(HtmlTemplate(LogsTemplate {
+        app,
+        name,
+        log,
+        time_source_id,
+    }))
 }
 
 #[derive(Template)]
