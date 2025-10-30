@@ -32,7 +32,11 @@ data:
     #!/bin/sh
     while true; do
       curl --fail -o "${TARGET}" -z "${TARGET}" -L "${URL}"
-      sleep "$PERIOD"
+      if [ $? -eq 0 ]; then
+        sleep "$PERIOD"
+      else
+        sleep 1
+      fi
     done
 ---
 apiVersion: v1
@@ -57,7 +61,7 @@ spec:
     name: http
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "nts-pool.fullname" . }}-geodb-cache
   namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
@@ -69,6 +73,15 @@ spec:
     matchLabels:
       app.kubernetes.io/component: geodb-cache
       {{- include "nts-pool.selectorLabels" . | nindent 6 }}
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
+    spec:
+      accessMode: ["ReadWriteOnce"]
+      storageClassName: sbs-default
+      resources:
+        requests:
+          storage: 100Mi
   template:
     metadata:
       labels:
@@ -83,8 +96,6 @@ spec:
               - key: "geolocation-loader.sh"
                 path: "geolocation-loader.sh"
                 mode: 0755
-        - name: geolocation
-          emptyDir: {}
       initContainers:
       - name: geolocation
         imagePullPolicy: "{{ default .Values.image.pullPolicy .Values.geodbCache.image.pullPolicy }}"
@@ -96,7 +107,7 @@ spec:
         command: ["/opt/geodb/scripts/geolocation-loader.sh"]
         workingDir: "/opt/geodb/"
         volumeMounts:
-          - name: geolocation
+          - name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
             mountPath: "/opt/geodb"
           - name: geolocation-script
             mountPath: "/opt/geodb/scripts/"
