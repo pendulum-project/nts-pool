@@ -10,8 +10,7 @@ listen = "0.0.0.0:4460"
 certificate-chain-path = "/var/lib/ntpd-rs/tls/time-a.fullchain.pem"
 private-key-path = "/var/lib/ntpd-rs/tls/time-a.key"
 key-exchange-timeout-ms = 1000
-accepted-pool-domains = ["localhost"]
-additional-pool-ca-certificates = ["/var/lib/ntpd-rs/tls/testca.pem"]
+accepted-pool-authentication-tokens = ["16716e4b9916e2dc6a3de9b7c9764d324ccf6c22204ff09dd3fba17ac5496b90"]
 ntp-server = "localhost"
 ntp-port = 1231
 
