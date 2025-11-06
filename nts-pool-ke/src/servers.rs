@@ -175,9 +175,12 @@ async fn fetch_support_data(
     PoolError,
 > {
     match tokio::time::timeout(timeout, async {
-        ServerInformationRequest { key: key.into() }
-            .serialize(&mut connection)
-            .await?;
+        ServerInformationRequest {
+            key: key.into(),
+            keep_alive: false,
+        }
+        .serialize(&mut connection)
+        .await?;
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let support_info = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
             &mut connection,
