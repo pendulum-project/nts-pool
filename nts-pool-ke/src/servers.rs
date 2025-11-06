@@ -177,7 +177,7 @@ async fn fetch_support_data(
     match tokio::time::timeout(timeout, async {
         ServerInformationRequest {
             key: key.into(),
-            keep_alive: false,
+            keep_alive: true,
         }
         .serialize(&mut connection)
         .await?;
@@ -187,7 +187,11 @@ async fn fetch_support_data(
             &mut buf,
         ))
         .await?;
-        connection.shutdown().await?;
+        if support_info.keep_alive {
+            connection.reuse().await;
+        } else {
+            connection.shutdown().await?;
+        }
         let supported_protocols: HashSet<ProtocolId> = support_info
             .supported_protocols
             .iter()
@@ -302,12 +306,13 @@ async fn load_upstream_tls(config: &BackendConfig) -> std::io::Result<TlsConnect
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
+    use std::sync::{Mutex, atomic::AtomicUsize};
 
     use super::*;
 
     struct TestConnection<'a> {
         written: &'a Mutex<Vec<u8>>,
+        reuse_call_count: &'a AtomicUsize,
         read_data: &'a [u8],
     }
 
@@ -356,15 +361,65 @@ mod tests {
     }
 
     impl ServerConnection for TestConnection<'_> {
-        async fn reuse(self) { /* noop */
+        async fn reuse(self) {
+            self.reuse_call_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     #[tokio::test]
     async fn test_query_supporting_servers() {
         let mut received = Mutex::new(vec![]);
+        let reuse_count = AtomicUsize::new(0);
         let connection = TestConnection {
             written: &received,
+            reuse_call_count: &reuse_count,
+            read_data: &[
+                0xC0, 4, 0, 6, 0, 0, 0, 1, 0, 2, 0xC0, 1, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32, 0x40, 0,
+                0, 0, 0x80, 0, 0, 0,
+            ],
+        };
+
+        let (protocols, algorithms) = fetch_support_data(
+            connection,
+            "abcd".into(),
+            &HashSet::from([0, 1]),
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
+        assert!(protocols.contains(&0));
+        assert!(protocols.contains(&1));
+        assert_eq!(protocols.len(), 2);
+
+        assert_eq!(
+            algorithms.get(&0),
+            Some(&AlgorithmDescription { id: 0, keysize: 16 })
+        );
+        assert_eq!(
+            algorithms.get(&1),
+            Some(&AlgorithmDescription { id: 1, keysize: 32 })
+        );
+
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let req = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
+            received.get_mut().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
+        assert!(req.supported_algorithms.iter().next().is_none());
+        assert!(req.supported_protocols.iter().next().is_none());
+        assert_eq!(reuse_count.into_inner(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_query_supporting_servers_keepalive_disallowed() {
+        let mut received = Mutex::new(vec![]);
+        let reuse_count = AtomicUsize::new(0);
+        let connection = TestConnection {
+            written: &received,
+            reuse_call_count: &reuse_count,
             read_data: &[
                 0xC0, 4, 0, 6, 0, 0, 0, 1, 0, 2, 0xC0, 1, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32, 0x80, 0,
                 0, 0,
@@ -401,5 +456,6 @@ mod tests {
         .unwrap();
         assert!(req.supported_algorithms.iter().next().is_none());
         assert!(req.supported_protocols.iter().next().is_none());
+        assert_eq!(reuse_count.into_inner(), 0);
     }
 }
