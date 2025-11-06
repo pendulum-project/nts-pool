@@ -337,6 +337,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     s2c: s2c.into(),
                     protocol,
                     algorithm: algorithm.id,
+                    keep_alive: false,
                 },
                 &pick,
                 source_address.into(),

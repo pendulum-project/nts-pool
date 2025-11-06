@@ -465,6 +465,7 @@ pub struct FixedKeyRequest<'a> {
     pub s2c: Cow<'a, [u8]>,
     pub protocol: ProtocolId,
     pub algorithm: AlgorithmId,
+    pub keep_alive: bool,
 }
 
 impl std::fmt::Debug for FixedKeyRequest<'_> {
@@ -500,6 +501,9 @@ impl<'a> FixedKeyRequest<'a> {
         }
         .serialize(&mut writer)
         .await?;
+        if self.keep_alive {
+            NtsRecord::KeepAlive.serialize(&mut writer).await?;
+        }
         NtsRecord::EndOfMessage.serialize(&mut writer).await?;
 
         Ok(())
@@ -514,6 +518,7 @@ impl<'a> FixedKeyRequest<'a> {
         let mut s2c = None;
         let mut algorithm = None;
         let mut protocol = None;
+        let mut keep_alive = false;
 
         loop {
             let record = NtsRecord::parse(reader).await?;
@@ -553,6 +558,7 @@ impl<'a> FixedKeyRequest<'a> {
 
                     authentication_key = Some(key)
                 }
+                NtsRecord::KeepAlive => keep_alive = true,
                 // Error
                 NtsRecord::Error { errorcode } => return Err(NtsError::Error(errorcode)),
                 // Warning
@@ -564,10 +570,7 @@ impl<'a> FixedKeyRequest<'a> {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
-                NtsRecord::KeepAlive
-                | NtsRecord::Unknown { .. }
-                | NtsRecord::Server { .. }
-                | NtsRecord::Port { .. } => {}
+                NtsRecord::Unknown { .. } | NtsRecord::Server { .. } | NtsRecord::Port { .. } => {}
                 // Not allowed
                 NtsRecord::NewCookie { .. }
                 | NtsRecord::SupportedNextProtocolList { .. }
@@ -587,6 +590,7 @@ impl<'a> FixedKeyRequest<'a> {
                 s2c,
                 protocol,
                 algorithm,
+                keep_alive,
             })
         } else {
             Err(NtsError::Invalid)
@@ -1424,7 +1428,8 @@ mod tests {
                     c2s: [1, 2].as_slice().into(),
                     s2c: [3, 4].as_slice().into(),
                     protocol: 1,
-                    algorithm: 2
+                    algorithm: 2,
+                    keep_alive: false,
                 },
                 &mut buf
             )
@@ -1435,6 +1440,30 @@ mod tests {
             [
                 0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
                 1, 0x80, 4, 0, 2, 0, 2, 0x80, 0, 0, 0
+            ]
+        );
+
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                FixedKeyRequest::serialize,
+                FixedKeyRequest {
+                    key: "abcd".into(),
+                    c2s: [1, 2].as_slice().into(),
+                    s2c: [3, 4].as_slice().into(),
+                    protocol: 1,
+                    algorithm: 2,
+                    keep_alive: true,
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
+                1, 0x80, 4, 0, 2, 0, 2, 0x40, 0, 0, 0, 0x80, 0, 0, 0
             ]
         );
     }
