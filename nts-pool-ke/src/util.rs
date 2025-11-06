@@ -36,3 +36,63 @@ impl<T> Drop for AbortingJoinHandle<T> {
         self.0.abort();
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct ArrayDeque<const N: usize, T> {
+    data: [Option<T>; N],
+    read: usize,
+    write: usize,
+}
+
+impl<T, const N: usize> ArrayDeque<N, T> {
+    #[must_use]
+    pub fn new() -> Self {
+        ArrayDeque {
+            data: core::array::from_fn(|_| None),
+            read: 0,
+            write: 0,
+        }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.data[self.read].is_none()
+    }
+
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        self.read == self.write && self.data[self.read].is_some()
+    }
+
+    #[must_use]
+    pub fn size(&self) -> usize {
+        if self.read < self.write {
+            self.write - self.read
+        } else if self.read == self.write {
+            if self.data[self.read].is_some() { N } else { 0 }
+        } else {
+            self.write + N - self.read
+        }
+    }
+
+    #[must_use]
+    pub fn pop(&mut self) -> Option<T> {
+        if let Some(el) = self.data[self.read].take() {
+            self.read = (self.read + 1) % N;
+            Some(el)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn try_push(&mut self, el: T) -> Option<T> {
+        if self.data[self.write].is_none() {
+            self.data[self.write] = Some(el);
+            self.write = (self.write + 1) % N;
+            None
+        } else {
+            Some(el)
+        }
+    }
+}
