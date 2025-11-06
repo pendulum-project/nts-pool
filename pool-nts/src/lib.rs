@@ -384,6 +384,7 @@ impl ServerInformationRequest<'_> {
 pub struct ServerInformationResponse<'a> {
     pub supported_algorithms: AlgorithmDescriptionList<'a>,
     pub supported_protocols: ProtocolList<'a>,
+    pub keep_alive: bool,
 }
 
 impl<'a> ServerInformationResponse<'a> {
@@ -393,6 +394,7 @@ impl<'a> ServerInformationResponse<'a> {
         tracing::trace!("Parsing ServerInformationResponse");
         let mut supported_algorithms = None;
         let mut supported_protocols = None;
+        let mut keep_alive = false;
 
         loop {
             let record = NtsRecord::parse(reader).await?;
@@ -416,6 +418,7 @@ impl<'a> ServerInformationResponse<'a> {
                     }
                     supported_algorithms = Some(algorithms)
                 }
+                NtsRecord::KeepAlive => keep_alive = true,
                 // Error
                 NtsRecord::Error { errorcode } => return Err(NtsError::Error(errorcode)),
                 // Warning
@@ -427,8 +430,7 @@ impl<'a> ServerInformationResponse<'a> {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
-                NtsRecord::KeepAlive
-                | NtsRecord::Unknown { .. }
+                NtsRecord::Unknown { .. }
                 | NtsRecord::Server { .. }
                 | NtsRecord::Port { .. }
                 | NtsRecord::AuthenticationToken { .. } => {}
@@ -449,6 +451,7 @@ impl<'a> ServerInformationResponse<'a> {
             Ok(ServerInformationResponse {
                 supported_algorithms,
                 supported_protocols,
+                keep_alive,
             })
         } else {
             Err(NtsError::Invalid)
