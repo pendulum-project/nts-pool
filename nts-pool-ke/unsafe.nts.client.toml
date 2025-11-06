@@ -10,7 +10,7 @@ observation-path = "/var/run/ntpd-rs/observe"
 [[source]]
 mode = "nts-pool"
 address =  "localhost:4460"
-certificate-authority = "test-keys/testca.pem"
+certificate-authority = "testdata/testca.pem"
 count = 1
 
 # System parameters used in filtering and steering the clock:

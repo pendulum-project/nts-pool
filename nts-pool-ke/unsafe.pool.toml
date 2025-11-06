@@ -1,3 +1,6 @@
+[observability]
+log-level = "debug"
+
 # part of the test setup for the NTS pool KE. Do not use in production!
 # (the private key of the certificate is public!)
 [server]
@@ -14,3 +17,4 @@ certificate-chain = "./testdata/end.fullchain.pem"
 private-key = "./testdata/end.key"
 key-exchange-servers = "./servers.json"
 base-shared-secret = "./base-shared-secret"
+geolocation-db = "./testdata/GeoLite2-Country-Test.mmdb"

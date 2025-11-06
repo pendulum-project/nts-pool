@@ -1,6 +1,6 @@
 services:
   time-a:
-    image: ghcr.io/pendulum-project/ntpd-rs:sha-0539aab
+    image: ghcr.io/pendulum-project/ntpd-rs:sha-3b4aaf6
     expose: [4460, "1231/udp"]
     ports: ["127.0.0.1:1231:1231/udp", "[::1]:1231:1231/udp"]
     stop_grace_period: 500ms
@@ -14,7 +14,7 @@ services:
       - "./nts-pool-ke/testdata/testca.pem:/var/lib/ntpd-rs/tls/testca.pem:ro"
 
   time-b:
-    image: ghcr.io/pendulum-project/ntpd-rs:sha-0539aab
+    image: ghcr.io/pendulum-project/ntpd-rs:sha-3b4aaf6
     expose: [4460, "1232/udp"]
     ports: ["127.0.0.1:1232:1232/udp", "[::1]:1232:1232/udp"]
     stop_grace_period: 500ms
