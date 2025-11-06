@@ -337,7 +337,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     s2c: s2c.into(),
                     protocol,
                     algorithm: algorithm.id,
-                    keep_alive: false,
+                    keep_alive: true,
                 },
                 &pick,
                 source_address.into(),
@@ -474,11 +474,17 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         ) -> impl Future<Output = Result<KeyExchangeResponse<'d>, PoolError>> + Send + 'b {
             async move {
                 request.serialize(&mut server_stream).await?;
-                Ok(KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(
-                    server_stream,
+                let response = KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(
+                    &mut server_stream,
                     buffer,
                 ))
-                .await?)
+                .await?;
+                if response.keep_alive {
+                    server_stream.reuse().await;
+                } else {
+                    let _ = server_stream.shutdown().await;
+                }
+                Ok(response)
             }
         }
 
@@ -535,7 +541,7 @@ mod tests {
         borrow::Cow,
         net::SocketAddr,
         path::PathBuf,
-        sync::{Arc, Mutex},
+        sync::{Arc, Mutex, atomic::AtomicUsize},
         time::Duration,
     };
 
@@ -584,6 +590,7 @@ mod tests {
             std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
         ),
         written: Mutex<Vec<u8>>,
+        reuse_count: AtomicUsize,
         uuid_exists: bool,
         response: Vec<u8>,
         received_denied_servers: Mutex<Vec<String>>,
@@ -612,6 +619,7 @@ mod tests {
                         algorithms.iter().copied().map(|v| (v.id, v)).collect(),
                     ),
                     written: Mutex::new(vec![]),
+                    reuse_count: AtomicUsize::new(0),
                     response,
                     uuid_exists,
                     received_denied_servers: Mutex::new(vec![]),
@@ -642,6 +650,7 @@ mod tests {
                 name: &self.inner.name,
                 supports: self.inner.supports.clone(),
                 written: &self.inner.written,
+                reuse_count: &self.inner.reuse_count,
                 read_data: &self.inner.response,
             })
         }
@@ -653,6 +662,7 @@ mod tests {
                     name: &self.inner.name,
                     supports: self.inner.supports.clone(),
                     written: &self.inner.written,
+                    reuse_count: &self.inner.reuse_count,
                     read_data: &self.inner.response,
                 })
             } else {
@@ -668,6 +678,7 @@ mod tests {
             std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
         ),
         written: &'a Mutex<Vec<u8>>,
+        reuse_count: &'a AtomicUsize,
         read_data: &'a [u8],
     }
 
@@ -700,6 +711,7 @@ mod tests {
         ) -> Result<Self::Connection<'a>, crate::error::PoolError> {
             Ok(TestConnection {
                 written: self.written,
+                reuse_count: self.reuse_count,
                 read_data: self.read_data,
             })
         }
@@ -711,6 +723,7 @@ mod tests {
 
     struct TestConnection<'a> {
         written: &'a Mutex<Vec<u8>>,
+        reuse_count: &'a AtomicUsize,
         read_data: &'a [u8],
     }
 
@@ -759,7 +772,9 @@ mod tests {
     }
 
     impl ServerConnection for TestConnection<'_> {
-        async fn reuse(self) { /* noop */
+        async fn reuse(self) {
+            self.reuse_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -835,6 +850,96 @@ mod tests {
         assert_eq!(response.algorithm, 0);
         assert_eq!(response.protocol, 0);
         assert_eq!(response.server.as_deref(), Some("a.test"));
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_keepalive() {
+        crate::test_init();
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x40,
+                0, 0, 0, 0x80, 0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            false,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: None,
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
+            .await
+            .unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
+                .await
+                .unwrap();
+        conn.shutdown().await.unwrap();
+
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let timesource_request = FixedKeyRequest::parse(&mut BufferBorrowingReader::new(
+            manager.inner.written.lock().unwrap().as_slice(),
+            &mut buf,
+        ))
+        .await
+        .unwrap();
+
+        assert_eq!(timesource_request.algorithm, 0);
+        assert_eq!(timesource_request.protocol, 0);
+        assert_eq!(timesource_request.c2s.len(), 16);
+        assert_eq!(timesource_request.s2c.len(), 16);
+        assert_eq!(response.algorithm, 0);
+        assert_eq!(response.protocol, 0);
+        assert_eq!(response.server.as_deref(), Some("a.test"));
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
 
         pool_handle.abort();
     }
@@ -918,6 +1023,13 @@ mod tests {
         assert_eq!(request.protocol, 0);
         assert_eq!(request.c2s.len(), 16);
         assert_eq!(request.s2c.len(), 16);
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
     }
 
     #[tokio::test]
@@ -999,6 +1111,13 @@ mod tests {
         assert_eq!(request.protocol, 1);
         assert_eq!(request.c2s.len(), 32);
         assert_eq!(request.s2c.len(), 32);
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
     }
 
     #[tokio::test]
@@ -1077,6 +1196,13 @@ mod tests {
         assert_eq!(
             manager.inner.received_addr.lock().unwrap().unwrap(),
             "1.2.3.4:9".parse().unwrap()
+        );
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
         );
 
         pool_handle.abort();
@@ -1167,6 +1293,13 @@ mod tests {
             manager.inner.received_uuid.lock().unwrap().take().unwrap(),
             "uuid"
         );
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
 
         pool_handle.abort();
     }
@@ -1245,6 +1378,13 @@ mod tests {
             manager.inner.received_uuid.lock().unwrap().take().unwrap(),
             "uuid"
         );
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
 
         pool_handle.abort();
     }
@@ -1319,6 +1459,13 @@ mod tests {
             response,
             Err(NtsError::Error(ErrorCode::BadRequest))
         ));
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
 
         pool_handle.abort();
     }
@@ -1393,6 +1540,13 @@ mod tests {
             response,
             Err(NtsError::Error(ErrorCode::BadRequest))
         ));
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
 
         pool_handle.abort();
     }
