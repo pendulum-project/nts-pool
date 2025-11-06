@@ -345,6 +345,7 @@ impl<'a> ClientRequest<'a> {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ServerInformationRequest<'a> {
     pub key: Cow<'a, str>,
+    pub keep_alive: bool,
 }
 
 impl std::fmt::Debug for ServerInformationRequest<'_> {
@@ -370,6 +371,9 @@ impl ServerInformationRequest<'_> {
         }
         .serialize(&mut writer)
         .await?;
+        if self.keep_alive {
+            NtsRecord::KeepAlive.serialize(&mut writer).await?;
+        }
         NtsRecord::EndOfMessage.serialize(&mut writer).await?;
 
         Ok(())
@@ -1217,7 +1221,10 @@ mod tests {
         assert!(
             swrap(
                 ServerInformationRequest::serialize,
-                ServerInformationRequest { key: "abcd".into() },
+                ServerInformationRequest {
+                    key: "abcd".into(),
+                    keep_alive: false
+                },
                 &mut buf
             )
             .is_ok()
@@ -1226,6 +1233,26 @@ mod tests {
             buf,
             [
                 0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x80, 0, 0, 0
+            ]
+        );
+
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                ServerInformationRequest::serialize,
+                ServerInformationRequest {
+                    key: "abcd".into(),
+                    keep_alive: true
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x40, 0, 0, 0,
+                0x80, 0, 0, 0
             ]
         );
     }
