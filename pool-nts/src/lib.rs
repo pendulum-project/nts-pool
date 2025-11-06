@@ -605,6 +605,7 @@ pub struct KeyExchangeResponse<'a> {
     pub cookies: Vec<Cow<'a, [u8]>>,
     pub server: Option<Cow<'a, str>>,
     pub port: Option<u16>,
+    pub keep_alive: bool,
 }
 
 impl<'a> KeyExchangeResponse<'a> {
@@ -617,6 +618,7 @@ impl<'a> KeyExchangeResponse<'a> {
         let mut cookies = vec![];
         let mut server = None;
         let mut port = None;
+        let mut keep_alive = false;
 
         loop {
             let record = NtsRecord::parse(reader).await?;
@@ -653,6 +655,7 @@ impl<'a> KeyExchangeResponse<'a> {
                     }
                     port = Some(received_port);
                 }
+                NtsRecord::KeepAlive => keep_alive = true,
                 // Error
                 NtsRecord::Error { errorcode } => return Err(NtsError::Error(errorcode)),
                 // Warning
@@ -664,9 +667,7 @@ impl<'a> KeyExchangeResponse<'a> {
                     return Err(NtsError::UnrecognizedCriticalRecord);
                 }
                 // Ignored
-                NtsRecord::Unknown { .. }
-                | NtsRecord::KeepAlive
-                | NtsRecord::AuthenticationToken { .. } => {}
+                NtsRecord::Unknown { .. } | NtsRecord::AuthenticationToken { .. } => {}
                 // Not allowed
                 NtsRecord::NtpServerDeny { .. }
                 | NtsRecord::FixedKeyRequest { .. }
@@ -684,6 +685,7 @@ impl<'a> KeyExchangeResponse<'a> {
                 cookies,
                 server,
                 port,
+                keep_alive,
             })
         } else {
             Err(NtsError::Invalid)
@@ -711,6 +713,9 @@ impl<'a> KeyExchangeResponse<'a> {
         }
         if let Some(port) = self.port {
             NtsRecord::Port { port }.serialize(&mut writer).await?;
+        }
+        if self.keep_alive {
+            NtsRecord::KeepAlive.serialize(&mut writer).await?;
         }
         NtsRecord::EndOfMessage.serialize(&mut writer).await?;
 
@@ -1479,6 +1484,7 @@ mod tests {
         assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
         assert_eq!(response.port, None);
         assert_eq!(response.server, None);
+        assert!(!response.keep_alive);
 
         let mut arr2 = [
             0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 5, 0, 2, 1, 2, 0x80, 5, 0, 2, 3, 4,
@@ -1495,6 +1501,7 @@ mod tests {
         );
         assert_eq!(response.port, None);
         assert_eq!(response.server, None);
+        assert!(!response.keep_alive);
 
         let mut arr3 = [
             0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
@@ -1507,6 +1514,7 @@ mod tests {
         assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
         assert_eq!(response.port, None);
         assert_eq!(response.server, Some("hi".into()));
+        assert!(!response.keep_alive);
 
         let mut arr4 = [
             0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 7, 0, 2, 0, 5, 0x80, 0, 0, 0,
@@ -1519,6 +1527,7 @@ mod tests {
         assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
         assert_eq!(response.port, Some(5));
         assert_eq!(response.server, None);
+        assert!(!response.keep_alive);
 
         let mut arr = [
             0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 5, 0, 2, 1, 2, 0x80, 5, 0, 2, 3, 4,
@@ -1535,6 +1544,24 @@ mod tests {
         );
         assert_eq!(response.port, Some(5));
         assert_eq!(response.server, Some("hi".into()));
+        assert!(!response.keep_alive);
+
+        let mut arr = [
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 5, 0, 2, 1, 2, 0x80, 5, 0, 2, 3, 4,
+            0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 5, 0x40, 0, 0, 0, 0x80, 0, 0, 0,
+        ];
+        let Ok(response) = pwrap!(KeyExchangeResponse::parse, &mut arr) else {
+            panic!("Expected succesful parse");
+        };
+        assert_eq!(response.protocol, 0);
+        assert_eq!(response.algorithm, 4);
+        assert_eq!(
+            response.cookies,
+            [Cow::Borrowed([1, 2].as_slice()), [3, 4].as_slice().into()]
+        );
+        assert_eq!(response.port, Some(5));
+        assert_eq!(response.server, Some("hi".into()));
+        assert!(response.keep_alive);
     }
 
     #[test]
@@ -1616,18 +1643,7 @@ mod tests {
         assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
         assert_eq!(response.port, None);
         assert_eq!(response.server, None);
-
-        let mut arr2 = [
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 0, 0, 0, 0x80, 0, 0, 0,
-        ];
-        let Ok(response) = pwrap!(KeyExchangeResponse::parse, &mut arr2) else {
-            panic!("Expected succesful parse");
-        };
-        assert_eq!(response.protocol, 0);
-        assert_eq!(response.algorithm, 4);
-        assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
-        assert_eq!(response.port, None);
-        assert_eq!(response.server, None);
+        assert!(!response.keep_alive);
 
         let mut arr3 = [
             0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x4f, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
@@ -1640,6 +1656,7 @@ mod tests {
         assert_eq!(response.cookies, [] as [Vec<u8>; 0]);
         assert_eq!(response.port, None);
         assert_eq!(response.server, None);
+        assert!(!response.keep_alive);
     }
 
     #[test]
@@ -1667,7 +1684,8 @@ mod tests {
                     algorithm: 4,
                     cookies: vec![],
                     server: None,
-                    port: None
+                    port: None,
+                    keep_alive: false,
                 },
                 &mut buf
             )
@@ -1687,7 +1705,8 @@ mod tests {
                     algorithm: 4,
                     cookies: vec![[1, 2, 3].as_slice().into(), [4, 5].as_slice().into()],
                     server: None,
-                    port: None
+                    port: None,
+                    keep_alive: false,
                 },
                 &mut buf
             )
@@ -1710,7 +1729,8 @@ mod tests {
                     algorithm: 4,
                     cookies: vec![],
                     server: Some("hi".into()),
-                    port: None
+                    port: None,
+                    keep_alive: false,
                 },
                 &mut buf
             )
@@ -1732,7 +1752,8 @@ mod tests {
                     algorithm: 4,
                     cookies: vec![],
                     server: None,
-                    port: Some(15)
+                    port: Some(15),
+                    keep_alive: false,
                 },
                 &mut buf
             )
@@ -1754,7 +1775,8 @@ mod tests {
                     algorithm: 4,
                     cookies: vec![[1, 2, 3].as_slice().into(), [4, 5].as_slice().into()],
                     server: Some("hi".into()),
-                    port: Some(15)
+                    port: Some(15),
+                    keep_alive: false,
                 },
                 &mut buf
             )
@@ -1765,6 +1787,30 @@ mod tests {
             [
                 0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0, 5, 0, 3, 1, 2, 3, 0, 5, 0, 2, 4, 5,
                 0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 15, 0x80, 0, 0, 0
+            ]
+        );
+
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                KeyExchangeResponse::serialize,
+                KeyExchangeResponse {
+                    protocol: 0,
+                    algorithm: 4,
+                    cookies: vec![[1, 2, 3].as_slice().into(), [4, 5].as_slice().into()],
+                    server: Some("hi".into()),
+                    port: Some(15),
+                    keep_alive: true,
+                },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            buf,
+            [
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0, 5, 0, 3, 1, 2, 3, 0, 5, 0, 2, 4, 5,
+                0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 15, 0x40, 0, 0, 0, 0x80, 0, 0, 0
             ]
         );
     }
