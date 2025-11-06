@@ -96,8 +96,10 @@ impl GeographicServerManager {
                 .await?
                 .into(),
         );
-        let cache_invalidator =
-            Arc::new(Self::cache_invalidator(server_support_cache.clone(), config.clone()).into());
+        let cache_invalidator = Arc::new(
+            Self::cache_invalidator(inner.clone(), server_support_cache.clone(), config.clone())
+                .into(),
+        );
 
         let result = Self {
             inner,
@@ -113,15 +115,18 @@ impl GeographicServerManager {
     }
 
     fn cache_invalidator(
+        serverdata: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
         server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
         config: Arc<BackendConfig>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
+                let serverdata = serverdata.read().unwrap().clone();
                 server_support_cache
                     .iter_mut_async(|entry| {
-                        if entry.1.age + config.server_support_cache_validity
-                            < tokio::time::Instant::now()
+                        if !serverdata.uuid_lookup.contains_key(&entry.0.1)
+                            || entry.1.age + config.server_support_cache_validity
+                                < tokio::time::Instant::now()
                         {
                             // delete old entry
                             let _ = entry.consume();
@@ -129,6 +134,7 @@ impl GeographicServerManager {
                         true
                     })
                     .await;
+                drop(serverdata);
                 tokio::time::sleep(config.server_support_cache_validity).await;
             }
         })
