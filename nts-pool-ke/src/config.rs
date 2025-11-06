@@ -111,7 +111,7 @@ struct BareBackendConfig {
     /// Validity duration for server support statements in seconds
     #[serde(default = "default_server_support_cache_validity")]
     server_support_cache_validity: u64,
-    /// Length of time a connection needs to be kept open
+    /// Length of time a connection needs to be kept open in seconds
     #[serde(default = "default_server_connection_cache_duration")]
     server_connection_cache_duration: u64,
 }
