@@ -15,7 +15,7 @@ use rustls::{pki_types::pem::PemObject, version::TLS13};
 use rustls_platform_verifier::Verifier;
 use sha3::Digest;
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufStream},
     net::TcpStream,
 };
 use tokio_rustls::{TlsConnector, client::TlsStream};
@@ -116,7 +116,7 @@ pub trait ServerConnection: AsyncRead + AsyncWrite + Unpin + Send {
     fn reuse(self) -> impl Future<Output = ()> + Send;
 }
 
-impl ServerConnection for TlsStream<TcpStream> {
+impl ServerConnection for BufStream<TlsStream<TcpStream>> {
     async fn reuse(mut self) {
         // no reuse, just shutdown the connection
         let _ = self.shutdown().await;
@@ -181,6 +181,7 @@ async fn fetch_support_data(
         }
         .serialize(&mut connection)
         .await?;
+        connection.flush().await?;
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let support_info = ServerInformationResponse::parse(&mut BufferBorrowingReader::new(
             &mut connection,

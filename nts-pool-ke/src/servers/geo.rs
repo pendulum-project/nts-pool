@@ -12,7 +12,7 @@ use phf::phf_map;
 use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
 use rand::Rng;
 use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf},
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufStream, ReadBuf},
     net::TcpStream,
     task::spawn_blocking,
 };
@@ -57,7 +57,8 @@ const MAX_CACHED_PER_SERVER: usize = 5;
 
 struct ServerConnectionCacheEntry {
     len_age: [tokio::time::Instant; MAX_CACHED_PER_SERVER],
-    connections: ArrayDeque<MAX_CACHED_PER_SERVER, (tokio::time::Instant, TlsStream<TcpStream>)>,
+    connections:
+        ArrayDeque<MAX_CACHED_PER_SERVER, (tokio::time::Instant, BufStream<TlsStream<TcpStream>>)>,
 }
 
 impl Default for ServerConnectionCacheEntry {
@@ -589,9 +590,11 @@ impl Server for GeographicServer {
         debug!("Connecting to {addr:?}");
         let io = TcpStream::connect(addr).await?;
         let upstream_tls = self.upstream_tls.read().unwrap().clone();
-        let inner = upstream_tls
-            .connect(self.inner.servers[self.index].server_name.clone(), io)
-            .await?;
+        let inner = BufStream::new(
+            upstream_tls
+                .connect(self.inner.servers[self.index].server_name.clone(), io)
+                .await?,
+        );
         Ok(GeoCachedTlsStream {
             inner,
             key: (connection_type, self.inner.servers[self.index].uuid.clone()),
@@ -613,7 +616,7 @@ impl Server for GeographicServer {
 }
 
 pub struct GeoCachedTlsStream {
-    inner: TlsStream<TcpStream>,
+    inner: BufStream<TlsStream<TcpStream>>,
     key: (ConnectionType, String),
     config: Arc<BackendConfig>,
     cache: Arc<scc::HashMap<(ConnectionType, String), ServerConnectionCacheEntry>>,
@@ -1693,7 +1696,7 @@ mod tests {
         assert!(
             server_connection_entry
                 .connections
-                .try_push((tokio::time::Instant::now(), conn))
+                .try_push((tokio::time::Instant::now(), BufStream::new(conn)))
                 .is_none()
         );
 
@@ -1762,14 +1765,26 @@ mod tests {
 
         let conn = server.connect(ConnectionType::IpV4).await.unwrap();
         assert_eq!(
-            conn.inner.get_ref().0.local_addr().unwrap().port(),
+            conn.inner
+                .get_ref()
+                .get_ref()
+                .0
+                .local_addr()
+                .unwrap()
+                .port(),
             cached_port
         );
         conn.reuse().await;
 
         let conn = server.connect(ConnectionType::IpV4).await.unwrap();
         assert_eq!(
-            conn.inner.get_ref().0.local_addr().unwrap().port(),
+            conn.inner
+                .get_ref()
+                .get_ref()
+                .0
+                .local_addr()
+                .unwrap()
+                .port(),
             cached_port
         );
         conn.reuse().await;
@@ -1778,7 +1793,13 @@ mod tests {
 
         let conn = server.connect(ConnectionType::IpV4).await.unwrap();
         assert_ne!(
-            conn.inner.get_ref().0.local_addr().unwrap().port(),
+            conn.inner
+                .get_ref()
+                .get_ref()
+                .0
+                .local_addr()
+                .unwrap()
+                .port(),
             cached_port
         );
         conn.reuse().await;
