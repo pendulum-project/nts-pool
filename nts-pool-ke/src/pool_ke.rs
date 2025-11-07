@@ -12,7 +12,7 @@ use pool_nts::{
 };
 use rustls::{pki_types::pem::PemObject, version::TLS13};
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncWriteExt, BufStream},
     net::TcpListener,
     select,
     signal::unix::{SignalKind, signal},
@@ -217,7 +217,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         // handle the initial client to pool
         let server_tls = self.server_tls.read().unwrap().clone();
-        let mut client_stream = server_tls.accept(client_stream).await?;
+        let mut client_stream = BufStream::new(server_tls.accept(client_stream).await?);
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let client_request = match ClientRequest::parse(&mut BufferBorrowingReader::new(
@@ -312,18 +312,19 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 return Err(e);
             }
         };
-        let (c2s, s2c) = match self.extract_keys(client_stream.get_ref().1, protocol, algorithm) {
-            Ok(result) => result,
-            Err(e) => {
-                ErrorResponse {
-                    errorcode: ErrorCode::InternalServerError,
+        let (c2s, s2c) =
+            match self.extract_keys(client_stream.get_ref().get_ref().1, protocol, algorithm) {
+                Ok(result) => result,
+                Err(e) => {
+                    ErrorResponse {
+                        errorcode: ErrorCode::InternalServerError,
+                    }
+                    .serialize(&mut client_stream)
+                    .await?;
+                    client_stream.shutdown().await?;
+                    return Err(e);
                 }
-                .serialize(&mut client_stream)
-                .await?;
-                client_stream.shutdown().await?;
-                return Err(e);
-            }
-        };
+            };
 
         debug!("fetching cookies from the NTS KE server");
 
@@ -474,6 +475,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         ) -> impl Future<Output = Result<KeyExchangeResponse<'d>, PoolError>> + Send + 'b {
             async move {
                 request.serialize(&mut server_stream).await?;
+                server_stream.flush().await?;
                 let response = KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(
                     &mut server_stream,
                     buffer,

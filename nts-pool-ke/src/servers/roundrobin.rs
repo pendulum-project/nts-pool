@@ -7,7 +7,7 @@ use std::{
 };
 
 use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
-use tokio::net::TcpStream;
+use tokio::{io::BufStream, net::TcpStream};
 use tokio_rustls::{TlsConnector, client::TlsStream};
 use tracing::debug;
 
@@ -113,7 +113,7 @@ pub struct RoundRobinServer<'a> {
 
 impl Server for RoundRobinServer<'_> {
     type Connection<'a>
-        = TlsStream<TcpStream>
+        = BufStream<TlsStream<TcpStream>>
     where
         Self: 'a;
 
@@ -146,11 +146,12 @@ impl Server for RoundRobinServer<'_> {
     ) -> Result<Self::Connection<'_>, PoolError> {
         let addr = resolve_with_type(&self.server.connection_address, connection_type).await?;
         let io = TcpStream::connect(addr).await?;
-        Ok(self
-            .owner
-            .upstream_tls
-            .connect(self.server.server_name.clone(), io)
-            .await?)
+        Ok(BufStream::new(
+            self.owner
+                .upstream_tls
+                .connect(self.server.server_name.clone(), io)
+                .await?,
+        ))
     }
 
     fn auth_key(&self) -> String {
