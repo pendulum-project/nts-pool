@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{
     str::FromStr,
     sync::{Arc, RwLock},

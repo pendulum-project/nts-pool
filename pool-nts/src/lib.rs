@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{borrow::Cow, fmt::Display, io::Error, slice};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
