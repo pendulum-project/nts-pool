@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use nts_pool_monitor::monitor_main;
 
 #[tokio::main]

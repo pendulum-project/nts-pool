@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[tokio::main]
 async fn main() -> ! {
     let result = nts_pool_ke::nts_pool_ke_main().await;

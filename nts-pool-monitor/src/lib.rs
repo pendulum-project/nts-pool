@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{fmt::Display, net::SocketAddr, path::PathBuf};
 
 use nts_pool_shared::IpVersion;

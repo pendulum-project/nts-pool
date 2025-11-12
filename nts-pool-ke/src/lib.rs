@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![cfg_attr(feature = "fuzz", allow(private_interfaces))]
 
 mod cli;
