@@ -78,7 +78,6 @@ pub fn create_router() -> Router<AppState> {
             "/management/time-sources/{id}/delete",
             post(management::delete_time_source), // HTML form only supports GET and POST
         )
-        .route("/management", get(management::dashboard))
         .route("/monitoring/get_work", get(monitoring::get_work))
         .route("/monitoring/submit", post(monitoring::post_results))
         .fallback(async |app: AppContext| not_found_page(app))
