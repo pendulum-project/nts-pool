@@ -20,16 +20,6 @@ use crate::{
 pub const TIME_SOURCES_ENDPOINT: &str = "/management/time-sources";
 
 #[derive(Template)]
-#[template(path = "management/dashboard.html.j2")]
-struct DashboardTemplate {
-    app: AppContext,
-}
-
-pub async fn dashboard(_user: AuthorizedUser, app: AppContext) -> impl IntoResponse {
-    HtmlTemplate(DashboardTemplate { app })
-}
-
-#[derive(Template)]
 #[template(path = "management/time_sources_page.html.j2")]
 struct TimeSourcesPageTemplate {
     app: AppContext,
