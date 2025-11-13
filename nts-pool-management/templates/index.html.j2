@@ -5,12 +5,50 @@
 {% block header %}<h1>NTS Pool</h1>{% endblock %}
 
 {% block content %}
+
+
   <section class="contained">
-    <p>Welcome to the NTS Pool Management System.</p>
-
-    <p>The <a href="/use">usage instructions</a> provide instructions on how to use the NTS pool to synchronize the time on your computer.</p>
-
-    <p>If you run an NTS server, you can also <a href="/join">join the pool</a> and help us provide NTS to more people.</p>
+    <highlight-actions>
+      <a href="/use" class="btn important">
+        {% include "icons/user-shield.svg.html.j2" %}
+        Use the pool
+      </a>
+      <a href="/join" class="btn important">
+        {% include "icons/clock-plus.svg.html.j2" %}
+        Join the pool
+      </a>
+    </highlight-actions>
+    <p>
+      The NTS pool provides Network Time Security (NTS) servers from around the
+      world for secure time synchronization over the internet.
+    </p>
+    <p>
+      The NTS pool is similar to the well-known
+      <a href="https://www.ntppool.org">NTP Pool Project</a>, but provides only
+      NTS-capable servers. NTS is an extension to the Network Time Protocol
+      (NTP). NTP is used daily by hundreds of millions of devices, but
+      unfortunately it is vulnerable to several attacks that could cause your
+      computer to accept time from unauthorized sources. NTS adds protection
+      that prevents these kinds of attacks.
+    </p>
+    <p>
+      You can start using the NTS pool on your personal computer or server right
+      away. For instructions, see the <a href="/use">usage instructions</a>.
+      Note that the pool is currently still under development and does not have
+      many servers yet.
+    </p>
+    <p>
+      We rely on volunteers and other organizations for hosting NTS servers. You
+      can help us grow the NTS pool by <a href="/join">joining the pool</a>. A
+      bigger pool allows us to provide NTS to more people eventually provide
+      secure time synchronization to every computer.
+    </p>
+    <p>
+      The NTS pool is operated by the
+      <a href="https://trifectatech.org">Trifecta Tech Foundation</a>, a Dutch
+      non-profit organization that develops open infrastructure software in the
+      public interest.
+    </p>
 
     {% if !(app.user|is_logged_in) %}
       <p role="alert">
