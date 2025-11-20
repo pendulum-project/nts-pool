@@ -138,7 +138,6 @@ async fn resolve_with_type<T: tokio::net::ToSocketAddrs>(
     Err(std::io::ErrorKind::NotFound.into())
 }
 
-#[expect(deprecated)]
 fn calculate_auth_key(
     base_shared_secret: &[u8],
     server_uuid: &[u8],
