@@ -196,11 +196,11 @@ struct BareNtsPoolKeConfig {
 }
 
 fn default_nts_ke_timeout() -> u64 {
-    1000
+    5000
 }
 
 fn default_timesource_timeout() -> u64 {
-    500
+    2500
 }
 
 fn default_server_support_cache_validity() -> u64 {
@@ -311,7 +311,7 @@ mod tests {
         let private_key = PathBuf::from("spam.der");
         assert_eq!(test.private_key, private_key);
 
-        assert_eq!(test.key_exchange_timeout, 1000,);
+        assert_eq!(test.key_exchange_timeout, 5000,);
         assert_eq!(test.listen, "0.0.0.0:4460".parse().unwrap(),);
     }
 
