@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use askama::Template;
 use axum::{
     Form,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{IntoResponse, Redirect},
 };
 use nts_pool_shared::IpVersion;
+use serde::Deserialize;
 
 use crate::{
     AppState,
@@ -14,8 +15,11 @@ use crate::{
     context::AppContext,
     cookies::CookieService,
     error::AppError,
-    models::time_source::{
-        self, LogRow, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
+    models::{
+        monitor::MonitorId,
+        time_source::{
+            self, LogRow, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm,
+        },
     },
     templates::{HtmlTemplate, filters},
 };
@@ -52,16 +56,27 @@ struct TimeSourceInfoTemplate {
     ts: TimeSource,
     log: Vec<LogRow>,
     scores: Vec<ScoreTableData>,
+    monitors: Vec<String>,
+    cur_monitor: Option<MonitorId>,
+    cur_protocol: IpVersion,
+}
+
+#[derive(Deserialize)]
+pub struct LogSelection {
+    monitor: Option<MonitorId>,
+    protocol: Option<IpVersion>,
 }
 
 pub async fn time_source_info(
     Path(time_source_id): Path<TimeSourceId>,
     app: AppContext,
     State(state): State<AppState>,
+    Query(log_choice): Query<LogSelection>,
 ) -> Result<impl IntoResponse, AppError> {
     let ts = time_source::details(&state.db, time_source_id).await?;
-    let log = time_source::logs(&state.db, time_source_id, 0, 200).await?;
     let scores = time_source::scores(&state.db, time_source_id).await?;
+    let cur_monitor = log_choice.monitor.or_else(|| scores.first().map(|v| v.id));
+    let cur_protocol = log_choice.protocol.unwrap_or(IpVersion::Ipv4);
     let mut scoremap: HashMap<String, (f64, f64)> = HashMap::new();
     for score in scores {
         match score.protocol {
@@ -69,6 +84,12 @@ pub async fn time_source_info(
             IpVersion::Ipv6 => scoremap.entry(score.id.to_string()).or_default().1 = score.score,
         }
     }
+    let monitors: Vec<String> = scoremap.iter().map(|v| v.0.clone()).collect();
+    let log = if let Some(cur_monitor) = cur_monitor {
+        time_source::logs(&state.db, time_source_id, cur_monitor, cur_protocol, 0, 200).await?
+    } else {
+        vec![]
+    };
 
     Ok(HtmlTemplate(TimeSourceInfoTemplate {
         app,
@@ -82,6 +103,9 @@ pub async fn time_source_info(
             })
             .collect(),
         log,
+        monitors,
+        cur_monitor,
+        cur_protocol,
     }))
 }
 

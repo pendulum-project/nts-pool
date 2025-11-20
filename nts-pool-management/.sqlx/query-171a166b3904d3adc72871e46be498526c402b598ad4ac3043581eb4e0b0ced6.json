@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT score, protocol as \"protocol: IpVersion\", monitor_id as monitor, raw_sample AS sample, received_at\n            FROM monitor_samples\n            WHERE time_source_id = $1\n            ORDER BY monitor_samples.received_at DESC\n            OFFSET $2\n            LIMIT $3\n        ",
+  "query": "\n            SELECT score, protocol as \"protocol: IpVersion\", monitor_id as monitor, raw_sample AS sample, received_at\n            FROM monitor_samples\n            WHERE time_source_id = $1 AND protocol = $2 AND monitor_id = $3\n            ORDER BY monitor_samples.received_at DESC\n            OFFSET $4\n            LIMIT $5\n        ",
   "describe": {
     "columns": [
       {
@@ -42,6 +42,18 @@
     "parameters": {
       "Left": [
         "Uuid",
+        {
+          "Custom": {
+            "name": "ip_protocol",
+            "kind": {
+              "Enum": [
+                "ipv4",
+                "ipv6"
+              ]
+            }
+          }
+        },
+        "Uuid",
         "Int8",
         "Int8"
       ]
@@ -54,5 +66,5 @@
       false
     ]
   },
-  "hash": "ed2041e8d00e1549407b85e23ed6754885eecc9e86f1c7fbc442fab80db3d4b2"
+  "hash": "171a166b3904d3adc72871e46be498526c402b598ad4ac3043581eb4e0b0ced6"
 }
