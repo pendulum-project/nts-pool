@@ -60,7 +60,7 @@ highlight-actions {
     justify-content: center;
 
     & > * {
-        margin: 0 var(--space-sm);
+        margin: var(--space-sm) var(--space-sm) var(--space-sm) 0;
     }
 }
 
