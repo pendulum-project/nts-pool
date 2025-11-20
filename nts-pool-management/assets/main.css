@@ -15,6 +15,7 @@ header {
   background-color: var(--background-alt);
   padding: var(--space-md) var(--space-md);
   display: flex;
+  flex-wrap: wrap;
   width: 100vw;
   flex: 0;
 }
@@ -67,7 +68,7 @@ nav {
       border-bottom: 4px solid var(--primary);
     }
   }
-  
+
   li {
     list-style: none;
   }
