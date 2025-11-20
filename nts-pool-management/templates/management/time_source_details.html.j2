@@ -18,8 +18,8 @@
   {% for row in scores %}
   <tr>
     <td>{{ row.monitor }}</td>
-    <td>{{ row.ipv4 }}</td>
-    <td>{{ row.ipv6 }}</td>
+    <td>{{ row.ipv4 | fmt("{:.1}") }}</td>
+    <td>{{ row.ipv6 | fmt("{:.1}") }}</td>
   </tr>
   {% endfor %}
 </table></p>
