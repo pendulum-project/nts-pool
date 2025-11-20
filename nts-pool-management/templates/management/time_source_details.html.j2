@@ -1,0 +1,49 @@
+{% extends "../layout.html.j2" %}
+
+{% block header %}<h1>{{ ts.hostname }} Details</h1>{% endblock %}
+
+{% block content %}
+
+<section>
+<h2>Scores</h2>
+<p>Current scores (servers are only used for traffic if their score for that type is higher than 10):
+<div class="multivalue-box"><div class="multivalue-element">Ipv4: {{ ts.ipv4_score | fmt("{:.1}") }}</div><div class="multivalue-element">Ipv6: {{ ts.ipv6_score | fmt("{:.1}") }}</div></div></p>
+<p>Current per-monitor scores:
+<table class="autowidth">
+  <tr>
+    <th>Monitor</th>
+    <th>Ipv4 Score</th>
+    <th>Ipv6 Score</th>
+  </tr>
+  {% for row in scores %}
+  <tr>
+    <td>{{ row.monitor }}</td>
+    <td>{{ row.ipv4 }}</td>
+    <td>{{ row.ipv6 }}</td>
+  </tr>
+  {% endfor %}
+</table></p>
+</section>
+
+<section>
+<h2>Logs</h2>
+{% if !log.is_empty() %}
+      <div class="grid-table">
+        <div class="grid-table-header">Received at</div>
+        <div class="grid-table-header">Monitor</div>
+        <div class="grid-table-header">Protocol</div>
+        <div class="grid-table-header">New score</div>
+        {% for row in log %}
+          <div title="{{ row.received_at }}">{{ row.received_at.format("%Y-%m-%d %H:%M") }}</div>
+          <div>{{ row.monitor }}</div>
+          <div>{{ row.protocol }}</div>
+          <div title="{{ row.score }}">{{ row.score | fmt("{:.1}") }}</div>
+          <div class="sample">{{ row.sample }}</div>
+        {% endfor %}
+      </div>
+  {% else %}
+    No monitoring logs available.
+  {% endif %}
+</section>
+
+{% endblock %}

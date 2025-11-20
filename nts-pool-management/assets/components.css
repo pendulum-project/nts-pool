@@ -294,6 +294,24 @@ table {
     }
 }
 
+table.autowidth {
+    width: auto;
+
+    th,
+    td {
+        width: auto;
+    }
+}
+
+.multivalue-box {
+    display: flex;
+    width: fit-content;
+    flex-direction: row;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background-color: var(--white);
+}
+
 .grid-table {
     display: grid;
     grid-template-columns: 1fr 3fr 1fr 1fr;
