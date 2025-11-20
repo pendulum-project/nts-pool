@@ -272,7 +272,6 @@ impl std::fmt::Display for LogRow {
 
 pub async fn logs(
     conn: impl DbConnLike<'_>,
-    owner: UserId,
     time_source_id: TimeSourceId,
     offset: i64,
     limit: i64,
@@ -282,13 +281,11 @@ pub async fn logs(
         r#"
             SELECT score, protocol as "protocol: IpVersion", monitor_id as monitor, raw_sample AS sample, received_at
             FROM monitor_samples
-            JOIN time_sources ON monitor_samples.time_source_id = time_sources.id
-            WHERE time_sources.owner = $1 AND time_sources.id = $2
+            WHERE time_source_id = $1
             ORDER BY monitor_samples.received_at DESC
-            OFFSET $3
-            LIMIT $4
+            OFFSET $2
+            LIMIT $3
         "#,
-        owner as _,
         time_source_id as _,
         offset,
         limit,
@@ -313,6 +310,84 @@ pub async fn source_name(
     .fetch_one(conn)
     .await?
     .hostname)
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ScoreListEntry {
+    pub id: MonitorId,
+    pub protocol: IpVersion,
+    pub score: f64,
+}
+
+pub async fn scores(
+    conn: impl DbConnLike<'_>,
+    id: TimeSourceId,
+) -> Result<Vec<ScoreListEntry>, sqlx::Error> {
+    sqlx::query_as!(
+        ScoreListEntry,
+        r#"
+            SELECT ms2.monitor_id AS "id!: _", ms2.protocol AS "protocol!: _", ms2.score AS "score!: _" FROM (
+                SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                FROM monitor_samples
+                WHERE time_source_id = $1
+                GROUP BY time_source_id, protocol, monitor_id
+            ) AS ms1
+            LEFT JOIN monitor_samples AS ms2 ON
+                ms1.time_source_id = ms2.time_source_id AND
+                ms1.protocol = ms2.protocol AND
+                ms1.monitor_id = ms2.monitor_id AND
+                ms1.target_received_at = ms2.received_at
+        "#,
+        id as _
+    )
+    .fetch_all(conn)
+    .await
+}
+
+pub async fn details(
+    conn: impl DbConnLike<'_>,
+    id: TimeSourceId,
+) -> Result<TimeSource, sqlx::Error> {
+    sqlx::query_as!(
+        TimeSource,
+        r#"
+            SELECT id, owner, hostname, port AS "port: _", countries, auth_token_randomizer, base_secret_index, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
+            LEFT JOIN (
+                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
+                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                    FROM monitor_samples
+                    WHERE protocol = 'ipv4'
+                    GROUP BY time_source_id, protocol, monitor_id
+                ) AS ms1
+                LEFT JOIN monitor_samples AS ms2 ON
+                    ms1.time_source_id = ms2.time_source_id AND
+                    ms1.protocol = ms2.protocol AND
+                    ms1.monitor_id = ms2.monitor_id AND
+                    ms1.target_received_at = ms2.received_at
+                GROUP BY
+                    ms2.time_source_id
+            ) AS s4 ON id = s4.time_source_id
+            LEFT JOIN (
+                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv6_score FROM (
+                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
+                    FROM monitor_samples
+                    WHERE protocol = 'ipv6'
+                    GROUP BY time_source_id, protocol, monitor_id
+                ) AS ms1
+                LEFT JOIN monitor_samples AS ms2 ON
+                    ms1.time_source_id = ms2.time_source_id AND
+                    ms1.protocol = ms2.protocol AND
+                    ms1.monitor_id = ms2.monitor_id AND
+                    ms1.target_received_at = ms2.received_at
+                GROUP BY
+                    ms2.time_source_id
+            ) AS s6 ON id = s6.time_source_id
+            WHERE id = $1 AND deleted = false;
+        "#,
+        id as _,
+    )
+    .fetch_one(conn)
+    .await
 }
 
 pub async fn by_user(

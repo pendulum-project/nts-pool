@@ -63,6 +63,10 @@ pub fn create_router() -> Router<AppState> {
             get(management::time_sources).post(management::create_time_source),
         )
         .route(
+            "/management/time-sources/{id}",
+            get(management::time_source_info),
+        )
+        .route(
             "/management/time-sources/{id}/logs",
             get(management::time_source_logs),
         )

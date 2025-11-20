@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use askama::Template;
 use axum::{
     Form,
     extract::{Path, State},
     response::{IntoResponse, Redirect},
 };
+use nts_pool_shared::IpVersion;
 
 use crate::{
     AppState,
@@ -51,13 +54,60 @@ pub async fn time_source_logs(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let name = time_source::source_name(&state.db, user.id, time_source_id).await?;
-    let log = time_source::logs(&state.db, user.id, time_source_id, 0, 200).await?;
+    let log = time_source::logs(&state.db, time_source_id, 0, 200).await?;
 
     Ok(HtmlTemplate(LogsTemplate {
         app,
         name,
         log,
         time_source_id,
+    }))
+}
+
+#[derive(Debug)]
+struct ScoreTableData {
+    monitor: String,
+    ipv4: f64,
+    ipv6: f64,
+}
+
+#[derive(Template)]
+#[template(path = "management/time_source_details.html.j2")]
+struct TimeSourceInfoTemplate {
+    app: AppContext,
+    ts: TimeSource,
+    log: Vec<LogRow>,
+    scores: Vec<ScoreTableData>,
+}
+
+pub async fn time_source_info(
+    Path(time_source_id): Path<TimeSourceId>,
+    app: AppContext,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let ts = time_source::details(&state.db, time_source_id).await?;
+    let log = time_source::logs(&state.db, time_source_id, 0, 200).await?;
+    let scores = time_source::scores(&state.db, time_source_id).await?;
+    let mut scoremap: HashMap<String, (f64, f64)> = HashMap::new();
+    for score in scores {
+        match score.protocol {
+            IpVersion::Ipv4 => scoremap.entry(score.id.to_string()).or_default().0 = score.score,
+            IpVersion::Ipv6 => scoremap.entry(score.id.to_string()).or_default().1 = score.score,
+        }
+    }
+
+    Ok(HtmlTemplate(TimeSourceInfoTemplate {
+        app,
+        ts,
+        scores: scoremap
+            .into_iter()
+            .map(|v| ScoreTableData {
+                monitor: v.0,
+                ipv4: v.1.0,
+                ipv6: v.1.1,
+            })
+            .collect(),
+        log,
     }))
 }
 
