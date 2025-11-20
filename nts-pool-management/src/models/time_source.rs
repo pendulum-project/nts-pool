@@ -136,7 +136,6 @@ pub async fn infer_regions(
     result.into_iter().collect()
 }
 
-#[expect(deprecated)]
 pub fn calculate_auth_key(
     base_shared_secret: &[u8],
     timesource_id: TimeSourceId,
