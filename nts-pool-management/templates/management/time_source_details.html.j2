@@ -27,7 +27,19 @@
 
 <section>
 <h2>Logs</h2>
-{% if !log.is_empty() %}
+{% if let Some(cur_monitor) = cur_monitor %}
+      <form method="get">
+      Monitor: <select name="monitor">
+      {% for mon in monitors %}
+        <option value="{{mon}}" {% if &cur_monitor.to_string() == mon %} selected {% endif %}>{{ mon }}</option>
+      {% endfor %}
+      </select>
+      <select name="protocol">
+        <option value="Ipv4" {% if cur_protocol == IpVersion::Ipv4 %} selected {% endif %}>IPv4</option>
+        <option value="Ipv6" {% if cur_protocol == IpVersion::Ipv6 %} selected {% endif %}>IPv6</option>
+      </select>
+      <button type="submit">apply</button>
+      </form>
       <div class="grid-table">
         <div class="grid-table-header">Received at</div>
         <div class="grid-table-header">Monitor</div>

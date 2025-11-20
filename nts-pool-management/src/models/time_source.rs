@@ -273,6 +273,8 @@ impl std::fmt::Display for LogRow {
 pub async fn logs(
     conn: impl DbConnLike<'_>,
     time_source_id: TimeSourceId,
+    monitor_id: MonitorId,
+    protocol: IpVersion,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<LogRow>, sqlx::Error> {
@@ -281,12 +283,14 @@ pub async fn logs(
         r#"
             SELECT score, protocol as "protocol: IpVersion", monitor_id as monitor, raw_sample AS sample, received_at
             FROM monitor_samples
-            WHERE time_source_id = $1
+            WHERE time_source_id = $1 AND protocol = $2 AND monitor_id = $3
             ORDER BY monitor_samples.received_at DESC
-            OFFSET $2
-            LIMIT $3
+            OFFSET $4
+            LIMIT $5
         "#,
         time_source_id as _,
+        protocol as _,
+        monitor_id as _,
         offset,
         limit,
     )
