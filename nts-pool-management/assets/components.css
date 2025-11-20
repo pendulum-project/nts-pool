@@ -57,7 +57,8 @@ a.btn {
 
 highlight-actions {
     display: flex;
-    justify-content: center;
+    justify-content: start;
+    margin-bottom: var(--space-md);
 
     & > * {
         margin: var(--space-sm) var(--space-sm) var(--space-sm) 0;
@@ -113,7 +114,7 @@ section > p {
     margin-bottom: var(--space-sm);
 }
 
-section.contained {
+.contained {
     max-width: 80ch;
 }
 
@@ -253,6 +254,12 @@ dialog .dialog-actions {
     border-color: var(--error)
 }
 
+.info {
+    color: color-mix(in lab, var(--info), var(--black) 50%);
+    background-color: color-mix(in lab, var(--info), var(--white) 70%);
+    border-color: var(--info)
+}
+
 details.toast > summary,
 aside {
     padding: var(--space-sm) var(--space-md);
@@ -320,4 +327,8 @@ table {
     div:not(.grid-table-header) {
         background-color: var(--white);
     }
+}
+
+.nowrap {
+    white-space: nowrap;
 }
