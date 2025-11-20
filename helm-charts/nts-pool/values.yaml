@@ -139,7 +139,7 @@ monitor:
   # This is 241 on purpose to create a large lcm between this and updateInterval.
   probeInterval: 241
   # Timeout for the nts key exchange with the timesource.
-  ntsTimeout: 1000
+  ntsTimeout: 10000
   # Timeout for ntp exchanges with timesources.
   ntpTimeout: 1000
 
