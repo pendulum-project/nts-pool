@@ -5,6 +5,7 @@ use std::{
 };
 
 use notify::{RecursiveMode, Watcher};
+use opentelemetry::{KeyValue, metrics::Counter};
 use pool_nts::{
     AlgorithmDescription, BufferBorrowingReader, ClientRequest, ErrorCode, ErrorResponse,
     FixedKeyRequest, KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError,
@@ -42,6 +43,7 @@ struct NtsPoolKe<S> {
     config: NtsPoolKeConfig,
     server_tls: RwLock<TlsAcceptor>,
     monitoring_keys: RwLock<Arc<HashSet<String>>>,
+    session_counter: Counter<u64>,
     server_manager: S,
 }
 
@@ -53,10 +55,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         let monitoring_keys = RwLock::new(Arc::new(load_monitoring_keys(&config).await?));
 
+        let session_counter = opentelemetry::global::meter("PoolKe")
+            .u64_counter("sessions")
+            .with_description("number of ke sessions with clients")
+            .build();
+
         Ok(NtsPoolKe {
             config,
             server_tls,
             monitoring_keys,
+            session_counter,
             server_manager,
         })
     }
@@ -97,9 +105,24 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 )
                 .await
                 {
-                    Err(_) => ::tracing::debug!(?source_address, "NTS Pool KE timed out"),
-                    Ok(Err(err)) => ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed"),
-                    Ok(Ok(())) => ::tracing::debug!(?source_address, "NTS Pool KE completed"),
+                    Err(_) => {
+                        ::tracing::debug!(?source_address, "NTS Pool KE timed out");
+                        self_clone
+                            .session_counter
+                            .add(1, &[KeyValue::new("outcome", "timeout")]);
+                    }
+                    Ok(Err(err)) => {
+                        ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed");
+                        self_clone
+                            .session_counter
+                            .add(1, &[KeyValue::new("outcome", "error")]);
+                    }
+                    Ok(Ok(())) => {
+                        ::tracing::debug!(?source_address, "NTS Pool KE completed");
+                        self_clone
+                            .session_counter
+                            .add(1, &[KeyValue::new("outcome", "success")]);
+                    }
                 }
                 drop(permit);
             });
