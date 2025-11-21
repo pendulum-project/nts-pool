@@ -40,19 +40,27 @@
       </select>
       <button type="submit">apply</button>
       </form>
-      <div class="grid-table">
-        <div class="grid-table-header">Received at</div>
-        <div class="grid-table-header">Monitor</div>
-        <div class="grid-table-header">Protocol</div>
-        <div class="grid-table-header">New score</div>
+      <table class="birowed">
+        <tr>
+          <th>Time</th>
+          <th>Key exchange</th>
+          <th>Ntp (cookie from KE)</th>
+          <th>Ntp (cookie from NTP)</th>
+          <th>New score</th>
+        </tr>
         {% for row in log %}
-          <div title="{{ row.received_at }}">{{ row.received_at.format("%Y-%m-%d %H:%M") }}</div>
-          <div>{{ row.monitor }}</div>
-          <div>{{ row.protocol }}</div>
-          <div title="{{ row.score }}">{{ row.score | fmt("{:.1}") }}</div>
-          <div class="sample">{{ row.sample }}</div>
+        <tr>
+          <td rowspan=2>{{ row.time.format("%Y-%m-%d %H:%M") }}</td>
+          <td>{{ row.ke_status }}</td>
+          <td>{{ row.ntp_from_ke_status }}</td>
+          <td>{{ row.ntp_from_ntp_status }}</td>
+          <td>{{ row.score | fmt("{:.1}") }}</td>
+        </tr>
+        <tr>
+          <td colspan=4><details name="samples"><summary>raw sample</summary><code-block>{{ row.raw_sample | fmt("{:#}") }}</code-block></details></td>
+        </tr>
         {% endfor %}
-      </div>
+      </table>
   {% else %}
     No monitoring logs available.
   {% endif %}

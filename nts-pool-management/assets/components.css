@@ -301,6 +301,20 @@ table {
     }
 }
 
+table.birowed {
+    tbody {
+        tr:nth-child(4n + 1),
+        tr:nth-child(4n + 4) {
+            background-color: var(--white);
+        }
+
+        tr:nth-child(4n + 2),
+        tr:nth-child(4n + 3) {
+            background-color: transparent;
+        }
+    }
+}
+
 table.autowidth {
     width: auto;
 
@@ -317,34 +331,6 @@ table.autowidth {
     gap: var(--space-sm);
     padding: var(--space-sm);
     background-color: var(--white);
-}
-
-.grid-table {
-    display: grid;
-    grid-template-columns: 1fr 3fr 1fr 1fr;
-    justify-content: space-around;
-
-    .sample {
-        grid-column-start: 1;
-        grid-column-end: 5;
-
-        white-space: pre;
-        white-space: nowrap;
-        overflow-x: auto;
-        margin-bottom: var(--space-sm);
-        padding: var(--space-sm);
-        font-family: monospace;
-    }
-
-    .grid-table-header {
-        font-weight: var(--bold);
-
-        margin-bottom: var(--space-sm);
-    }
-
-    div:not(.grid-table-header) {
-        background-color: var(--white);
-    }
 }
 
 .nowrap {
