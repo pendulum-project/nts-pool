@@ -27,9 +27,17 @@ default = []
 fuzz = []
 
 [dependencies]
+maxminddb.workspace = true
+notify.workspace = true
 nts-pool-shared.workspace = true
+phf.workspace = true
 pool-nts.workspace = true
+rand.workspace = true
+rustls = { workspace = true, features = ["logging", "std"] }
+rustls-platform-verifier = { workspace = true }
 scc = "3.3.2"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 sha3.workspace = true
 tokio = { workspace = true, default-features = false, features = [
     "rt-multi-thread",
@@ -41,6 +49,8 @@ tokio = { workspace = true, default-features = false, features = [
     "signal",
     "sync",
 ] }
+tokio-rustls = { workspace = true, features = ["logging"] }
+tokio-util = { workspace = true, features = ["rt"] }
 toml = { workspace = true, default-features = false, features = ["parse"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, default-features = false, features = [
@@ -48,16 +58,6 @@ tracing-subscriber = { workspace = true, default-features = false, features = [
     "fmt",
     "ansi",
 ] }
-rustls = { workspace = true, features = ["logging", "std"] }
-rustls-platform-verifier = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
-tokio-rustls = { workspace = true, features = ["logging"] }
-tokio-util = { workspace = true, features = ["rt"] }
-phf.workspace = true
-notify.workspace = true
-maxminddb.workspace = true
-rand.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
