@@ -7,6 +7,7 @@ mod error;
 mod haproxy;
 mod pool_ke;
 mod servers;
+mod telemetry;
 mod tracing;
 mod util;
 
@@ -18,6 +19,7 @@ use config::Config;
 use crate::{
     pool_ke::run_nts_pool_ke,
     servers::{GeographicServerManager, RoundRobinServerManager},
+    telemetry::telemetry_init,
 };
 
 use self::tracing as daemon_tracing;
@@ -105,6 +107,7 @@ pub(crate) async fn initialize_logging_parse_config(
 
 async fn run(options: NtsPoolKeOptions) -> Result<(), Box<dyn std::error::Error>> {
     let config = initialize_logging_parse_config(options.log_level, options.config).await;
+    telemetry_init();
 
     // give the user a warning that we use the command line option
     if config.observability.log_level.is_some() && options.log_level.is_some() {
