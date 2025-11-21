@@ -5,6 +5,7 @@ use std::{
 };
 
 use notify::{RecursiveMode, Watcher};
+use opentelemetry::{KeyValue, metrics::Counter};
 use pool_nts::{
     AlgorithmDescription, BufferBorrowingReader, ClientRequest, ErrorCode, ErrorResponse,
     FixedKeyRequest, KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError,
@@ -42,6 +43,7 @@ struct NtsPoolKe<S> {
     config: NtsPoolKeConfig,
     server_tls: RwLock<TlsAcceptor>,
     monitoring_keys: RwLock<Arc<HashSet<String>>>,
+    session_counter: Counter<u64>,
     server_manager: S,
 }
 
@@ -53,10 +55,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         let monitoring_keys = RwLock::new(Arc::new(load_monitoring_keys(&config).await?));
 
+        let session_counter = opentelemetry::global::meter("PoolKe")
+            .u64_counter("sessions")
+            .with_description("number of ke sessions with clients")
+            .build();
+
         Ok(NtsPoolKe {
             config,
             server_tls,
             monitoring_keys,
+            session_counter,
             server_manager,
         })
     }
@@ -91,15 +99,43 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             let self_clone = self.clone();
 
             tracker.spawn(async move {
+                let mut is_monitor = false;
                 match tokio::time::timeout(
                     self_clone.config.key_exchange_timeout,
-                    self_clone.handle_client(client_stream, source_address),
+                    self_clone.handle_client(client_stream, source_address, &mut is_monitor),
                 )
                 .await
                 {
-                    Err(_) => ::tracing::debug!(?source_address, "NTS Pool KE timed out"),
-                    Ok(Err(err)) => ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed"),
-                    Ok(Ok(())) => ::tracing::debug!(?source_address, "NTS Pool KE completed"),
+                    Err(_) => {
+                        ::tracing::debug!(?source_address, "NTS Pool KE timed out");
+                        self_clone.session_counter.add(
+                            1,
+                            &[
+                                KeyValue::new("outcome", "timeout"),
+                                KeyValue::new("is_monitor", is_monitor),
+                            ],
+                        );
+                    }
+                    Ok(Err(err)) => {
+                        ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed");
+                        self_clone.session_counter.add(
+                            1,
+                            &[
+                                KeyValue::new("outcome", "error"),
+                                KeyValue::new("is_monitor", is_monitor),
+                            ],
+                        );
+                    }
+                    Ok(Ok(())) => {
+                        ::tracing::debug!(?source_address, "NTS Pool KE completed");
+                        self_clone.session_counter.add(
+                            1,
+                            &[
+                                KeyValue::new("outcome", "success"),
+                                KeyValue::new("is_monitor", is_monitor),
+                            ],
+                        );
+                    }
                 }
                 drop(permit);
             });
@@ -204,6 +240,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         &self,
         mut client_stream: tokio::net::TcpStream,
         mut source_address: SocketAddr,
+        is_monitor: &mut bool,
     ) -> Result<(), PoolError> {
         // Handle the proxy message if needed
         if self.config.use_proxy_protocol
@@ -261,6 +298,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 }
             },
             ClientRequest::Uuid { key, uuid, .. } if monitoring_keys.contains(key.as_ref()) => {
+                *is_monitor = true;
                 if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
                     server
                 } else {
