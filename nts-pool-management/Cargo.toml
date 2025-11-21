@@ -17,11 +17,29 @@ argon2 = { workspace = true, features = ["std"] }
 askama = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true, features = ["cookie", "cookie-private", "cookie-key-expansion", "typed-header"] }
+chrono = { workspace = true, features = ["serde"] }
+derive_more = { workspace = true, features = ["full"] }
+eyre = { workspace = true }
 headers.workspace = true
+jsonwebtoken = { workspace = true }
+lettre = { workspace = true, default-features = false, features = [
+    "builder",
+    "smtp-transport",
+    "pool",
+    "hostname",
+    "rustls",
+    "aws-lc-rs",
+    "rustls-platform-verifier",
+    "tokio1",
+    "tokio1-rustls",
+    "tracing",
+] }
 maxminddb.workspace = true
 notify.workspace = true
 nts-pool-shared = { workspace = true, features = ["sqlx"] }
 phf.workspace = true
+rand = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_qs = { workspace = true }
@@ -41,25 +59,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, default-features = true, features = [
     "env-filter",
 ] }
-chrono = { workspace = true, features = ["serde"] }
 uuid = { workspace = true, features = ["serde", "v4"] }
-rustls = { workspace = true }
-jsonwebtoken = { workspace = true }
-lettre = { workspace = true, default-features = false, features = [
-    "builder",
-    "smtp-transport",
-    "pool",
-    "hostname",
-    "rustls",
-    "aws-lc-rs",
-    "rustls-platform-verifier",
-    "tokio1",
-    "tokio1-rustls",
-    "tracing",
-] }
-rand = { workspace = true }
-eyre = { workspace = true }
-derive_more = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 testcontainers = { workspace = true }
