@@ -204,6 +204,7 @@ async fn run_probing_inner<
                 Task::Update => {
                     tracing::debug!("Requesting configuration update");
                     let command = command.clone();
+                    let probe = probe.clone();
                     let config = config.clone();
                     let new_work_sender = new_work_sender.clone();
                     update_deadline = Instant::now() + command.read().unwrap().update_interval;
@@ -211,6 +212,7 @@ async fn run_probing_inner<
                         let Ok(new_command) = M::get_command(&config).await else {
                             return;
                         };
+                        let new_probe = T::from_command(&config, &new_command);
                         let new_command = Arc::new(new_command);
 
                         // Make sure the compiler doesn't think the lock guard lives beyond this block.
@@ -221,6 +223,8 @@ async fn run_probing_inner<
                             drop(command_place);
                             old_command
                         };
+
+                        *probe.write().unwrap() = Arc::new(new_probe);
 
                         let new_server_count = new_command
                             .timesources
