@@ -49,6 +49,12 @@ ingresses:
     # Optional name of the secret that stores the TLS certificate and key for the management ingress
     tlsSecretName: null
 
+metrics:
+  endpoint: null
+  headersSecretRef:
+    name: nts-pool-metrics-token
+    key: headers
+
 # Configuration for the Key Exchange (KE) service
 ke:
   # Domain names on which the KE will be available (first one will be the primary, i.e. common name)
