@@ -89,14 +89,33 @@ fn extract_keyexchange_status(ke: &Value) -> Option<String> {
         .or_else(|| {
             ke.get("status")
                 .and_then(|ke_status| ke_status.as_str())
-                .map(|ke_status| ke_status.to_owned())
+                .map(|ke_status| {
+                    ke.get("exchange_duration")
+                        .and_then(|v| v.as_f64())
+                        .map(|v| format!("{} (duration: {:.1}ms)", ke_status, v * 1000.0))
+                        .unwrap_or_else(|| ke_status.to_owned())
+                })
         })
 }
 
 fn extract_ntp_status(ntp: &Value) -> Option<String> {
     ntp.get("status")
         .and_then(|ntp_status| ntp_status.as_str())
-        .map(|ntp_status| ntp_status.to_owned())
+        .map(|ntp_status| {
+            let rtt = ntp.get("roundtrip_duration").and_then(|v| v.as_f64());
+            let offset = ntp.get("offset").and_then(|v| v.as_f64());
+
+            match (rtt, offset) {
+                (Some(rtt), Some(offset)) => format!(
+                    "{} (RTT: {:.1}ms, offset: {:.1}ms)",
+                    ntp_status,
+                    rtt * 1000.0,
+                    offset * 1000.0
+                ),
+                (Some(rtt), None) => format!("{} (RTT: {:.1}ms)", ntp_status, rtt * 1000.0),
+                _ => ntp_status.to_owned(),
+            }
+        })
 }
 
 pub async fn time_source_info(
