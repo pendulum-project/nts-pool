@@ -124,3 +124,9 @@ spec:
         env:
           - name: RESTART_BUMP
             value: "{{ default 1 .Values.ke.restartBump}}"
+          - name: OTEL_METRICS_EXPORT_DESTINATION
+            value: "{{ .Values.metrics.endpoint }}"
+          - name: OTEL_EXPORTER_OTLP_METRICS_HEADERS
+            valueFrom:
+              secretKeyRef:
+                {{- toYaml .Values.metrics.headersSecretRef | nindent 16 }}
