@@ -126,7 +126,9 @@ spec:
             value: "{{ default 1 .Values.ke.restartBump}}"
           - name: OTEL_METRICS_EXPORT_DESTINATION
             value: "{{ .Values.metrics.endpoint }}"
+          {{- with .Values.metrics.headerSecretRef }}
           - name: OTEL_EXPORTER_OTLP_METRICS_HEADERS
             valueFrom:
               secretKeyRef:
-                {{- toYaml .Values.metrics.headersSecretRef | nindent 16 }}
+                {{- toYaml . | nindent 16 }}
+          {{- end }}

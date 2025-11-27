@@ -51,9 +51,7 @@ ingresses:
 
 metrics:
   endpoint: null
-  headersSecretRef:
-    name: nts-pool-metrics-token
-    key: headers
+  headersSecretRef: null
 
 # Configuration for the Key Exchange (KE) service
 ke:
