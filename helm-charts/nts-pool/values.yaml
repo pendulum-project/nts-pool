@@ -55,6 +55,7 @@ metrics:
 
 # Configuration for the Key Exchange (KE) service
 ke:
+  extraEnv: null
   # Domain names on which the KE will be available (first one will be the primary, i.e. common name)
   domainName: ntspool.example.com
   # Name of the secret that stores the TLS certificate and key for the KE service

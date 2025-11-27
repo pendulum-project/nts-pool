@@ -132,3 +132,6 @@ spec:
               secretKeyRef:
                 {{- toYaml . | nindent 16 }}
           {{- end }}
+          {{- with .Values.ke.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
