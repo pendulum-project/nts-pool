@@ -18,7 +18,7 @@ pub async fn get_work(
     _monitor: AuthenticatedMonitor,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let timesources = models::time_source::not_deleted(&state.db).await?;
+    let timesources = models::time_source::list(&state.db).await?;
 
     Ok(Json(ProbeControlCommand {
         timesources: timesources

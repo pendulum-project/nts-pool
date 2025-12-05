@@ -29,7 +29,7 @@ static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
 
 uuid!(TimeSourceId);
 
-#[derive(Debug, Clone, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Deserialize, sqlx::FromRow, sqlx::Type)]
 pub struct TimeSource {
     pub id: TimeSourceId,
     pub owner: UserId,
@@ -355,37 +355,18 @@ pub async fn details(
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, auth_token_randomizer, base_secret_index, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
-            LEFT JOIN (
-                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
-                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
-                    FROM monitor_samples
-                    WHERE protocol = 'ipv4'
-                    GROUP BY time_source_id, protocol, monitor_id
-                ) AS ms1
-                LEFT JOIN monitor_samples AS ms2 ON
-                    ms1.time_source_id = ms2.time_source_id AND
-                    ms1.protocol = ms2.protocol AND
-                    ms1.monitor_id = ms2.monitor_id AND
-                    ms1.target_received_at = ms2.received_at
-                GROUP BY
-                    ms2.time_source_id
-            ) AS s4 ON id = s4.time_source_id
-            LEFT JOIN (
-                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv6_score FROM (
-                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
-                    FROM monitor_samples
-                    WHERE protocol = 'ipv6'
-                    GROUP BY time_source_id, protocol, monitor_id
-                ) AS ms1
-                LEFT JOIN monitor_samples AS ms2 ON
-                    ms1.time_source_id = ms2.time_source_id AND
-                    ms1.protocol = ms2.protocol AND
-                    ms1.monitor_id = ms2.monitor_id AND
-                    ms1.target_received_at = ms2.received_at
-                GROUP BY
-                    ms2.time_source_id
-            ) AS s6 ON id = s6.time_source_id
+            SELECT
+                id AS "id!",
+                owner AS "owner!",
+                hostname AS "hostname!",
+                port AS "port: _",
+                countries AS "countries!",
+                auth_token_randomizer AS "auth_token_randomizer!",
+                base_secret_index AS "base_secret_index!",
+                weight AS "weight!",
+                ipv4_score AS "ipv4_score!: _",
+                ipv6_score AS "ipv6_score!: _"
+            FROM time_source_scores
             WHERE id = $1 AND deleted = false;
         "#,
         id as _,
@@ -401,37 +382,18 @@ pub async fn by_user(
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, auth_token_randomizer, base_secret_index, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
-            LEFT JOIN (
-                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
-                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
-                    FROM monitor_samples
-                    WHERE protocol = 'ipv4'
-                    GROUP BY time_source_id, protocol, monitor_id
-                ) AS ms1
-                LEFT JOIN monitor_samples AS ms2 ON
-                    ms1.time_source_id = ms2.time_source_id AND
-                    ms1.protocol = ms2.protocol AND
-                    ms1.monitor_id = ms2.monitor_id AND
-                    ms1.target_received_at = ms2.received_at
-                GROUP BY
-                    ms2.time_source_id
-            ) AS s4 ON id = s4.time_source_id
-            LEFT JOIN (
-                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv6_score FROM (
-                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
-                    FROM monitor_samples
-                    WHERE protocol = 'ipv6'
-                    GROUP BY time_source_id, protocol, monitor_id
-                ) AS ms1
-                LEFT JOIN monitor_samples AS ms2 ON
-                    ms1.time_source_id = ms2.time_source_id AND
-                    ms1.protocol = ms2.protocol AND
-                    ms1.monitor_id = ms2.monitor_id AND
-                    ms1.target_received_at = ms2.received_at
-                GROUP BY
-                    ms2.time_source_id
-            ) AS s6 ON id = s6.time_source_id
+            SELECT
+                id AS "id!",
+                owner AS "owner!",
+                hostname AS "hostname!",
+                port AS "port: _",
+                countries AS "countries!",
+                auth_token_randomizer AS "auth_token_randomizer!",
+                base_secret_index AS "base_secret_index!",
+                weight AS "weight!",
+                ipv4_score AS "ipv4_score!: _",
+                ipv6_score AS "ipv6_score!: _"
+            FROM time_source_scores
             WHERE owner = $1 AND deleted = false;
         "#,
         owner as _,
@@ -440,42 +402,58 @@ pub async fn by_user(
     .await
 }
 
-pub async fn not_deleted(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, sqlx::Error> {
+pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, sqlx::Error> {
     sqlx::query_as!(
         TimeSource,
         r#"
-            SELECT id, owner, hostname, port AS "port: _", countries, auth_token_randomizer, base_secret_index, weight, COALESCE(ipv4_score, 0) AS "ipv4_score!: _", COALESCE(ipv6_score, 0) AS "ipv6_score!: _" FROM time_sources
-            LEFT JOIN (
-                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv4_score FROM (
-                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
-                    FROM monitor_samples
-                    WHERE protocol = 'ipv4'
-                    GROUP BY time_source_id, protocol, monitor_id
-                ) AS ms1
-                LEFT JOIN monitor_samples AS ms2 ON
-                    ms1.time_source_id = ms2.time_source_id AND
-                    ms1.protocol = ms2.protocol AND
-                    ms1.monitor_id = ms2.monitor_id AND
-                    ms1.target_received_at = ms2.received_at
-                GROUP BY
-                    ms2.time_source_id
-            ) AS s4 ON id = s4.time_source_id
-            LEFT JOIN (
-                SELECT ms2.time_source_id, MAX(ms2.score) AS ipv6_score FROM (
-                    SELECT time_source_id, protocol, monitor_id, MAX(received_at) AS target_received_at
-                    FROM monitor_samples
-                    WHERE protocol = 'ipv6'
-                    GROUP BY time_source_id, protocol, monitor_id
-                ) AS ms1
-                LEFT JOIN monitor_samples AS ms2 ON
-                    ms1.time_source_id = ms2.time_source_id AND
-                    ms1.protocol = ms2.protocol AND
-                    ms1.monitor_id = ms2.monitor_id AND
-                    ms1.target_received_at = ms2.received_at
-                GROUP BY
-                    ms2.time_source_id
-            ) AS s6 ON id = s6.time_source_id
+            SELECT
+                id AS "id!",
+                owner AS "owner!",
+                hostname AS "hostname!",
+                port AS "port: _",
+                countries AS "countries!",
+                auth_token_randomizer AS "auth_token_randomizer!",
+                base_secret_index AS "base_secret_index!",
+                weight AS "weight!",
+                ipv4_score AS "ipv4_score!: _",
+                ipv6_score AS "ipv6_score!: _"
+            FROM time_source_scores
             WHERE deleted = false;
+        "#,
+    )
+    .fetch_all(conn)
+    .await
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct TimeSourceWithOwner {
+    pub time_source: TimeSource,
+    pub user_email: String,
+}
+
+pub async fn list_with_owner_names(
+    conn: impl DbConnLike<'_>,
+) -> Result<Vec<TimeSourceWithOwner>, sqlx::Error> {
+    sqlx::query_as!(
+        TimeSourceWithOwner,
+        r#"
+            SELECT
+                (
+                    ts.id,
+                    ts.owner,
+                    ts.hostname,
+                    ts.port,
+                    ts.countries,
+                    ts.auth_token_randomizer,
+                    ts.base_secret_index,
+                    ts.weight,
+                    ts.ipv4_score,
+                    ts.ipv6_score
+                ) AS "time_source!: TimeSource",
+                u.email AS "user_email!"
+            FROM time_source_scores AS ts
+            LEFT JOIN users AS u ON ts.owner = u.id
+            WHERE ts.deleted = false;
         "#,
     )
     .fetch_all(conn)

@@ -47,6 +47,7 @@ pub fn create_router() -> Router<AppState> {
         )
         .route("/logout", get(auth::logout))
         .route("/admin", get(admin::overview))
+        .route("/admin/time-sources", get(admin::list_time_sources))
         .route("/admin/users", get(admin::users))
         .route("/admin/users/{id}/block", post(admin::user_block))
         .route("/admin/users/{id}/unblock", post(admin::user_unblock))
@@ -143,7 +144,7 @@ pub async fn poolke_servers(
     State(state): State<AppState>,
     _authentication: AuthenticatedInternal,
 ) -> Result<impl IntoResponse, AppError> {
-    let timesources = models::time_source::not_deleted(&state.db).await?;
+    let timesources = models::time_source::list(&state.db).await?;
     Ok(Json(
         timesources
             .into_iter()
