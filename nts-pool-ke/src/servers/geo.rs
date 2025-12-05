@@ -371,28 +371,31 @@ impl ServerManager for GeographicServerManager {
         } else {
             &inner.regions_ipv6
         };
-        let region =
-            if let Ok(Some(location)) = inner.geodb.lookup::<geoip2::Country>(address.ip()) {
-                debug!("Geolocation lookup for {:?}", location);
-                location
-                    .country
-                    .and_then(|v| v.iso_code)
-                    .and_then(|v| regions.get(v))
-                    .or_else(|| {
-                        debug!("Falling back to continent, country zone does not exist");
-                        location
-                            .continent
-                            .and_then(|v| v.code)
-                            .and_then(|v| CONTINENTS.get(v))
-                            .and_then(|v| regions.get(*v))
-                    })
-            } else {
-                None
-            }
-            .unwrap_or_else(|| {
-                debug!("Falling back to global, continent and country zone does not exist");
-                regions.get(GLOBAL).unwrap()
-            });
+        let region = if let Ok(Some(location)) = inner
+            .geodb
+            .lookup(address.ip())
+            .and_then(|r| r.decode::<geoip2::Country>())
+        {
+            debug!("Geolocation lookup for {:?}", location);
+            location
+                .country
+                .iso_code
+                .and_then(|v| regions.get(v))
+                .or_else(|| {
+                    debug!("Falling back to continent, country zone does not exist");
+                    location
+                        .continent
+                        .code
+                        .and_then(|v| CONTINENTS.get(v))
+                        .and_then(|v| regions.get(*v))
+                })
+        } else {
+            None
+        }
+        .unwrap_or_else(|| {
+            debug!("Falling back to global, continent and country zone does not exist");
+            regions.get(GLOBAL).unwrap()
+        });
 
         if region.is_empty() {
             debug!("Selected region is empty");

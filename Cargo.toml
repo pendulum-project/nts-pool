@@ -36,7 +36,7 @@ eyre = "0.6.11"
 headers = "0.4.1"
 jsonwebtoken = "9.3.1"
 lettre = { version = "0.11.18", default-features = false }
-maxminddb = "0.26.0"
+maxminddb = "0.27.0"
 notify = "8.2.0"
 opentelemetry = "0.31.0"
 opentelemetry-otlp = { version = "0.31.0", features = ["reqwest-rustls"] }
