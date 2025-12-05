@@ -111,7 +111,10 @@ pub async fn infer_regions(
 
     let mut result = HashSet::new();
     for addr in addresses {
-        let Some(lookup) = (match geodb.lookup::<maxminddb::geoip2::Country>(addr.ip()) {
+        let Some(lookup) = (match geodb
+            .lookup(addr.ip())
+            .and_then(|r| r.decode::<maxminddb::geoip2::Country>())
+        {
             Ok(lookup) => lookup,
             Err(e) => {
                 tracing::error!("Failure during geoip lookup: {e}");
@@ -121,14 +124,10 @@ pub async fn infer_regions(
             continue;
         };
 
-        if let Some(continent) = lookup
-            .continent
-            .and_then(|v| v.code)
-            .and_then(|c| CONTINENTS.get(c))
-        {
+        if let Some(continent) = lookup.continent.code.and_then(|c| CONTINENTS.get(c)) {
             result.insert((*continent).to_owned());
         }
-        if let Some(country) = lookup.country.and_then(|v| v.iso_code) {
+        if let Some(country) = lookup.country.iso_code {
             result.insert(country.to_owned());
         }
     }
