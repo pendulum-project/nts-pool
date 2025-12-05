@@ -15,6 +15,7 @@ use crate::{
     error::AppError,
     models::{
         monitor::{self, Monitor, MonitorId, NewMonitor},
+        time_source,
         user::{self, User, UserId},
     },
     templates::{HtmlTemplate, filters},
@@ -183,4 +184,21 @@ pub async fn login_as(
     )
     .wrap_err("Failed to switch to user")?;
     Ok((cookie_jar, Redirect::to("/")))
+}
+
+#[derive(Template)]
+#[template(path = "admin/list_time_sources.html.j2")]
+struct ListTimeSourcesTemplate {
+    app: AppContext,
+    time_sources: Vec<time_source::TimeSourceWithOwner>,
+}
+
+pub async fn list_time_sources(
+    _admin: Administrator,
+    app: AppContext,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let time_sources = time_source::list_with_owner_names(&state.db).await?;
+
+    Ok(HtmlTemplate(ListTimeSourcesTemplate { app, time_sources }))
 }

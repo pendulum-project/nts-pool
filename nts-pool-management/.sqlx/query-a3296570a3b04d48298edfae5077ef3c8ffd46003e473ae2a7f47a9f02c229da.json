@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id AS \"id!\",\n                owner AS \"owner!\",\n                hostname AS \"hostname!\",\n                port AS \"port: _\",\n                countries AS \"countries!\",\n                auth_token_randomizer AS \"auth_token_randomizer!\",\n                base_secret_index AS \"base_secret_index!\",\n                weight AS \"weight!\",\n                ipv4_score AS \"ipv4_score!: _\",\n                ipv6_score AS \"ipv6_score!: _\"\n            FROM time_source_scores\n            WHERE deleted = false;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "hostname!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "port: _",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "countries!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 5,
+        "name": "auth_token_randomizer!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "base_secret_index!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "weight!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "ipv4_score!: _",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 9,
+        "name": "ipv6_score!: _",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a3296570a3b04d48298edfae5077ef3c8ffd46003e473ae2a7f47a9f02c229da"
+}
