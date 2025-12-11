@@ -47,6 +47,8 @@ pub struct ProbeResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum KeyExchangeStatus {
     Success,
+    SrvIpv4Only,
+    SrvIpv6Only,
     Failed,
     Timeout,
 }
