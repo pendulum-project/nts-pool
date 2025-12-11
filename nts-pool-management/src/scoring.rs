@@ -19,7 +19,15 @@ fn offset_step(offset: f64) -> f64 {
 }
 
 pub fn score_sample(sample: &ProbeResult) -> SampleScore {
-    if sample.ntp_with_ke_cookie.status == SecuredNtpProbeStatus::Deny
+    if sample.keyexchange.status == KeyExchangeStatus::SrvIpv4Only
+        || sample.keyexchange.status == KeyExchangeStatus::SrvIpv6Only
+    {
+        // Only support for one ip protocol is OK for an SRV pool server.
+        SampleScore {
+            step: 1.0,
+            max_score: None,
+        }
+    } else if sample.ntp_with_ke_cookie.status == SecuredNtpProbeStatus::Deny
         || sample.ntp_with_ntp_cookie.status == SecuredNtpProbeStatus::Deny
     {
         SampleScore {
