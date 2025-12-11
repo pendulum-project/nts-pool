@@ -47,6 +47,10 @@ struct ScoreTableData {
     monitor: String,
     ipv4: f64,
     ipv6: f64,
+    #[expect(unused)]
+    srvv4: f64,
+    #[expect(unused)]
+    srvv6: f64,
 }
 
 struct DisplayLogRow {
@@ -124,15 +128,25 @@ pub async fn time_source_info(
     State(state): State<AppState>,
     Query(log_choice): Query<LogSelection>,
 ) -> Result<impl IntoResponse, AppError> {
+    #[derive(Default)]
+    struct Scores {
+        ipv4: f64,
+        ipv6: f64,
+        srvv4: f64,
+        srvv6: f64,
+    }
+
     let ts = time_source::details(&state.db, time_source_id).await?;
     let scores = time_source::scores(&state.db, time_source_id).await?;
     let cur_monitor = log_choice.monitor.or_else(|| scores.first().map(|v| v.id));
     let cur_protocol = log_choice.protocol.unwrap_or(IpVersion::Ipv4);
-    let mut scoremap: HashMap<String, (f64, f64)> = HashMap::new();
+    let mut scoremap: HashMap<String, Scores> = HashMap::new();
     for score in scores {
         match score.protocol {
-            IpVersion::Ipv4 => scoremap.entry(score.id.to_string()).or_default().0 = score.score,
-            IpVersion::Ipv6 => scoremap.entry(score.id.to_string()).or_default().1 = score.score,
+            IpVersion::Ipv4 => scoremap.entry(score.id.to_string()).or_default().ipv4 = score.score,
+            IpVersion::Ipv6 => scoremap.entry(score.id.to_string()).or_default().ipv6 = score.score,
+            IpVersion::Srvv4 => scoremap.entry(score.id.to_string()).or_default().srvv4 = score.score,
+            IpVersion::Srvv6 => scoremap.entry(score.id.to_string()).or_default().srvv6 = score.score,
         }
     }
     let monitors: Vec<String> = scoremap.iter().map(|v| v.0.clone()).collect();
@@ -149,8 +163,10 @@ pub async fn time_source_info(
             .into_iter()
             .map(|v| ScoreTableData {
                 monitor: v.0,
-                ipv4: v.1.0,
-                ipv6: v.1.1,
+                ipv4: v.1.ipv4,
+                ipv6: v.1.ipv6,
+                srvv4: v.1.srvv4,
+                srvv6: v.1.srvv6,
             })
             .collect(),
         log: logs
