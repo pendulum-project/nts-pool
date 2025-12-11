@@ -24,9 +24,16 @@ impl std::fmt::Display for IpVersion {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ProbeTimesourceInfo {
+    pub uuid: String,
+    pub domain: Option<String>,
+    pub port: Option<u16>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ProbeControlCommand {
-    pub timesources: HashSet<(IpVersion, String)>,
+    pub timesources: HashSet<(IpVersion, ProbeTimesourceInfo)>,
     pub poolke: String,
     pub result_endpoint: String,
     pub result_batchsize: usize,

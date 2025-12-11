@@ -145,8 +145,12 @@ pub async fn time_source_info(
         match score.protocol {
             IpVersion::Ipv4 => scoremap.entry(score.id.to_string()).or_default().ipv4 = score.score,
             IpVersion::Ipv6 => scoremap.entry(score.id.to_string()).or_default().ipv6 = score.score,
-            IpVersion::Srvv4 => scoremap.entry(score.id.to_string()).or_default().srvv4 = score.score,
-            IpVersion::Srvv6 => scoremap.entry(score.id.to_string()).or_default().srvv6 = score.score,
+            IpVersion::Srvv4 => {
+                scoremap.entry(score.id.to_string()).or_default().srvv4 = score.score
+            }
+            IpVersion::Srvv6 => {
+                scoremap.entry(score.id.to_string()).or_default().srvv6 = score.score
+            }
         }
     }
     let monitors: Vec<String> = scoremap.iter().map(|v| v.0.clone()).collect();
