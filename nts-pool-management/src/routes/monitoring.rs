@@ -30,6 +30,7 @@ pub async fn get_work(
                         ProbeTimesourceInfo {
                             uuid: ts.id.to_string(),
                             domain: None,
+                            port: None,
                         },
                     ),
                     (
@@ -37,6 +38,7 @@ pub async fn get_work(
                         ProbeTimesourceInfo {
                             uuid: ts.id.to_string(),
                             domain: None,
+                            port: None,
                         },
                     ),
                 ]

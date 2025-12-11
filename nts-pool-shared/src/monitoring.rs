@@ -13,6 +13,21 @@ pub enum IpVersion {
     Srvv6,
 }
 
+impl IpVersion {
+    pub fn is_srv(self) -> bool {
+        matches!(self, IpVersion::Srvv4 | IpVersion::Srvv6)
+    }
+
+    pub fn other_ip_protocol(self) -> Self {
+        match self {
+            IpVersion::Ipv4 => IpVersion::Ipv6,
+            IpVersion::Ipv6 => IpVersion::Ipv4,
+            IpVersion::Srvv4 => IpVersion::Srvv6,
+            IpVersion::Srvv6 => IpVersion::Srvv4,
+        }
+    }
+}
+
 impl std::fmt::Display for IpVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

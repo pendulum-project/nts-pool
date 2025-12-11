@@ -265,25 +265,45 @@ impl KeyExchangeClient {
         &self,
         io: impl AsyncRead + AsyncWrite + Unpin,
         server_name: String,
-        uuid: impl AsRef<str>,
+        uuid: Option<impl AsRef<str>>,
     ) -> Result<KeyExchangeResult, NtsError> {
-        let request = ClientRequest::Uuid {
-            algorithms: self
-                .algorithms
-                .iter()
-                .copied()
-                .map(|v| v.into())
-                .collect::<Vec<AlgorithmId>>()
-                .into(),
-            protocols: self
-                .protocols
-                .iter()
-                .copied()
-                .map(|v| v.into())
-                .collect::<Vec<ProtocolId>>()
-                .into(),
-            key: self.authorization_key.as_str().into(),
-            uuid: uuid.as_ref().into(),
+        let request = if let Some(ref uuid) = uuid {
+            ClientRequest::Uuid {
+                algorithms: self
+                    .algorithms
+                    .iter()
+                    .copied()
+                    .map(|v| v.into())
+                    .collect::<Vec<AlgorithmId>>()
+                    .into(),
+                protocols: self
+                    .protocols
+                    .iter()
+                    .copied()
+                    .map(|v| v.into())
+                    .collect::<Vec<ProtocolId>>()
+                    .into(),
+                key: self.authorization_key.as_str().into(),
+                uuid: uuid.as_ref().into(),
+            }
+        } else {
+            ClientRequest::Ordinary {
+                algorithms: self
+                    .algorithms
+                    .iter()
+                    .copied()
+                    .map(|v| v.into())
+                    .collect::<Vec<AlgorithmId>>()
+                    .into(),
+                protocols: self
+                    .protocols
+                    .iter()
+                    .copied()
+                    .map(|v| v.into())
+                    .collect::<Vec<ProtocolId>>()
+                    .into(),
+                denied_servers: vec![],
+            }
         };
 
         let mut io = self
