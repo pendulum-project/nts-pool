@@ -12,6 +12,8 @@
       <th>Owner</th>
       <th>IPv4 Score</th>
       <th>IPv6 Score</th>
+      <th>SRV Score (Ipv4)</th>
+      <th>SRV Score (Ipv6)</th>
       <th>Weight</th>
       <th>Countries</th>
       <td><!-- Actions --></td>
@@ -23,6 +25,8 @@
           <td>{{ ts.user_email }}</td>
           <td>{{ ts.time_source.ipv4_score | fmt("{:.1}") }}</td>
           <td>{{ ts.time_source.ipv6_score | fmt("{:.1}") }}</td>
+          <td>{{ ts.time_source.srv4_score | fmt("{:.1}") }}</td>
+          <td>{{ ts.time_source.srv6_score | fmt("{:.1}") }}</td>
           <td>{{ ts.time_source.weight }}</td>
           <td>{{ ts.time_source.countries.join(", ") }}</td>
           <td>
