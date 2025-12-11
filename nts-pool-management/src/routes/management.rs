@@ -47,9 +47,7 @@ struct ScoreTableData {
     monitor: String,
     ipv4: f64,
     ipv6: f64,
-    #[expect(unused)]
     srvv4: f64,
-    #[expect(unused)]
     srvv6: f64,
 }
 
