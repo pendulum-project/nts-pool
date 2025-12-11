@@ -29,7 +29,7 @@ use std::{
 };
 
 use eyre::Context;
-use nts_pool_shared::{ProbeControlCommand, ProbeResult};
+use nts_pool_shared::{ProbeControlCommand, ProbeResult, ProbeTimesourceInfo};
 use serde::Serialize;
 use tokio::{
     select,
@@ -55,7 +55,7 @@ trait ProbeExecutor {
 
     fn run_probe(
         self: Arc<Self>,
-        timesource: (IpVersion, String),
+        timesource: (IpVersion, ProbeTimesourceInfo),
     ) -> impl Future<Output = Result<Self::Output, eyre::Error>> + Send;
 }
 
@@ -78,9 +78,9 @@ impl ProbeExecutor for Probe {
 
     async fn run_probe(
         self: Arc<Self>,
-        timesource: (IpVersion, String),
+        timesource: (IpVersion, ProbeTimesourceInfo),
     ) -> Result<Self::Output, eyre::Error> {
-        self.probe(timesource.1, timesource.0).await
+        self.probe(timesource.1.uuid, timesource.0).await
     }
 }
 
@@ -134,7 +134,7 @@ async fn run_probing_inner<
     let config = Arc::new(config);
 
     let (new_work_sender, mut new_work) =
-        tokio::sync::mpsc::unbounded_channel::<(Instant, (IpVersion, String))>();
+        tokio::sync::mpsc::unbounded_channel::<(Instant, (IpVersion, ProbeTimesourceInfo))>();
     let (result_sender, result_receiver) =
         tokio::sync::mpsc::channel::<((IpVersion, String), T::Output)>(MAX_RESULT_QUEUE_SIZE);
     let permitter = Arc::new(tokio::sync::Semaphore::new(MAX_PARALLEL_PROBES));
@@ -179,12 +179,14 @@ async fn run_probing_inner<
                     if command.timesources.contains(&work_item.1) {
                         if let Ok(permit) = permitter.clone().try_acquire_owned() {
                             let local_probe = probe.read().unwrap().clone();
-                            let uuid = work_item.1.clone();
+                            let work = work_item.1.clone();
                             let result_sender = result_sender.clone();
                             tokio::spawn(async move {
-                                match local_probe.run_probe(uuid.clone()).await {
+                                match local_probe.run_probe(work.clone()).await {
                                     Ok(result) => {
-                                        let _ = result_sender.send((uuid, result)).await;
+                                        let _ = result_sender
+                                            .send(((work.0, work.1.uuid), result))
+                                            .await;
                                     }
                                     Err(e) => {
                                         warn!("Probe failed: {}", e)
@@ -362,6 +364,7 @@ mod tests {
         time::Duration,
     };
 
+    use nts_pool_shared::ProbeTimesourceInfo;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
@@ -387,9 +390,9 @@ mod tests {
 
         async fn run_probe(
             self: Arc<Self>,
-            timesource: (IpVersion, String),
+            timesource: (IpVersion, ProbeTimesourceInfo),
         ) -> Result<Self::Output, eyre::Error> {
-            Ok(timesource)
+            Ok((timesource.0, timesource.1.uuid))
         }
     }
 
@@ -402,7 +405,7 @@ mod tests {
             let (mut conn, _) = server.accept().await.unwrap();
             let mut req = [0u8; 4096];
             let _ = conn.read(&mut req).await.unwrap();
-            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 347\r\n\r\n{\"timesources\":[[\"Ipv4\",\"UUID-A\"],[\"Ipv6\",\"UUID-B\"]],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
+            conn.write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 365\r\n\r\n{\"timesources\":[[\"Ipv4\",{\"uuid\":\"UUID-A\"}],[\"Ipv6\",{\"uuid\":\"UUID-B\"}]],\"poolke\":\"localhost\",\"result_endpoint\":\"http://localhost:3000/monitoring/submit\",\"result_batchsize\":4,\"result_max_waittime\":{\"secs\":60,\"nanos\":0},\"update_interval\":{\"secs\":60,\"nanos\":0},\"probe_interval\":{\"secs\":4,\"nanos\":0},\"nts_timeout\":{\"secs\":1,\"nanos\":0},\"ntp_timeout\":{\"secs\":1,\"nanos\":0}}").await.unwrap();
             conn.shutdown().await.unwrap();
         });
 
@@ -517,8 +520,20 @@ mod tests {
             ) -> Result<ProbeControlCommand, eyre::Error> {
                 Ok(ProbeControlCommand {
                     timesources: [
-                        (IpVersion::Ipv4, "A".to_string()),
-                        (IpVersion::Ipv4, "B".to_string()),
+                        (
+                            IpVersion::Ipv4,
+                            ProbeTimesourceInfo {
+                                uuid: "A".to_string(),
+                                domain: None,
+                            },
+                        ),
+                        (
+                            IpVersion::Ipv4,
+                            ProbeTimesourceInfo {
+                                uuid: "B".to_string(),
+                                domain: None,
+                            },
+                        ),
                     ]
                     .into(),
                     poolke: "".into(),
@@ -595,8 +610,20 @@ mod tests {
                         INDEX.store(1, std::sync::atomic::Ordering::SeqCst);
                         ProbeControlCommand {
                             timesources: [
-                                (IpVersion::Ipv4, "A".to_string()),
-                                (IpVersion::Ipv4, "B".to_string()),
+                                (
+                                    IpVersion::Ipv4,
+                                    ProbeTimesourceInfo {
+                                        uuid: "A".to_string(),
+                                        domain: None,
+                                    },
+                                ),
+                                (
+                                    IpVersion::Ipv4,
+                                    ProbeTimesourceInfo {
+                                        uuid: "B".to_string(),
+                                        domain: None,
+                                    },
+                                ),
                             ]
                             .into(),
                             poolke: "".into(),
@@ -612,7 +639,14 @@ mod tests {
                     1 => {
                         INDEX.store(2, std::sync::atomic::Ordering::SeqCst);
                         ProbeControlCommand {
-                            timesources: [(IpVersion::Ipv4, "B".to_string())].into(),
+                            timesources: [(
+                                IpVersion::Ipv4,
+                                ProbeTimesourceInfo {
+                                    uuid: "B".to_string(),
+                                    domain: None,
+                                },
+                            )]
+                            .into(),
                             poolke: "".into(),
                             result_endpoint: "".into(),
                             result_batchsize: 1,
@@ -625,8 +659,20 @@ mod tests {
                     }
                     _ => ProbeControlCommand {
                         timesources: [
-                            (IpVersion::Ipv4, "B".to_string()),
-                            (IpVersion::Ipv4, "C".to_string()),
+                            (
+                                IpVersion::Ipv4,
+                                ProbeTimesourceInfo {
+                                    uuid: "B".to_string(),
+                                    domain: None,
+                                },
+                            ),
+                            (
+                                IpVersion::Ipv4,
+                                ProbeTimesourceInfo {
+                                    uuid: "C".to_string(),
+                                    domain: None,
+                                },
+                            ),
                         ]
                         .into(),
                         poolke: "".into(),
