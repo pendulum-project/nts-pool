@@ -17,7 +17,9 @@
             "kind": {
               "Enum": [
                 "ipv4",
-                "ipv6"
+                "ipv6",
+                "srvv4",
+                "srvv6"
               ]
             }
           }
@@ -48,7 +50,9 @@
             "kind": {
               "Enum": [
                 "ipv4",
-                "ipv6"
+                "ipv6",
+                "srvv4",
+                "srvv6"
               ]
             }
           }
