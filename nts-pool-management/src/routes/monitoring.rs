@@ -41,6 +41,22 @@ pub async fn get_work(
                             port: None,
                         },
                     ),
+                    (
+                        IpVersion::Srvv4,
+                        ProbeTimesourceInfo {
+                            uuid: ts.id.to_string(),
+                            domain: Some(ts.hostname.clone()),
+                            port: ts.port.map(|v| v.into()),
+                        },
+                    ),
+                    (
+                        IpVersion::Srvv6,
+                        ProbeTimesourceInfo {
+                            uuid: ts.id.to_string(),
+                            domain: Some(ts.hostname.clone()),
+                            port: ts.port.map(|v| v.into()),
+                        },
+                    ),
                 ]
                 .into_iter()
             })
