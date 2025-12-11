@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 pub enum IpVersion {
     Ipv4,
     Ipv6,
+    Srvv4,
+    Srvv6,
 }
 
 impl std::fmt::Display for IpVersion {
@@ -16,6 +18,8 @@ impl std::fmt::Display for IpVersion {
         match self {
             IpVersion::Ipv4 => write!(f, "IPv4"),
             IpVersion::Ipv6 => write!(f, "IPv6"),
+            IpVersion::Srvv4 => write!(f, "SRVv4"),
+            IpVersion::Srvv6 => write!(f, "SRVv6"),
         }
     }
 }
