@@ -1,6 +1,6 @@
 use axum::{Json, extract::State, response::IntoResponse};
 use eyre::Context;
-use nts_pool_shared::{IpVersion, ProbeControlCommand, ProbeResult};
+use nts_pool_shared::{IpVersion, ProbeControlCommand, ProbeResult, ProbeTimesourceInfo};
 
 use crate::{
     AppState,
@@ -25,8 +25,20 @@ pub async fn get_work(
             .iter()
             .flat_map(|ts| {
                 [
-                    (IpVersion::Ipv4, ts.id.to_string()),
-                    (IpVersion::Ipv6, ts.id.to_string()),
+                    (
+                        IpVersion::Ipv4,
+                        ProbeTimesourceInfo {
+                            uuid: ts.id.to_string(),
+                            domain: None,
+                        },
+                    ),
+                    (
+                        IpVersion::Ipv6,
+                        ProbeTimesourceInfo {
+                            uuid: ts.id.to_string(),
+                            domain: None,
+                        },
+                    ),
                 ]
                 .into_iter()
             })
