@@ -157,7 +157,8 @@ impl Probe {
         let start_time = Instant::now();
         let ke_result = match timeout(
             self.nts_timeout,
-            self.ntske.exchange_keys(io, domain, Some(uuid)),
+            self.ntske
+                .exchange_keys(io, domain, if ipprot.is_srv() { None } else { Some(uuid) }),
         )
         .await
         {

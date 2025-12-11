@@ -42,6 +42,8 @@ pub struct TimeSource {
     pub weight: i32,
     pub ipv4_score: f64,
     pub ipv6_score: f64,
+    pub srv4_score: f64,
+    pub srv6_score: f64,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -373,7 +375,9 @@ pub async fn details(
                 base_secret_index AS "base_secret_index!",
                 weight AS "weight!",
                 ipv4_score AS "ipv4_score!: _",
-                ipv6_score AS "ipv6_score!: _"
+                ipv6_score AS "ipv6_score!: _",
+                srv4_score AS "srv4_score!: _",
+                srv6_score AS "srv6_score!: _"
             FROM time_source_scores
             WHERE id = $1 AND deleted = false;
         "#,
@@ -400,7 +404,9 @@ pub async fn by_user(
                 base_secret_index AS "base_secret_index!",
                 weight AS "weight!",
                 ipv4_score AS "ipv4_score!: _",
-                ipv6_score AS "ipv6_score!: _"
+                ipv6_score AS "ipv6_score!: _",
+                srv4_score AS "srv4_score!: _",
+                srv6_score AS "srv6_score!: _"
             FROM time_source_scores
             WHERE owner = $1 AND deleted = false;
         "#,
@@ -424,7 +430,9 @@ pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, sqlx::Er
                 base_secret_index AS "base_secret_index!",
                 weight AS "weight!",
                 ipv4_score AS "ipv4_score!: _",
-                ipv6_score AS "ipv6_score!: _"
+                ipv6_score AS "ipv6_score!: _",
+                srv4_score AS "srv4_score!: _",
+                srv6_score AS "srv6_score!: _"
             FROM time_source_scores
             WHERE deleted = false;
         "#,
@@ -456,7 +464,9 @@ pub async fn list_with_owner_names(
                     ts.base_secret_index,
                     ts.weight,
                     ts.ipv4_score,
-                    ts.ipv6_score
+                    ts.ipv6_score,
+                    ts.srv4_score,
+                    ts.srv6_score
                 ) AS "time_source!: TimeSource",
                 u.email AS "user_email!"
             FROM time_source_scores AS ts
