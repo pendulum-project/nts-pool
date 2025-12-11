@@ -59,11 +59,13 @@ impl Probe {
     pub async fn probe(
         &self,
         uuid: impl AsRef<str>,
+        domain: impl AsRef<str>,
+        port: u16,
         ipprot: IpVersion,
     ) -> Result<ProbeResult, eyre::Error> {
         let uuid = uuid.as_ref();
         tracing::debug!("Probing {}", uuid);
-        let (keyexchange, next) = self.probe_keyexchange(uuid, ipprot).await?;
+        let (keyexchange, next) = self.probe_keyexchange(uuid, domain, port, ipprot).await?;
         tracing::debug!("Keyexchange result: {:?}", keyexchange);
 
         let (ntp_with_ke_cookie, next) = match next {
@@ -90,9 +92,62 @@ impl Probe {
     async fn probe_keyexchange(
         &self,
         uuid: impl AsRef<str>,
+        domain: impl AsRef<str>,
+        port: u16,
         ipprot: IpVersion,
     ) -> Result<(KeyExchangeProbeResult, Option<NtpInputs>), eyre::Error> {
-        let addr = resolve_as_version((self.poolke.as_str(), 4460), ipprot).await?;
+        let (domain, addr) = if ipprot.is_srv() {
+            match resolve_as_version((domain.as_ref(), port), ipprot).await {
+                Ok(addr) => (domain.as_ref().to_owned(), addr),
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::NotFound || e.raw_os_error().is_none() =>
+                {
+                    if resolve_as_version((domain.as_ref(), port), ipprot.other_ip_protocol())
+                        .await
+                        .is_ok()
+                    {
+                        return Ok((
+                            KeyExchangeProbeResult {
+                                status: match ipprot {
+                                    IpVersion::Ipv4 => KeyExchangeStatus::Failed,
+                                    IpVersion::Ipv6 => KeyExchangeStatus::Failed,
+                                    IpVersion::Srvv4 => KeyExchangeStatus::SrvIpv6Only,
+                                    IpVersion::Srvv6 => KeyExchangeStatus::SrvIpv4Only,
+                                },
+                                description: "Only resolvable over other IP version".into(),
+                                exchange_start: SystemTime::now()
+                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                                exchange_duration: 0.0,
+                                num_cookies: 0,
+                            },
+                            None,
+                        ));
+                    } else {
+                        return Ok((
+                            KeyExchangeProbeResult {
+                                status: KeyExchangeStatus::Failed,
+                                description: "Domain name not resolvable".into(),
+                                exchange_start: SystemTime::now()
+                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                                exchange_duration: 0.0,
+                                num_cookies: 0,
+                            },
+                            None,
+                        ));
+                    }
+                }
+                Err(e) => return Err(e.into()),
+            }
+        } else {
+            (
+                self.poolke.clone(),
+                resolve_as_version((self.poolke.as_str(), 4460), ipprot).await?,
+            )
+        };
         let io = TcpStream::connect(addr).await?;
 
         let exchange_start = SystemTime::now()
@@ -102,12 +157,12 @@ impl Probe {
         let start_time = Instant::now();
         let ke_result = match timeout(
             self.nts_timeout,
-            self.ntske.exchange_keys(io, self.poolke.clone(), uuid),
+            self.ntske.exchange_keys(io, domain, Some(uuid)),
         )
         .await
         {
             Ok(Ok(result)) => result,
-            Ok(Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer))) => {
+            Ok(Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer))) if !ipprot.is_srv() => {
                 return Err(eyre::eyre!("Server not known (yet)"));
             }
             Ok(Err(e)) => {
@@ -404,6 +459,34 @@ mod tests {
     use crate::{packet::IdentityCipher, test_init};
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_nts_keyexchange_dns() {
+        test_init();
+        let probe = Probe::new(ProbeConfig {
+            poolke: "".into(),
+            nts_config: NtsClientConfig {
+                certificates: [].into(),
+                protocol_version: crate::NtpVersion::V4,
+                authorization_key: "".into(),
+            },
+            nts_timeout: Duration::from_secs(1),
+            ntp_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        let findings = probe
+            .probe_keyexchange("UUID", "doesnotexist", 4460, IpVersion::Srvv4)
+            .await
+            .unwrap();
+        assert_eq!(findings.0.status, KeyExchangeStatus::Failed);
+
+        let findings = probe
+            .probe_keyexchange("UUID", "127.0.0.1", 4460, IpVersion::Srvv6)
+            .await
+            .unwrap();
+        assert_eq!(std::dbg!(findings.0).status, KeyExchangeStatus::SrvIpv4Only);
+    }
 
     #[tokio::test]
     async fn test_ntp_dns_failed() {
