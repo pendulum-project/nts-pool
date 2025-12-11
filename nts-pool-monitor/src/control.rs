@@ -80,7 +80,13 @@ impl ProbeExecutor for Probe {
         self: Arc<Self>,
         timesource: (IpVersion, ProbeTimesourceInfo),
     ) -> Result<Self::Output, eyre::Error> {
-        self.probe(timesource.1.uuid, timesource.0).await
+        self.probe(
+            timesource.1.uuid,
+            timesource.1.domain.as_deref().unwrap_or(""),
+            timesource.1.port.unwrap_or(4460),
+            timesource.0,
+        )
+        .await
     }
 }
 
@@ -525,6 +531,7 @@ mod tests {
                             ProbeTimesourceInfo {
                                 uuid: "A".to_string(),
                                 domain: None,
+                                port: None,
                             },
                         ),
                         (
@@ -532,6 +539,7 @@ mod tests {
                             ProbeTimesourceInfo {
                                 uuid: "B".to_string(),
                                 domain: None,
+                                port: None,
                             },
                         ),
                     ]
@@ -615,6 +623,7 @@ mod tests {
                                     ProbeTimesourceInfo {
                                         uuid: "A".to_string(),
                                         domain: None,
+                                        port: None,
                                     },
                                 ),
                                 (
@@ -622,6 +631,7 @@ mod tests {
                                     ProbeTimesourceInfo {
                                         uuid: "B".to_string(),
                                         domain: None,
+                                        port: None,
                                     },
                                 ),
                             ]
@@ -644,6 +654,7 @@ mod tests {
                                 ProbeTimesourceInfo {
                                     uuid: "B".to_string(),
                                     domain: None,
+                                    port: None,
                                 },
                             )]
                             .into(),
@@ -664,6 +675,7 @@ mod tests {
                                 ProbeTimesourceInfo {
                                     uuid: "B".to_string(),
                                     domain: None,
+                                    port: None,
                                 },
                             ),
                             (
@@ -671,6 +683,7 @@ mod tests {
                                 ProbeTimesourceInfo {
                                     uuid: "C".to_string(),
                                     domain: None,
+                                    port: None,
                                 },
                             ),
                         ]
