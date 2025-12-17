@@ -208,7 +208,7 @@ pub async fn create_time_source(
     match time_source::create(
         &state.db,
         user.id,
-        new_time_source.clone().try_into()?,
+        new_time_source.clone().into_new_source(&app)?,
         state.config.base_secret_index,
         &geodb,
     )
@@ -224,11 +224,10 @@ pub async fn create_time_source(
             ),
         })
         .into_response()),
-        Err(_) => Ok((
-            cookies.flash_error("Could not add time source".to_string()),
-            Redirect::to(TIME_SOURCES_ENDPOINT),
-        )
-            .into_response()),
+        Err(_) => {
+            cookies.flash_error("Could not add duplicate time source".to_string());
+            Ok((cookies, Redirect::to(TIME_SOURCES_ENDPOINT)).into_response())
+        }
     }
 }
 
