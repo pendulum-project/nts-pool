@@ -9,6 +9,7 @@ use sha3::Digest;
 
 use crate::{
     DbConnLike,
+    context::AppContext,
     error::AppError,
     models::{
         monitor::MonitorId,
@@ -46,7 +47,7 @@ pub struct TimeSource {
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct NewTimeSource {
     pub hostname: String,
-    pub port: Option<Port>,
+    pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -60,37 +61,45 @@ pub struct UpdateTimeSourceForm {
     pub weight: i32,
 }
 
-impl TryFrom<NewTimeSourceForm> for NewTimeSource {
-    type Error = AppError;
+const DEFAULT_NTSKE_PORT: u16 = 4460;
 
-    fn try_from(form: NewTimeSourceForm) -> Result<Self, Self::Error> {
-        let port = if form.port.is_empty() {
-            None
+impl NewTimeSourceForm {
+    pub fn into_new_source(self, context: &AppContext) -> Result<NewTimeSource, AppError> {
+        let port = if self.port.is_empty() {
+            DEFAULT_NTSKE_PORT
+                .try_into()
+                .wrap_err("Internal app error, 4460 not a valid port")?
         } else {
-            Some(
-                form.port
-                    .parse::<u16>()
-                    .wrap_err("Could not parse into port number")?
-                    .try_into()
-                    .wrap_err("Could not parse into port number")?,
-            )
+            self.port
+                .parse::<u16>()
+                .wrap_err("Could not parse into port number")?
+                .try_into()
+                .wrap_err("Could not parse into port number")?
         };
 
-        // Check domain name is reasonable (cf. RFC 1035)
-        if form.hostname.is_empty()
-            || !form
-                .hostname
-                .chars()
-                .all(|c| matches!(c, '0'..='9' | '.' | '-' | 'a'..='z' | 'A'..='Z'))
-        {
-            return Err(eyre::eyre!("Invalid domain name").into());
-        }
+        check_hostname_reasonable(&self.hostname, context)?;
 
-        Ok(Self {
-            hostname: form.hostname,
+        Ok(NewTimeSource {
+            hostname: self.hostname,
             port,
         })
     }
+}
+
+fn check_hostname_reasonable(hostname: &str, context: &AppContext) -> Result<(), AppError> {
+    if hostname.is_empty()
+        || !hostname
+            .chars()
+            .all(|c| matches!(c, '0'..='9' | '.' | '-' | 'a'..='z' | 'A'..='Z'))
+        || hostname.ends_with(".local")
+        || hostname.ends_with(".")
+        || hostname.ends_with("localhost")
+        || hostname.ends_with(&context.ke_domain)
+    {
+        return Err(eyre::eyre!("Invalid domain name").into());
+    }
+
+    Ok(())
 }
 
 pub async fn infer_regions(
@@ -466,14 +475,15 @@ mod tests {
     #[test]
     fn test_time_source_form_valid_without_port_1() {
         assert_eq!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "test".into(),
                 port: "".into()
-            })
+            }
+            .into_new_source(&AppContext::default())
             .unwrap(),
             NewTimeSource {
                 hostname: "test".into(),
-                port: None
+                port: 4460.try_into().unwrap()
             }
         );
     }
@@ -481,14 +491,15 @@ mod tests {
     #[test]
     fn test_time_source_form_valid_without_port_2() {
         assert_eq!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "ExAmPlE.com".into(),
                 port: "".into()
-            })
+            }
+            .into_new_source(&AppContext::default())
             .unwrap(),
             NewTimeSource {
                 hostname: "ExAmPlE.com".into(),
-                port: None
+                port: 4460.try_into().unwrap(),
             }
         );
     }
@@ -496,14 +507,15 @@ mod tests {
     #[test]
     fn test_time_source_form_valid_with_port() {
         assert_eq!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "test".into(),
                 port: "456".into()
-            })
+            }
+            .into_new_source(&AppContext::default())
             .unwrap(),
             NewTimeSource {
                 hostname: "test".into(),
-                port: Some(456.try_into().unwrap())
+                port: 456.try_into().unwrap()
             }
         );
     }
@@ -511,10 +523,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_weird_characters_1() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "js(.com".into(),
                 port: "".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -522,10 +535,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_weird_characters_2() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "jsê.com".into(),
                 port: "".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -533,10 +547,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_weird_characters_3() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "js@.com".into(),
                 port: "".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -544,10 +559,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_port_0() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "example.com".into(),
                 port: "0".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -555,10 +571,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_port_100000() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "example.com".into(),
                 port: "100000".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -566,10 +583,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_non_numeric_port() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "example.com".into(),
                 port: "fe".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -577,10 +595,11 @@ mod tests {
     #[test]
     fn test_time_source_form_reject_port_with_trailing_garbage() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "example.com".into(),
                 port: "123 abc".into(),
-            })
+            }
+            .into_new_source(&AppContext::default())
             .is_err()
         );
     }
@@ -588,9 +607,76 @@ mod tests {
     #[test]
     fn test_time_source_form_require_hostname() {
         assert!(
-            NewTimeSource::try_from(NewTimeSourceForm {
+            NewTimeSourceForm {
                 hostname: "".into(),
                 port: "".into(),
+            }
+            .into_new_source(&AppContext::default())
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_local() {
+        assert!(
+            NewTimeSourceForm {
+                hostname: "example.local".into(),
+                port: "123".into(),
+            }
+            .into_new_source(&AppContext::default())
+            .is_err()
+        );
+
+        assert!(
+            NewTimeSourceForm {
+                hostname: "localhost".into(),
+                port: "123".into(),
+            }
+            .into_new_source(&AppContext::default())
+            .is_err()
+        );
+
+        assert!(
+            NewTimeSourceForm {
+                hostname: "example.local.".into(),
+                port: "123".into(),
+            }
+            .into_new_source(&AppContext::default())
+            .is_err()
+        );
+
+        assert!(
+            NewTimeSourceForm {
+                hostname: "example.localhost".into(),
+                port: "123".into(),
+            }
+            .into_new_source(&AppContext::default())
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_time_source_form_reject_ke_domain() {
+        assert!(
+            NewTimeSourceForm {
+                hostname: "ke.example.org".into(),
+                port: "123".into(),
+            }
+            .into_new_source(&AppContext {
+                ke_domain: "ke.example.org".into(),
+                ..AppContext::default()
+            })
+            .is_err()
+        );
+
+        assert!(
+            NewTimeSourceForm {
+                hostname: "bla.ke.example.org".into(),
+                port: "123".into(),
+            }
+            .into_new_source(&AppContext {
+                ke_domain: "ke.example.org".into(),
+                ..AppContext::default()
             })
             .is_err()
         );
