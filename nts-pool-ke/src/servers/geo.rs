@@ -88,6 +88,12 @@ pub struct GeographicServerManager {
     cache_invalidator: Arc<AbortingJoinHandle<()>>,
 }
 
+struct Lookups {
+    regions_ipv4: HashMap<String, Vec<ServerLookup>>,
+    regions_ipv6: HashMap<String, Vec<ServerLookup>>,
+    uuid_lookup: HashMap<Arc<str>, usize>,
+}
+
 struct GeographicServerManagerInner {
     servers: Box<[KeyExchangeServer]>,
     regions_ipv4: HashMap<String, Vec<ServerLookup>>,
@@ -278,90 +284,11 @@ impl GeographicServerManager {
             let server_file = std::fs::File::open(servers)?;
             let servers: Box<[KeyExchangeServer]> = serde_json::from_reader(server_file)?;
 
-            let mut regions_ipv4: HashMap<String, Vec<ServerLookup>> = HashMap::new();
-            let mut regions_ipv6: HashMap<String, Vec<ServerLookup>> = HashMap::new();
-            let mut uuid_lookup = HashMap::new();
-            for (index, server) in servers.iter().enumerate() {
-                if uuid_lookup.insert(server.uuid.clone(), index).is_some() {
-                    return Err(std::io::ErrorKind::InvalidData.into());
-                }
-                if server.ipv4_capable {
-                    for region in &server.regions {
-                        if let Some(region_list) = regions_ipv4.get_mut(region) {
-                            region_list.push(ServerLookup {
-                                index,
-                                total_weight_including: server.weight
-                                    + region_list
-                                        .last()
-                                        .map(|v| v.total_weight_including)
-                                        .unwrap_or(0),
-                            })
-                        } else {
-                            regions_ipv4.insert(
-                                region.clone(),
-                                vec![ServerLookup {
-                                    index,
-                                    total_weight_including: server.weight,
-                                }],
-                            );
-                        }
-                    }
-                }
-                if server.ipv6_capable {
-                    for region in &server.regions {
-                        if let Some(region_list) = regions_ipv6.get_mut(region) {
-                            region_list.push(ServerLookup {
-                                index,
-                                total_weight_including: server.weight
-                                    + region_list
-                                        .last()
-                                        .map(|v| v.total_weight_including)
-                                        .unwrap_or(0),
-                            })
-                        } else {
-                            regions_ipv6.insert(
-                                region.clone(),
-                                vec![ServerLookup {
-                                    index,
-                                    total_weight_including: server.weight,
-                                }],
-                            );
-                        }
-                    }
-                }
-            }
-            let mut ipv4weight = 0;
-            regions_ipv4.insert(
-                GLOBAL.into(),
-                servers
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, server)| server.ipv4_capable)
-                    .map(|(index, server)| {
-                        ipv4weight += server.weight;
-                        ServerLookup {
-                            total_weight_including: ipv4weight,
-                            index,
-                        }
-                    })
-                    .collect(),
-            );
-            let mut ipv6weight = 0;
-            regions_ipv6.insert(
-                GLOBAL.into(),
-                servers
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, server)| server.ipv6_capable)
-                    .map(|(index, server)| {
-                        ipv6weight += server.weight;
-                        ServerLookup {
-                            total_weight_including: ipv6weight,
-                            index,
-                        }
-                    })
-                    .collect(),
-            );
+            let Lookups {
+                regions_ipv4,
+                regions_ipv6,
+                uuid_lookup,
+            } = Self::generate_lookups(&servers)?;
 
             let geodb = maxminddb::Reader::open_readfile(geodb).map_err(std::io::Error::other)?;
 
@@ -375,6 +302,60 @@ impl GeographicServerManager {
         })
         .await
         .map_err(std::io::Error::other)?
+    }
+
+    fn add_to_region(
+        regions: &mut HashMap<String, Vec<ServerLookup>>,
+        regionname: &str,
+        index: usize,
+        weight: usize,
+    ) {
+        if let Some(region_list) = regions.get_mut(regionname) {
+            region_list.push(ServerLookup {
+                index,
+                total_weight_including: weight
+                    + region_list
+                        .last()
+                        .map(|v| v.total_weight_including)
+                        .unwrap_or(0),
+            })
+        } else {
+            regions.insert(
+                regionname.to_owned(),
+                vec![ServerLookup {
+                    index,
+                    total_weight_including: weight,
+                }],
+            );
+        }
+    }
+
+    fn generate_lookups(servers: &[KeyExchangeServer]) -> Result<Lookups, std::io::Error> {
+        let mut regions_ipv4: HashMap<String, Vec<ServerLookup>> = HashMap::new();
+        let mut regions_ipv6: HashMap<String, Vec<ServerLookup>> = HashMap::new();
+        let mut uuid_lookup = HashMap::new();
+        for (index, server) in servers.iter().enumerate() {
+            if uuid_lookup.insert(server.uuid.clone(), index).is_some() {
+                return Err(std::io::ErrorKind::InvalidData.into());
+            }
+            if server.ipv4_capable {
+                Self::add_to_region(&mut regions_ipv4, GLOBAL, index, server.weight);
+                for region in &server.regions {
+                    Self::add_to_region(&mut regions_ipv4, region, index, server.weight);
+                }
+            }
+            if server.ipv6_capable {
+                Self::add_to_region(&mut regions_ipv6, GLOBAL, index, server.weight);
+                for region in &server.regions {
+                    Self::add_to_region(&mut regions_ipv6, region, index, server.weight);
+                }
+            }
+        }
+        Ok(Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        })
     }
 }
 
