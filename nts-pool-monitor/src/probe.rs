@@ -110,12 +110,7 @@ impl Probe {
             Ok(Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer))) => {
                 return Err(eyre::eyre!("Server not known (yet)"));
             }
-            Ok(Err(NtsError::Error(
-                pool_nts::ErrorCode::BadRequest | pool_nts::ErrorCode::InternalServerError,
-            ))) => {
-                return Err(eyre::eyre!("KELB could not succesfully handle our request"));
-            }
-            Ok(Err(e @ NtsError::Invalid | e @ NtsError::Error(_))) => {
+            Ok(Err(e)) => {
                 let end_time = Instant::now();
                 return Ok((
                     KeyExchangeProbeResult {
@@ -125,10 +120,8 @@ impl Probe {
                                 "Time source's response was invalid but well-structured".into()
                             }
                             NtsError::Error(e) => e.to_string(),
-                            _ => {
-                                return Err(eyre::eyre!(
-                                    "Unexpected branch taken in error description"
-                                ));
+                            e => {
+                                format!("Unexpected error during key exchange: {e}")
                             }
                         },
                         exchange_start,
@@ -138,7 +131,6 @@ impl Probe {
                     None,
                 ));
             }
-            Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
                 let end_time = Instant::now();
                 return Ok((
@@ -213,12 +205,57 @@ impl Probe {
                 }
                 Err(e) => return Err(e),
             };
-        let mut socket = timestamped_socket::socket::connect_address(
+        let mut socket = match timestamped_socket::socket::connect_address(
             addr,
             timestamped_socket::socket::GeneralTimestampMode::SoftwareAll,
-        )?;
+        ) {
+            Ok(socket) => socket,
+            Err(e) => {
+                tracing::debug!("Unexpected error during connect: {e}");
+                return Ok((
+                    SecuredNtpProbeResult {
+                        status: SecuredNtpProbeStatus::CouldNotConnect,
+                        request_sent: SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        requested_cookies: 0,
+                        received_cookies: 0,
+                        roundtrip_duration: None,
+                        remote_residence_time: None,
+                        offset: None,
+                        stratum: None,
+                        leap_indicates_synchronized: false,
+                    },
+                    None,
+                ));
+            }
+        };
 
-        let send = socket.send(msg).await?.ok_or(std::io::ErrorKind::Other)?;
+        let send = match socket.send(msg).await {
+            // Timestamp not present errors are purely internal problems, don't blame remote for those.
+            Ok(timestamp) => timestamp.ok_or(std::io::ErrorKind::Other)?,
+            Err(e) => {
+                tracing::debug!("Unexpected error during send: {e}");
+                return Ok((
+                    SecuredNtpProbeResult {
+                        status: SecuredNtpProbeStatus::CouldNotSend,
+                        request_sent: SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        requested_cookies: 0,
+                        received_cookies: 0,
+                        roundtrip_duration: None,
+                        remote_residence_time: None,
+                        offset: None,
+                        stratum: None,
+                        leap_indicates_synchronized: false,
+                    },
+                    None,
+                ));
+            }
+        };
         let t1 = NtpTimestamp::from_net_timestamp(send);
 
         let mut have_deny = false;
@@ -228,7 +265,29 @@ impl Probe {
         let (t4, msg) = loop {
             let received = select! {
                 biased;
-                r = socket.recv(&mut buf) => r?,
+                r = socket.recv(&mut buf) => match r {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::debug!("Unexpected error during recv: {e}");
+                        return Ok((
+                            SecuredNtpProbeResult {
+                                status: SecuredNtpProbeStatus::CouldNotReceive,
+                                request_sent: SystemTime::now()
+                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                                requested_cookies: 0,
+                                received_cookies: 0,
+                                roundtrip_duration: None,
+                                remote_residence_time: None,
+                                offset: None,
+                                stratum: None,
+                                leap_indicates_synchronized: false,
+                            },
+                            None,
+                        ));
+                    }
+                },
                 _ = &mut timeout => {
                     return Ok((
                         SecuredNtpProbeResult {
@@ -302,6 +361,7 @@ impl Probe {
 
             break (
                 NtpTimestamp::from_net_timestamp(
+                    // Timestamps should be present, problems with that are a bug on our side.
                     received.timestamp.ok_or(std::io::ErrorKind::Other)?,
                 ),
                 incoming,
