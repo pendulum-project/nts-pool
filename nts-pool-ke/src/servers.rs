@@ -68,11 +68,12 @@ pub trait ServerManager: Sync + Send {
     /// any denied servers.
     ///
     /// Denied servers need not be respected if no other options are available
-    fn assign_server(
-        &self,
+    fn assign_server<'a>(
+        &'a self,
         address: SocketAddr,
+        domain: Option<&'_ str>,
         denied_servers: &[Cow<'_, str>],
-    ) -> Option<Self::Server<'_>>;
+    ) -> Option<Self::Server<'a>>;
 
     /// Select a server with given UUID. This is used for making KE connections
     /// in the monitoring.
