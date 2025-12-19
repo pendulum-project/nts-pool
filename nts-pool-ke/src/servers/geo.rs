@@ -793,66 +793,50 @@ mod tests {
     #[tokio::test]
     async fn test_load_is_distributed() {
         crate::test_init();
+
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-a".into(),
+                domain: "a.test".into(),
+                server_name: ServerName::try_from("a.test").unwrap(),
+                connection_address: ("a.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-b".into(),
+                domain: "b.test".into(),
+                server_name: ServerName::try_from("b.test").unwrap(),
+                connection_address: ("b.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-a".into(),
-                        domain: "a.test".into(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("a.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-b".into(),
-                        domain: "b.test".into(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("b.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
+                uuid_lookup,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -895,66 +879,50 @@ mod tests {
     #[tokio::test]
     async fn test_respect_denied_if_possible() {
         crate::test_init();
+
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-a".into(),
+                domain: "a.test".into(),
+                server_name: ServerName::try_from("a.test").unwrap(),
+                connection_address: ("a.test".into(), 4460),
+                randomizer: "".into(),
+                base_key_index: 0,
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-b".into(),
+                domain: "b.test".into(),
+                server_name: ServerName::try_from("b.test").unwrap(),
+                connection_address: ("b.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-a".into(),
-                        domain: "a.test".into(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("a.test".into(), 4460),
-                        randomizer: "".into(),
-                        base_key_index: 0,
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-b".into(),
-                        domain: "b.test".into(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("b.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+                uuid_lookup,
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -990,66 +958,48 @@ mod tests {
     #[tokio::test]
     async fn test_ignore_denied_if_impossible() {
         crate::test_init();
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-a".into(),
+                domain: "a.test".into(),
+                server_name: ServerName::try_from("a.test").unwrap(),
+                connection_address: ("a.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-b".into(),
+                domain: "b.test".into(),
+                server_name: ServerName::try_from("b.test").unwrap(),
+                base_key_index: 0,
+                connection_address: ("b.test".into(), 4460),
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-a".into(),
-                        domain: "a.test".into(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("a.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-b".into(),
-                        domain: "b.test".into(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        base_key_index: 0,
-                        connection_address: ("b.test".into(), 4460),
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+                uuid_lookup,
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -1083,102 +1033,62 @@ mod tests {
     #[tokio::test]
     async fn test_region_handling() {
         crate::test_init();
+
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-global".into(),
+                domain: "global.test".into(),
+                server_name: ServerName::try_from("global.test").unwrap(),
+                connection_address: ("global.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-eu".into(),
+                domain: "eu.test".into(),
+                server_name: ServerName::try_from("eu.test").unwrap(),
+                connection_address: ("eu.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec!["EUROPE".into()],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-gb".into(),
+                domain: "gb.test".into(),
+                server_name: ServerName::try_from("gb.test").unwrap(),
+                connection_address: ("gb.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec!["EUROPE".into(), "GB".into()],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-global".into(),
-                        domain: "global.test".into(),
-                        server_name: ServerName::try_from("global.test").unwrap(),
-                        connection_address: ("global.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-eu".into(),
-                        domain: "eu.test".into(),
-                        server_name: ServerName::try_from("eu.test").unwrap(),
-                        connection_address: ("eu.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-gb".into(),
-                        domain: "gb.test".into(),
-                        server_name: ServerName::try_from("gb.test").unwrap(),
-                        connection_address: ("gb.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([
-                    (
-                        "@".into(),
-                        vec![ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        }],
-                    ),
-                    (
-                        "EUROPE".into(),
-                        vec![ServerLookup {
-                            total_weight_including: 1,
-                            index: 1,
-                        }],
-                    ),
-                    (
-                        "GB".into(),
-                        vec![ServerLookup {
-                            total_weight_including: 1,
-                            index: 2,
-                        }],
-                    ),
-                ]),
-                regions_ipv6: HashMap::from([
-                    (
-                        "@".into(),
-                        vec![ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        }],
-                    ),
-                    (
-                        "EUROPE".into(),
-                        vec![ServerLookup {
-                            total_weight_including: 1,
-                            index: 1,
-                        }],
-                    ),
-                    (
-                        "GB".into(),
-                        vec![ServerLookup {
-                            total_weight_including: 1,
-                            index: 2,
-                        }],
-                    ),
-                ]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([
-                    ("UUID-global".into(), 0),
-                    ("UUID-eu".into(), 1),
-                    ("UUID-gb".into(), 2),
-                ]),
+                uuid_lookup,
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -1200,102 +1110,98 @@ mod tests {
             cache_invalidator: Arc::new(tokio::spawn(async {}).into()),
         };
 
+        // Note: below checks are inherently probabilistic, but failure chance should be tiny (1 in 2^55)
+
         // GB
-        let server = manager
-            .assign_server("81.2.69.193:4460".parse().unwrap(), &[])
-            .unwrap();
-        assert_eq!(server.name().as_ref(), "gb.test");
+        let mut seen = HashSet::new();
+        for _ in 0..100 {
+            let server = manager
+                .assign_server("81.2.69.193:4460".parse().unwrap(), &[])
+                .unwrap();
+            seen.insert(server.name().to_owned());
+        }
+        assert_eq!(seen, HashSet::from(["gb.test".into()]));
         // SE
-        let server = manager
-            .assign_server("89.160.20.113:4460".parse().unwrap(), &[])
-            .unwrap();
-        assert_eq!(server.name().as_ref(), "eu.test");
+        let mut seen = HashSet::new();
+        for _ in 0..100 {
+            let server = manager
+                .assign_server("89.160.20.113:4460".parse().unwrap(), &[])
+                .unwrap();
+            seen.insert(server.name().to_owned());
+        }
+        assert_eq!(seen, HashSet::from(["gb.test".into(), "eu.test".into()]));
         // US
-        let server = manager
-            .assign_server("50.114.0.1:4460".parse().unwrap(), &[])
-            .unwrap();
-        assert_eq!(server.name().as_ref(), "global.test");
+        let mut seen = HashSet::new();
+        for _ in 0..100 {
+            let server = manager
+                .assign_server("50.114.0.1:4460".parse().unwrap(), &[])
+                .unwrap();
+            seen.insert(server.name().to_owned());
+        }
+        assert_eq!(
+            seen,
+            HashSet::from(["gb.test".into(), "eu.test".into(), "global.test".into()])
+        );
     }
 
     #[tokio::test]
     async fn test_v4_v6_handling() {
         crate::test_init();
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-both".into(),
+                domain: "both.test".into(),
+                server_name: ServerName::try_from("both.test").unwrap(),
+                connection_address: ("both.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-ipv4".into(),
+                domain: "ipv4.test".into(),
+                server_name: ServerName::try_from("ipv4.test").unwrap(),
+                connection_address: ("ipv4.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: false,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-ipv6".into(),
+                domain: "ipv6.test".into(),
+                server_name: ServerName::try_from("ipv6.test").unwrap(),
+                connection_address: ("ipv6.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: false,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-both".into(),
-                        domain: "both.test".into(),
-                        server_name: ServerName::try_from("both.test").unwrap(),
-                        connection_address: ("both.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-ipv4".into(),
-                        domain: "ipv4.test".into(),
-                        server_name: ServerName::try_from("ipv4.test").unwrap(),
-                        connection_address: ("ipv4.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: false,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-ipv6".into(),
-                        domain: "ipv6.test".into(),
-                        server_name: ServerName::try_from("ipv6.test").unwrap(),
-                        connection_address: ("ipv6.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: false,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 2,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([
-                    ("UUID-both".into(), 0),
-                    ("UUID-ipv4".into(), 1),
-                    ("UUID-ipv6".into(), 2),
-                ]),
+                uuid_lookup,
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -1398,66 +1304,49 @@ mod tests {
     #[tokio::test]
     async fn test_server_weighting_no_exclusion() {
         crate::test_init();
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-a".into(),
+                domain: "a.test".into(),
+                server_name: ServerName::try_from("a.test").unwrap(),
+                connection_address: ("a.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-b".into(),
+                domain: "b.test".into(),
+                server_name: ServerName::try_from("b.test").unwrap(),
+                connection_address: ("b.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 2,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-a".into(),
-                        domain: "a.test".into(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("a.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-b".into(),
-                        domain: "b.test".into(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("b.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 2,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 3,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 3,
-                            index: 1,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+                uuid_lookup,
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -1498,78 +1387,60 @@ mod tests {
     #[tokio::test]
     async fn test_server_weighting_with_exclusion() {
         crate::test_init();
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-a".into(),
+                domain: "a.test".into(),
+                server_name: ServerName::try_from("a.test").unwrap(),
+                connection_address: ("a.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-b".into(),
+                domain: "b.test".into(),
+                server_name: ServerName::try_from("b.test").unwrap(),
+                connection_address: ("b.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 2,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-c".into(),
+                domain: "c.test".into(),
+                server_name: ServerName::try_from("c.test").unwrap(),
+                connection_address: ("c.test".into(), 4460),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 4,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
         let manager = GeographicServerManager {
             inner: Arc::new(RwLock::new(Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-a".into(),
-                        domain: "a.test".into(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("a.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-b".into(),
-                        domain: "b.test".into(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("b.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 2,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-c".into(),
-                        domain: "c.test".into(),
-                        server_name: ServerName::try_from("c.test").unwrap(),
-                        connection_address: ("c.test".into(), 4460),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 4,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 3,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 3,
-                            index: 1,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+                uuid_lookup,
             }))),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -1623,66 +1494,49 @@ mod tests {
                 .is_ok()
         );
 
+        let servers: Box<_> = [
+            KeyExchangeServer {
+                uuid: "UUID-a".into(),
+                domain: "a.test".into(),
+                server_name: ServerName::try_from("a.test").unwrap(),
+                connection_address: ("127.0.0.1".into(), 0),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+            KeyExchangeServer {
+                uuid: "UUID-b".into(),
+                domain: "b.test".into(),
+                server_name: ServerName::try_from("b.test").unwrap(),
+                connection_address: ("127.0.0.1".into(), 0),
+                base_key_index: 0,
+                randomizer: "".into(),
+                weight: 1,
+                regions: vec![],
+                ipv4_capable: true,
+                ipv6_capable: true,
+            },
+        ]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let server = GeographicServer {
             inner: Arc::new(GeographicServerManagerInner {
-                servers: [
-                    KeyExchangeServer {
-                        uuid: "UUID-a".into(),
-                        domain: "a.test".into(),
-                        server_name: ServerName::try_from("a.test").unwrap(),
-                        connection_address: ("127.0.0.1".into(), 0),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                    KeyExchangeServer {
-                        uuid: "UUID-b".into(),
-                        domain: "b.test".into(),
-                        server_name: ServerName::try_from("b.test").unwrap(),
-                        connection_address: ("127.0.0.1".into(), 0),
-                        base_key_index: 0,
-                        randomizer: "".into(),
-                        weight: 1,
-                        regions: vec![],
-                        ipv4_capable: true,
-                        ipv6_capable: true,
-                    },
-                ]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![
-                        ServerLookup {
-                            total_weight_including: 1,
-                            index: 0,
-                        },
-                        ServerLookup {
-                            total_weight_including: 2,
-                            index: 1,
-                        },
-                    ],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0), ("UUID-b".into(), 1)]),
+                uuid_lookup,
             }),
             server_support_cache: Arc::new(server_support_cache),
             server_connection_cache: Arc::new(scc::HashMap::new()),
@@ -1751,40 +1605,35 @@ mod tests {
                 .is_ok()
         );
 
+        let servers: Box<_> = [KeyExchangeServer {
+            uuid: "UUID-a".into(),
+            domain: "localhost".into(),
+            server_name: ServerName::try_from("localhost").unwrap(),
+            connection_address: ("127.0.0.1".into(), server_addr.port()),
+            base_key_index: 0,
+            randomizer: "".into(),
+            weight: 1,
+            regions: vec![],
+            ipv4_capable: true,
+            ipv6_capable: true,
+        }]
+        .into();
+        let Lookups {
+            regions_ipv4,
+            regions_ipv6,
+            uuid_lookup,
+        } = GeographicServerManager::generate_lookups(&servers).unwrap();
+
         let server = GeographicServer {
             inner: Arc::new(GeographicServerManagerInner {
-                servers: [KeyExchangeServer {
-                    uuid: "UUID-a".into(),
-                    domain: "localhost".into(),
-                    server_name: ServerName::try_from("localhost").unwrap(),
-                    connection_address: ("127.0.0.1".into(), server_addr.port()),
-                    base_key_index: 0,
-                    randomizer: "".into(),
-                    weight: 1,
-                    regions: vec![],
-                    ipv4_capable: true,
-                    ipv6_capable: true,
-                }]
-                .into(),
-                regions_ipv4: HashMap::from([(
-                    "@".into(),
-                    vec![ServerLookup {
-                        total_weight_including: 1,
-                        index: 0,
-                    }],
-                )]),
-                regions_ipv6: HashMap::from([(
-                    "@".into(),
-                    vec![ServerLookup {
-                        total_weight_including: 1,
-                        index: 0,
-                    }],
-                )]),
+                servers,
+                regions_ipv4,
+                regions_ipv6,
                 geodb: Reader::from_source(
                     include_bytes!("../../testdata/GeoLite2-Country-Test.mmdb").to_vec(),
                 )
                 .unwrap(),
-                uuid_lookup: HashMap::from([("UUID-a".into(), 0)]),
+                uuid_lookup,
             }),
             server_support_cache: Arc::new(scc::HashMap::new()),
             server_connection_cache: Arc::new(server_connection_cache),
