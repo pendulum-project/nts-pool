@@ -291,21 +291,24 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         let monitoring_keys = self.monitoring_keys.read().unwrap().clone();
 
         let pick = match &client_request {
-            ClientRequest::Ordinary { denied_servers, .. } => match self
-                .server_manager
-                .assign_server(source_address, denied_servers)
-            {
-                Some(server) => server,
-                None => {
-                    ErrorResponse {
-                        errorcode: ErrorCode::InternalServerError,
+            ClientRequest::Ordinary { denied_servers, .. } => {
+                match self.server_manager.assign_server(
+                    source_address,
+                    client_stream.get_ref().get_ref().1.server_name(),
+                    denied_servers,
+                ) {
+                    Some(server) => server,
+                    None => {
+                        ErrorResponse {
+                            errorcode: ErrorCode::InternalServerError,
+                        }
+                        .serialize(&mut client_stream)
+                        .await?;
+                        client_stream.shutdown().await?;
+                        return Err(PoolError::NoSuchServer);
                     }
-                    .serialize(&mut client_stream)
-                    .await?;
-                    client_stream.shutdown().await?;
-                    return Err(PoolError::NoSuchServer);
                 }
-            },
+            }
             ClientRequest::Uuid { key, uuid, .. } if monitoring_keys.contains(key.as_ref()) => {
                 *is_monitor = true;
                 if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
@@ -720,6 +723,7 @@ mod tests {
         fn assign_server(
             &self,
             address: std::net::SocketAddr,
+            _domain: Option<&str>,
             denied_servers: &[Cow<'_, str>],
         ) -> Option<Self::Server<'_>> {
             *self.inner.received_denied_servers.lock().unwrap() = denied_servers

@@ -63,6 +63,7 @@ impl ServerManager for RoundRobinServerManager {
     fn assign_server(
         &self,
         _address: SocketAddr,
+        _domain: Option<&str>,
         denied_servers: &[Cow<'_, str>],
     ) -> Option<Self::Server<'_>> {
         if self.servers.is_empty() {
@@ -248,10 +249,10 @@ mod tests {
         };
 
         let first_server = manager
-            .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+            .assign_server("127.0.0.1:4460".parse().unwrap(), None, &[])
             .unwrap();
         let second_server = manager
-            .assign_server("127.0.0.1:4460".parse().unwrap(), &[])
+            .assign_server("127.0.0.1:4460".parse().unwrap(), None, &[])
             .unwrap();
         assert_ne!(first_server.name(), second_server.name());
     }
@@ -342,12 +343,12 @@ mod tests {
         };
 
         let server = manager
-            .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
+            .assign_server("127.0.0.1:4460".parse().unwrap(), None, &["a.test".into()])
             .unwrap();
         assert_ne!(server.name().as_ref(), "a.test");
 
         let server = manager
-            .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
+            .assign_server("127.0.0.1:4460".parse().unwrap(), None, &["a.test".into()])
             .unwrap();
         assert_ne!(server.name().as_ref(), "a.test");
     }
@@ -394,12 +395,14 @@ mod tests {
         let first = manager
             .assign_server(
                 "127.0.0.1:4460".parse().unwrap(),
+                None,
                 &["a.test".into(), "b.test".into()],
             )
             .unwrap();
         let second = manager
             .assign_server(
                 "127.0.0.1:4460".parse().unwrap(),
+                None,
                 &["a.test".into(), "b.test".into()],
             )
             .unwrap();
