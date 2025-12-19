@@ -60,6 +60,9 @@ pub struct KeyExchangeProbeResult {
 pub enum SecuredNtpProbeStatus {
     Success,
     DnsLookupFailed,
+    CouldNotConnect,
+    CouldNotSend,
+    CouldNotReceive,
     NtsNak,
     Deny,
     Timeout,
