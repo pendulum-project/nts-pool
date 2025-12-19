@@ -38,7 +38,7 @@
               <dd>Ipv6 score</dd>
               <dt>{{ ts.ipv6_score | fmt("{:.1}") }}</dt>
               <dd>Weight</dd>
-              <dt><input type="number" name="weight" value="{{ ts.weight }}" /></dt>
+              <dt><input type="number" name="weight" min="1" max="{{ app.max_timesource_weight }}" value="{{ ts.weight }}" /></dt>
             </dl>
             <button type="submit" class="btn-sm">Save</button>
           </form>

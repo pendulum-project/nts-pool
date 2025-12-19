@@ -36,3 +36,6 @@ The management server is configured primarily through environment variables, whi
 - `NTSPOOL_MONITOR_PROBE_INTERVAL`: Time between individual probes of a time source for a given protocol, in seconds. (Example: `4`)
 - `NTSPOOL_MONITOR_NTS_TIMEOUT`: Maximum time the monitor will wait for an NTS key exchange with a time source before declaring it unreachable, in milliseconds. (Example: `1000`)
 - `NTSPOOL_MONITOR_NTP_TIMEOUT`: Maximum time the monitor will wait for an NTP message exchange with a time source before declaring it unreachable, in milliseconds. (Example: `1000`)
+
+## Time source weight configuration
+- `NTSPOOL_MAX_TIMESOURCE_WEIGHT`: Maximum weight that can be given to a timesource by the user. (Example: `10`)

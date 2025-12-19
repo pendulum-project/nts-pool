@@ -31,6 +31,8 @@ pub struct AppConfig {
     pub monitor_probe_interval: Duration,
     pub monitor_nts_timeout: Duration,
     pub monitor_ntp_timeout: Duration,
+    // timesource weight configuration
+    pub max_timesource_weight: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +127,12 @@ impl AppConfig {
                 .wrap_err("NTSPOOL_MONITOR_NTP_TIMEOUT should be number off milliseconds")?,
         );
 
+        // timesource weight configuration
+        let max_timesource_weight: i32 = std::env::var("NTSPOOL_MAX_TIMESOURCE_WEIGHT")
+            .wrap_err("Missing NTSPOOL_MAX_TIMESOURCE_WEIGHT environment variable")?
+            .parse()
+            .wrap_err("NTSPOOL_MAX_TIMESOURCE_WEIGHT should be an integer")?;
+
         Ok(Self {
             base_url,
             assets_path,
@@ -145,6 +153,7 @@ impl AppConfig {
             monitor_probe_interval,
             monitor_nts_timeout,
             monitor_ntp_timeout,
+            max_timesource_weight,
         })
     }
 }
@@ -171,6 +180,7 @@ impl Default for AppConfig {
             monitor_probe_interval: Duration::from_secs(4),
             monitor_nts_timeout: Duration::from_millis(1000),
             monitor_ntp_timeout: Duration::from_millis(1000),
+            max_timesource_weight: 10,
         }
     }
 }

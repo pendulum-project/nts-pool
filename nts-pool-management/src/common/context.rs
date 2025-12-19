@@ -25,6 +25,7 @@ pub struct AppContext {
     pub user_context: UserContext,
     pub flash_message: Option<(MessageType, String)>,
     pub base_url: BaseUrl,
+    pub max_timesource_weight: i32,
 }
 
 impl Default for AppContext {
@@ -37,6 +38,7 @@ impl Default for AppContext {
             flash_message: Default::default(),
             user_context: Default::default(),
             base_url: "http://localhost:3000".into(),
+            max_timesource_weight: 10,
         }
     }
 }
@@ -105,6 +107,7 @@ async fn extract_context(
             user_context,
             base_url: state.config.base_url.clone(),
             ke_domain: state.config.poolke_name.clone(),
+            max_timesource_weight: state.config.max_timesource_weight,
         },
     ))
 }

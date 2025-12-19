@@ -123,6 +123,8 @@ management:
     mountPath: /opts/nts-pool-management/database-cert/cert.pem
     # The certificate content (in PEM format)
     cert: null
+  # Maximum weight for timesources that can be configured through the management interface
+  maxTimesourceWeight: 10
   # Update this to a new value to trigger setting up a new set of management pods
   restartBump: 1
   # Override global image settings for the management service

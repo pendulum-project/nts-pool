@@ -274,6 +274,11 @@ pub async fn update_time_source(
     mut cookies: CookieService,
     Form(time_source): Form<UpdateTimeSourceForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    if time_source.weight <= 0 || time_source.weight > state.config.max_timesource_weight {
+        cookies.flash_error("Invalid time source weight".to_string());
+        return Ok((cookies, Redirect::to(TIME_SOURCES_ENDPOINT)));
+    }
+
     match time_source::update(&state.db, user.id, time_source_id, time_source).await {
         Ok(_) => cookies.flash_success("Time source updated successfully".to_string()),
         Err(_) => cookies.flash_error("Could not update time source".to_string()),
