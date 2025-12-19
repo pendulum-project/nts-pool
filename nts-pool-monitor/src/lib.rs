@@ -29,7 +29,8 @@ async fn resolve_as_version<T: tokio::net::ToSocketAddrs>(
 
     for candidate in resolved {
         match (ipprot, candidate) {
-            (IpVersion::Ipv4, SocketAddr::V4(_)) | (IpVersion::Ipv6, SocketAddr::V6(_)) => {
+            (IpVersion::Ipv4 | IpVersion::Srvv4, SocketAddr::V4(_))
+            | (IpVersion::Ipv6 | IpVersion::Srvv6, SocketAddr::V6(_)) => {
                 return Ok(candidate);
             }
             _ => {}
