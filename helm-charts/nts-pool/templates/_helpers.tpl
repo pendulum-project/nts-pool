@@ -112,6 +112,8 @@ Create the name of the service account to use
   value: "{{ .Values.monitor.ntpTimeout }}"
 - name: NTSPOOL_GEOLOCATION_DB
   value: "/opt/geodb/geodb.mmdb"
+- name: NTSPOOL_MAX_TIMESOURCE_WEIGHT
+  value: "{{ .Values.management.maxTimesourceWeight }}"
 - name: RUST_BACKTRACE
   value: "1"
 {{- end }}
