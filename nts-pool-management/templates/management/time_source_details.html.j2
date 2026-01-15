@@ -14,12 +14,16 @@
     <th>Monitor</th>
     <th>Ipv4 Score</th>
     <th>Ipv6 Score</th>
+    <th>SRV Score (Ipv4)</th>
+    <th>SRV Score (Ipv6)</th>
   </tr>
   {% for row in scores %}
   <tr>
     <td>{{ row.monitor }}</td>
     <td>{{ row.ipv4 | fmt("{:.1}") }}</td>
     <td>{{ row.ipv6 | fmt("{:.1}") }}</td>
+    <td>{{ row.srvv4 | fmt("{:.1}") }}</td>
+    <td>{{ row.srvv6 | fmt("{:.1}") }}</td>
   </tr>
   {% endfor %}
 </table></p>
@@ -37,6 +41,8 @@
       <select name="protocol">
         <option value="Ipv4" {% if cur_protocol == IpVersion::Ipv4 %} selected {% endif %}>IPv4</option>
         <option value="Ipv6" {% if cur_protocol == IpVersion::Ipv6 %} selected {% endif %}>IPv6</option>
+        <option value="Srvv4" {% if cur_protocol == IpVersion::Srvv4 %} selected {% endif %}>SRV (Ipv4)</option>
+        <option value="Srvv6" {% if cur_protocol == IpVersion::Srvv6 %} selected {% endif %}>SRV (Ipv6)</option>
       </select>
       <button type="submit">apply</button>
       </form>

@@ -37,6 +37,10 @@
               <dt>{{ ts.ipv4_score | fmt("{:.1}") }}</dt>
               <dd>Ipv6 score</dd>
               <dt>{{ ts.ipv6_score | fmt("{:.1}") }}</dt>
+              <dd>SRV score (Ipv4)</dd>
+              <dt>{{ ts.srv4_score | fmt("{:.1}") }}</dt>
+              <dd>SRV score (Ipv6)</dd>
+              <dt>{{ ts.srv6_score | fmt("{:.1}") }}</dt>
               <dd>Weight</dd>
               <dt><input type="number" name="weight" min="1" max="{{ app.max_timesource_weight }}" value="{{ ts.weight }}" /></dt>
             </dl>

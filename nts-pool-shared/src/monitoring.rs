@@ -9,6 +9,23 @@ use serde::{Deserialize, Serialize};
 pub enum IpVersion {
     Ipv4,
     Ipv6,
+    Srvv4,
+    Srvv6,
+}
+
+impl IpVersion {
+    pub fn is_srv(self) -> bool {
+        matches!(self, IpVersion::Srvv4 | IpVersion::Srvv6)
+    }
+
+    pub fn other_ip_protocol(self) -> Self {
+        match self {
+            IpVersion::Ipv4 => IpVersion::Ipv6,
+            IpVersion::Ipv6 => IpVersion::Ipv4,
+            IpVersion::Srvv4 => IpVersion::Srvv6,
+            IpVersion::Srvv6 => IpVersion::Srvv4,
+        }
+    }
 }
 
 impl std::fmt::Display for IpVersion {
@@ -16,13 +33,22 @@ impl std::fmt::Display for IpVersion {
         match self {
             IpVersion::Ipv4 => write!(f, "IPv4"),
             IpVersion::Ipv6 => write!(f, "IPv6"),
+            IpVersion::Srvv4 => write!(f, "SRVv4"),
+            IpVersion::Srvv6 => write!(f, "SRVv6"),
         }
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ProbeTimesourceInfo {
+    pub uuid: String,
+    pub domain: Option<String>,
+    pub port: Option<u16>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ProbeControlCommand {
-    pub timesources: HashSet<(IpVersion, String)>,
+    pub timesources: HashSet<(IpVersion, ProbeTimesourceInfo)>,
     pub poolke: String,
     pub result_endpoint: String,
     pub result_batchsize: usize,
@@ -43,6 +69,8 @@ pub struct ProbeResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum KeyExchangeStatus {
     Success,
+    SrvIpv4Only,
+    SrvIpv6Only,
     Failed,
     Timeout,
 }
