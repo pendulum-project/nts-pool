@@ -24,6 +24,15 @@ impl SortDirection {
     }
 }
 
+impl AsRef<str> for SortDirection {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Asc => "asc",
+            Self::Desc => "desc",
+        }
+    }
+}
+
 /// Raw pagination query parameters the client can supply.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Pagination<S: Default + PartialEq> {

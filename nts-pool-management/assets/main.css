@@ -30,7 +30,7 @@ main section {
   margin-bottom: var(--space-lg);
 }
 
-nav {
+nav:not(.pagination) {
   background-color: var(--secondary);
   color: var(--white);
   display: flex;

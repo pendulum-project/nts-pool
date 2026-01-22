@@ -16,8 +16,9 @@ use crate::{
     models::{
         monitor::{self, Monitor, MonitorId, NewMonitor},
         time_source,
-        user::{self, User, UserId},
+        user::{self, User, UserId, UserSort},
     },
+    pagination::{Pagination, PaginationInfo},
     templates::{HtmlTemplate, filters},
 };
 
@@ -39,15 +40,31 @@ pub async fn overview(
 struct UsersTemplate {
     app: AppContext,
     users: Vec<User>,
+    pagination: PaginationInfo<UserSort>,
 }
 
 pub async fn users(
     _admin: Administrator,
     app: AppContext,
+    pagination: Pagination<UserSort>,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let users = user::list(&state.db).await?;
-    Ok(HtmlTemplate(UsersTemplate { app, users }))
+    let total_items = user::count(&state.db).await?.max(0) as u64;
+    let pagination = pagination.set_total(total_items);
+    let users = user::list(
+        &state.db,
+        pagination.limit(),
+        pagination.offset(),
+        pagination.sort(),
+        pagination.direction(),
+    )
+    .await?;
+
+    Ok(HtmlTemplate(UsersTemplate {
+        app,
+        users,
+        pagination,
+    }))
 }
 
 #[derive(Template)]
