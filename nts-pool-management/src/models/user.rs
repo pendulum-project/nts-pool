@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-use crate::{DbConnLike, models::util::uuid};
+use crate::{DbConnLike, models::util::uuid, pagination::SortDirection};
 
 uuid!(UserId);
 
@@ -126,6 +126,29 @@ pub struct NewUser {
     pub activation_expires_at: DateTime<Utc>,
 }
 
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UserSort {
+    #[default]
+    CreatedAt,
+    Email,
+    DisabledSince,
+    LastLoginAt,
+    Role,
+}
+
+impl AsRef<str> for UserSort {
+    fn as_ref(&self) -> &str {
+        match self {
+            UserSort::CreatedAt => "created_at",
+            UserSort::Email => "email",
+            UserSort::DisabledSince => "disabled_since",
+            UserSort::LastLoginAt => "last_login_at",
+            UserSort::Role => "role",
+        }
+    }
+}
+
 /// Create a new user with the given email
 pub async fn create(conn: impl DbConnLike<'_>, new_user: NewUser) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
@@ -146,17 +169,51 @@ pub async fn create(conn: impl DbConnLike<'_>, new_user: NewUser) -> Result<User
 }
 
 /// List all the users in the database
-pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<User>, sqlx::Error> {
+pub async fn list(
+    conn: impl DbConnLike<'_>,
+    limit: i64,
+    offset: i64,
+    sort_field: &UserSort,
+    sort_direction: &SortDirection,
+) -> Result<Vec<User>, sqlx::Error> {
+    dbg!(limit, offset);
     sqlx::query_as!(
         User,
         r#"
             SELECT id, email, role AS "role: _", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at
             FROM users
-            ORDER BY created_at DESC
-        "#
+            ORDER BY
+              CASE WHEN $3 = 'email' AND $4 = 'asc' THEN email END ASC,
+              CASE WHEN $3 = 'email' AND $4 = 'desc' THEN email END DESC,
+              CASE WHEN $3 = 'last_login_at' AND $4 = 'asc' THEN last_login_at END ASC,
+              CASE WHEN $3 = 'last_login_at' AND $4 = 'desc' THEN last_login_at END DESC,
+              CASE WHEN $3 = 'disabled_since' AND $4 = 'asc' THEN disabled_since END ASC,
+              CASE WHEN $3 = 'disabled_since' AND $4 = 'desc' THEN disabled_since END DESC,
+              CASE WHEN $3 = 'role' AND $4 = 'asc' THEN role END ASC,
+              CASE WHEN $3 = 'role' AND $4 = 'desc' THEN role END DESC,
+              created_at DESC
+            LIMIT $1
+            OFFSET $2
+        "#,
+        limit,
+        offset,
+        sort_field.as_ref(),
+        sort_direction.as_ref(),
     )
     .fetch_all(conn)
     .await
+}
+
+pub async fn count(conn: impl DbConnLike<'_>) -> Result<i64, sqlx::Error> {
+    Ok(sqlx::query!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM users
+        "#
+    )
+    .fetch_one(conn)
+    .await?
+    .count)
 }
 
 /// Retrieve a user by their email address

@@ -16,6 +16,8 @@
   --info: #99b6d5;
   --link: #0a57f0;
 
+  --muted: var(--grey);
+  
   /* spacing */
   --space-xxs: 0.25rem;
   --space-xs: 0.5rem;
