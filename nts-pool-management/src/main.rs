@@ -23,6 +23,7 @@ pub use common::*;
 
 mod common;
 pub mod models;
+mod pagination;
 pub mod routes;
 mod scoring;
 pub mod templates;
