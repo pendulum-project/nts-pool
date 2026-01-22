@@ -2,6 +2,7 @@ button,
 [type="button"],
 [type="submit"],
 [type="reset"],
+.pagination button,
 a.btn {
     display: inline-block;
     background-color: var(--primary);
@@ -92,6 +93,34 @@ input[type="number"].error,
 input[type="password"].error {
     border: var(--border-width) solid var(--error);
     background-color: var(--white);
+}
+
+nav.pagination {
+  margin: var(--space-md) 0;
+  a.btn, button {
+    color: var(--secondary);
+    background-color: inherit;
+    padding: 0 var(--space-sm);
+    border: inherit;
+  }
+
+  [aria-disabled] {
+    color: var(--grey);
+  }
+
+  [aria-disabled]:hover {
+    color: var(--grey);
+    cursor: inherit;
+  }
+
+  [aria-current="page"] {
+    text-decoration: underline;
+  }
+
+  a.btn:hover, button:hover {
+    border: inherit;
+    color: var(--primary);
+  }
 }
 
 #accept-terms + span {
@@ -278,6 +307,11 @@ table {
     width: 100%;
     th {
         text-align: left;
+      
+        a,
+        a:visited {
+            color: inherit;
+        }
     }
 
     th,
