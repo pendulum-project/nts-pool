@@ -2111,6 +2111,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "serde_urlencoded",
  "sha3",
  "sqlx",
  "testcontainers",
