@@ -15,7 +15,7 @@ use crate::{
     error::AppError,
     models::{
         monitor::{self, Monitor, MonitorId, NewMonitor},
-        time_source,
+        regions, time_source,
         user::{self, User, UserId, UserSort},
     },
     pagination::{Pagination, PaginationInfo},
@@ -152,6 +152,45 @@ pub async fn rekey_monitor(
         name: monitor.name,
         key: authentication_key,
     }))
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct RegionManipulateForm {
+    region: String,
+}
+
+#[derive(Template)]
+#[template(path = "admin/regions.html.j2")]
+struct RegionsTemplate {
+    app: AppContext,
+    regions: Vec<String>,
+}
+
+pub async fn regions(
+    _admin: Administrator,
+    app: AppContext,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let regions = regions::list_enabled_regions(&state.db).await?;
+    Ok(HtmlTemplate(RegionsTemplate { app, regions }))
+}
+
+pub async fn enable_region(
+    _admin: Administrator,
+    State(state): State<AppState>,
+    Form(RegionManipulateForm { region }): Form<RegionManipulateForm>,
+) -> Result<impl IntoResponse, AppError> {
+    regions::enable_region(&state.db, region).await?;
+    Ok(Redirect::to("/admin/regions"))
+}
+
+pub async fn disable_region(
+    _admin: Administrator,
+    State(state): State<AppState>,
+    Form(RegionManipulateForm { region }): Form<RegionManipulateForm>,
+) -> Result<impl IntoResponse, AppError> {
+    regions::disable_region(&state.db, region).await?;
+    Ok(Redirect::to("/admin/regions"))
 }
 
 pub async fn user_block(
