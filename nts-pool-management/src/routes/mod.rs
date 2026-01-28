@@ -59,6 +59,9 @@ pub fn create_router() -> Router<AppState> {
             "/admin/monitors/{id}/regenerate_key",
             post(admin::rekey_monitor),
         )
+        .route("/admin/regions", get(admin::regions))
+        .route("/admin/regions/enable", post(admin::enable_region))
+        .route("/admin/regions/disable", post(admin::disable_region))
         .route(
             TIME_SOURCES_ENDPOINT,
             get(management::time_sources).post(management::create_time_source),
