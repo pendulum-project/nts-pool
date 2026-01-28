@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use askama::Template;
 use axum::{
     Json, Router,
@@ -148,6 +150,10 @@ pub async fn poolke_servers(
     _authentication: AuthenticatedInternal,
 ) -> Result<impl IntoResponse, AppError> {
     let timesources = models::time_source::list(&state.db).await?;
+    let regions: HashSet<_> = models::regions::list_enabled_regions(&state.db)
+        .await?
+        .into_iter()
+        .collect();
     Ok(Json(
         timesources
             .into_iter()
@@ -158,7 +164,11 @@ pub async fn poolke_servers(
                 base_key_index: 0,
                 randomizer: ts.auth_token_randomizer,
                 weight: Some(ts.weight.try_into().unwrap_or(1)),
-                regions: vec![],
+                regions: ts
+                    .countries
+                    .into_iter()
+                    .filter(|v| regions.contains(v))
+                    .collect(),
                 ipv4_capable: Some(ts.ipv4_score > 10.0),
                 ipv6_capable: Some(ts.ipv6_score > 10.0),
             })
