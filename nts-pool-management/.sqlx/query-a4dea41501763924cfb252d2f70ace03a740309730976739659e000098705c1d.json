@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, email, role AS \"role: _\", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n            FROM users\n            ORDER BY created_at DESC\n        ",
+  "query": "\n            SELECT id, email, role AS \"role: _\", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at\n            FROM users\n            ORDER BY\n              CASE WHEN $3 = 'email' AND $4 = 'asc' THEN email END ASC,\n              CASE WHEN $3 = 'email' AND $4 = 'desc' THEN email END DESC,\n              CASE WHEN $3 = 'last_login_at' AND $4 = 'asc' THEN last_login_at END ASC,\n              CASE WHEN $3 = 'last_login_at' AND $4 = 'desc' THEN last_login_at END DESC,\n              CASE WHEN $3 = 'disabled_since' AND $4 = 'asc' THEN disabled_since END ASC,\n              CASE WHEN $3 = 'disabled_since' AND $4 = 'desc' THEN disabled_since END DESC,\n              CASE WHEN $3 = 'role' AND $4 = 'asc' THEN role END ASC,\n              CASE WHEN $3 = 'role' AND $4 = 'desc' THEN role END DESC,\n              created_at DESC\n            LIMIT $1\n            OFFSET $2\n        ",
   "describe": {
     "columns": [
       {
@@ -70,7 +70,12 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text"
+      ]
     },
     "nullable": [
       false,
@@ -86,5 +91,5 @@
       false
     ]
   },
-  "hash": "b6d9dc2ec6d1b4d8bbdeed458e00014f7f80c1cb77ba06ac8607d592844c4157"
+  "hash": "a4dea41501763924cfb252d2f70ace03a740309730976739659e000098705c1d"
 }

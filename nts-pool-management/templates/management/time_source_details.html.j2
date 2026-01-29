@@ -4,47 +4,52 @@
 
 {% block content %}
 
-<section>
-<h2>Scores</h2>
-<p>Current scores (servers are only used for traffic if their score for that type is higher than 10):
-<div class="multivalue-box"><div class="multivalue-element">Ipv4: {{ ts.ipv4_score | fmt("{:.1}") }}</div><div class="multivalue-element">Ipv6: {{ ts.ipv6_score | fmt("{:.1}") }}</div></div></p>
-<p>Current per-monitor scores:
-<table class="autowidth">
-  <tr>
-    <th>Monitor</th>
-    <th>Ipv4 Score</th>
-    <th>Ipv6 Score</th>
-    <th>SRV Score (Ipv4)</th>
-    <th>SRV Score (Ipv6)</th>
-  </tr>
-  {% for row in scores %}
-  <tr>
-    <td>{{ row.monitor }}</td>
-    <td>{{ row.ipv4 | fmt("{:.1}") }}</td>
-    <td>{{ row.ipv6 | fmt("{:.1}") }}</td>
-    <td>{{ row.srvv4 | fmt("{:.1}") }}</td>
-    <td>{{ row.srvv6 | fmt("{:.1}") }}</td>
-  </tr>
-  {% endfor %}
-</table></p>
-</section>
+  <section>
+    <h2>Scores</h2>
+    <p>Current scores (servers are only used for traffic if their score for that type is higher than 10):
+      <div class="multivalue-box"><div class="multivalue-element">Ipv4: {{ ts.ipv4_score | fmt("{:.1}") }}</div><div class="multivalue-element">Ipv6: {{ ts.ipv6_score | fmt("{:.1}") }}</div></div></p>
+    <p>Current per-monitor scores:
+      <table class="autowidth">
+        <tr>
+          <th>Monitor</th>
+          <th>Ipv4 Score</th>
+          <th>Ipv6 Score</th>
+          <th>SRV Score (Ipv4)</th>
+          <th>SRV Score (Ipv6)</th>
+       </tr>
+        {% for row in scores %}
+          <tr>
+            <td>{{ row.monitor }}</td>
+            <td>{{ row.ipv4 | fmt("{:.1}") }}</td>
+            <td>{{ row.ipv6 | fmt("{:.1}") }}</td>
+            <td>{{ row.srvv4 | fmt("{:.1}") }}</td>
+            <td>{{ row.srvv6 | fmt("{:.1}") }}</td>
+          </tr>
+        {% endfor %}
+    </table></p>
+  </section>
 
-<section>
-<h2>Logs</h2>
-{% if let Some(cur_monitor) = cur_monitor %}
-      <form method="get">
-      Monitor: <select name="monitor">
-      {% for mon in monitors %}
-        <option value="{{mon}}" {% if &cur_monitor.to_string() == mon %} selected {% endif %}>{{ mon }}</option>
-      {% endfor %}
-      </select>
-      <select name="protocol">
-        <option value="Ipv4" {% if cur_protocol == IpVersion::Ipv4 %} selected {% endif %}>IPv4</option>
-        <option value="Ipv6" {% if cur_protocol == IpVersion::Ipv6 %} selected {% endif %}>IPv6</option>
-        <option value="Srvv4" {% if cur_protocol == IpVersion::Srvv4 %} selected {% endif %}>SRV (Ipv4)</option>
-        <option value="Srvv6" {% if cur_protocol == IpVersion::Srvv6 %} selected {% endif %}>SRV (Ipv6)</option>
-      </select>
-      <button type="submit">apply</button>
+  <section>
+    <h2>Logs</h2>
+    {% if let Some(cur_monitor) = cur_monitor %}
+      <form method="get" class="table-filter">
+        <div>
+          Monitor: <select name="monitor">
+          {% for mon in monitors %}
+            <option value="{{mon}}" {% if &cur_monitor.to_string() == mon %} selected {% endif %}>{{ mon }}</option>
+          {% endfor %}
+          </select>
+        </div>
+        <div>
+          Protocol: 
+          <select name="protocol">
+            <option value="Ipv4" {% if cur_protocol == IpVersion::Ipv4 %} selected {% endif %}>IPv4</option>
+            <option value="Ipv6" {% if cur_protocol == IpVersion::Ipv6 %} selected {% endif %}>IPv6</option>
+            <option value="Srvv4" {% if cur_protocol == IpVersion::Srvv4 %} selected {% endif %}>SRV (Ipv4)</option>
+            <option value="Srvv6" {% if cur_protocol == IpVersion::Srvv6 %} selected {% endif %}>SRV (Ipv6)</option>
+          </select>
+        </div>
+        <button class="btn-sm" type="submit">Apply</button>
       </form>
       <table class="birowed">
         <tr>
@@ -55,21 +60,29 @@
           <th>New score</th>
         </tr>
         {% for row in log %}
+          <tr>
+            <td rowspan=2>{{ row.time.format("%Y-%m-%d %H:%M") }}</td>
+            <td>{{ row.ke_status }}</td>
+            <td>{{ row.ntp_from_ke_status }}</td>
+            <td>{{ row.ntp_from_ntp_status }}</td>
+            <td>{{ row.score | fmt("{:.1}") }}</td>
+          </tr>
         <tr>
-          <td rowspan=2>{{ row.time.format("%Y-%m-%d %H:%M") }}</td>
-          <td>{{ row.ke_status }}</td>
-          <td>{{ row.ntp_from_ke_status }}</td>
-          <td>{{ row.ntp_from_ntp_status }}</td>
-          <td>{{ row.score | fmt("{:.1}") }}</td>
+          <td colspan="4"><details name="samples"><summary>raw sample</summary><code-block>{{ row.raw_sample | fmt("{:#}") }}</code-block></details></td>
         </tr>
-        <tr>
-          <td colspan=4><details name="samples"><summary>raw sample</summary><code-block>{{ row.raw_sample | fmt("{:#}") }}</code-block></details></td>
-        </tr>
-        {% endfor %}
+      {% endfor %}
       </table>
-  {% else %}
-    No monitoring logs available.
-  {% endif %}
-</section>
+      <section class="table-controls">
+        {% if pagination.total_pages > 0 %}
+          {% include "components/pagination.html.j2" %}
+        {% endif %}
+        <div>
+          {{pagination.total_items()}} Total items
+        </div>
+      </section>
+    {% else %}
+      No monitoring logs available.
+    {% endif %}
+  </section>
 
 {% endblock %}

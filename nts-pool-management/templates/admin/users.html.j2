@@ -25,7 +25,7 @@
           Last login
           {{ pagination.dir_icon(UserSort::LastLoginAt) }}
         </a>
-        </th>
+      </th>
       <th>
         <a href="{{ pagination.sort_link(UserSort::DisabledSince) }}">
           Disabled since
@@ -67,29 +67,12 @@
       {% endfor %}
     </tbody>
   </table>
-
-  <nav aria-label="Pagination" class="pagination">
-  {% if pagination.has_prev %}
-    <a href="{{ pagination.prev() }}" rel="prev" class="btn">&lt;</a>
-  {% else %}
-    <button role="button" disabled aria-disabled="true">&lt;</button>
-  {% endif %}
-  {% for link in pagination.links %}
-    {% if let Some(number) = link.number %}
-      {% if link.current %}
-        <button role="button" disabled aria-current="page">{{ number }}</button>
-      {% else %}
-        <a href="{{ pagination.goto(number) }}" class="btn">{{ number }}</a>
-      {% endif %}
-    {% else %}
-      <span aria-hidden="true">...</span>
+  <section class="table-controls">
+    {% if pagination.total_pages > 0 %}
+      {% include "components/pagination.html.j2" %}
     {% endif %}
-  {% endfor %}
-  {% if pagination.has_next %}
-    <a href="{{ pagination.next() }}" rel="next" class="btn">&gt;</a>
-  {% else %}
-    <button role="button" disabled aria-disabled="true">&gt;</button>
-  {% endif %}
-</nav>
-  
+    <div>
+      {{users.len()}} Total items
+    </div>
+  </section>
 {% endblock %}

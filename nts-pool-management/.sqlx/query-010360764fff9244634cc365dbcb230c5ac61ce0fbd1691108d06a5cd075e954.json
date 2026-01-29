@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as \"count!\"\n        FROM monitor_samples\n        WHERE time_source_id = $1 AND protocol = $2 AND monitor_id = $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "ip_protocol",
+            "kind": {
+              "Enum": [
+                "ipv4",
+                "ipv6",
+                "srvv4",
+                "srvv6"
+              ]
+            }
+          }
+        },
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "010360764fff9244634cc365dbcb230c5ac61ce0fbd1691108d06a5cd075e954"
+}
