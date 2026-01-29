@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO enabled_regions (name) VALUES ($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9faa1095d7b2abdc5de9a124320a9e1e520f110743544f9375ed57bc20c3281"
+}
