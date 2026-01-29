@@ -58,7 +58,7 @@ fn is_default_page(page: &u32) -> bool {
 
 /// Default page size when unspecified.
 const fn default_per_page() -> u32 {
-    500
+    100
 }
 
 fn is_default_per_page(per_page: &u32) -> bool {

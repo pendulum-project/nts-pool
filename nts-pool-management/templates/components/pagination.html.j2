@@ -1,0 +1,23 @@
+<nav aria-label="Pagination" class="pagination">
+  {% if pagination.has_prev %}
+    <a href="{{ pagination.prev() }}" rel="prev" class="btn btn-sm">&lt;</a>
+  {% else %}
+    <button class="btn-sm" role="button" disabled aria-disabled="true">&lt;</button>
+  {% endif %}
+  {% for link in pagination.links %}
+    {% if let Some(number) = link.number %}
+      {% if link.current %}
+        <button class="btn-sm" role="button" disabled aria-current="page">{{ number }}</button>
+      {% else %}
+        <a href="{{ pagination.goto(number) }}" class="btn btn-sm">{{ number }}</a>
+      {% endif %}
+    {% else %}
+      <span aria-hidden="true">...</span>
+    {% endif %}
+  {% endfor %}
+  {% if pagination.has_next %}
+    <a href="{{ pagination.next() }}" rel="next" class="btn btn-sm">&gt;</a>
+  {% else %}
+    <button class="btn-sm" role="button" disabled aria-disabled="true">&gt;</button>
+  {% endif %}
+</nav>
