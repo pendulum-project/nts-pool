@@ -102,44 +102,39 @@ impl Probe {
                 Err(e)
                     if e.kind() == std::io::ErrorKind::NotFound || e.raw_os_error().is_none() =>
                 {
+                    let (status, description);
                     if resolve_as_version((domain.as_ref(), port), ipprot.other_ip_protocol())
                         .await
                         .is_ok()
                     {
-                        return Ok((
-                            KeyExchangeProbeResult {
-                                status: match ipprot {
-                                    IpVersion::Ipv4 => KeyExchangeStatus::Failed,
-                                    IpVersion::Ipv6 => KeyExchangeStatus::Failed,
-                                    IpVersion::Srvv4 => KeyExchangeStatus::SrvIpv6Only,
-                                    IpVersion::Srvv6 => KeyExchangeStatus::SrvIpv4Only,
-                                },
-                                description: "Only resolvable over other IP version".into(),
-                                exchange_start: SystemTime::now()
-                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs(),
-                                exchange_duration: 0.0,
-                                num_cookies: 0,
-                            },
-                            None,
-                        ));
+                        status = match ipprot {
+                            IpVersion::Ipv4 => KeyExchangeStatus::Failed,
+                            IpVersion::Ipv6 => KeyExchangeStatus::Failed,
+                            IpVersion::Srvv4 => KeyExchangeStatus::SrvIpv6Only,
+                            IpVersion::Srvv6 => KeyExchangeStatus::SrvIpv4Only,
+                        };
+                        description = "Only resolvable over other IP version".into();
                     } else {
-                        return Ok((
-                            KeyExchangeProbeResult {
-                                status: KeyExchangeStatus::Failed,
-                                description: "Domain name not resolvable".into(),
-                                exchange_start: SystemTime::now()
-                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs(),
-                                exchange_duration: 0.0,
-                                num_cookies: 0,
-                            },
-                            None,
-                        ));
+                        status = KeyExchangeStatus::Failed;
+                        description = "Domain name not resolvable".into();
                     }
+
+                    return Ok((
+                        KeyExchangeProbeResult {
+                            status,
+                            description,
+                            exchange_start: SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(),
+
+                            exchange_duration: 0.0,
+                            num_cookies: 0,
+                        },
+                        None,
+                    ));
                 }
+
                 Err(e) => return Err(e.into()),
             }
         } else {
