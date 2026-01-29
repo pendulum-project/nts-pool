@@ -12,6 +12,7 @@ pub struct PaginationInfo<S> {
     pub has_prev: bool,
     pub has_next: bool,
     pub total_pages: u32,
+    pub total_items: u64,
     /// Pre-computed markup-friendly page links (numbers and ellipses).
     pub links: Vec<PageLink>,
 
@@ -31,6 +32,10 @@ where
     /// Translate the pagination configuration into a SQL `OFFSET`.
     pub fn offset(&self) -> i64 {
         ((self.page - 1) as i64) * self.per_page as i64
+    }
+
+    pub fn total_items(&self) -> u64 {
+        self.total_items
     }
 
     /// Generate a URL query string for the given page and per-page values.
@@ -112,6 +117,7 @@ where
         has_prev,
         has_next,
         total_pages,
+        total_items,
         links: build_links(page, total_pages),
         sort: pagination.sort,
         order: pagination.order,

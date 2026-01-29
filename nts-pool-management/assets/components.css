@@ -38,7 +38,7 @@ a.btn {
 }
 
 .btn-alt:hover {
-    color: color-mix(in lab, var(--primary), var(--black) 30%);
+    color: color-mix(in lab, var(--primary), var(--black) 30%) !important;
 }
 
 .btn-link,
@@ -53,7 +53,7 @@ a.btn {
 
 .btn-sm {
     max-width: fit-content;
-    padding: var(--space-xs) var(--space-sm);
+    padding: 0 var(--space-sm);
 }
 
 highlight-actions {
@@ -95,43 +95,16 @@ input[type="password"].error {
     background-color: var(--white);
 }
 
-nav.pagination {
-  margin: var(--space-md) 0;
-  a.btn, button {
-    color: var(--secondary);
-    background-color: inherit;
-    padding: 0 var(--space-sm);
-    border: inherit;
-  }
-
-  [aria-disabled] {
-    color: var(--grey);
-  }
-
-  [aria-disabled]:hover {
-    color: var(--grey);
-    cursor: inherit;
-  }
-
-  [aria-current="page"] {
-    text-decoration: underline;
-  }
-
-  a.btn:hover, button:hover {
-    border: inherit;
-    color: var(--primary);
-  }
-}
-
 #accept-terms + span {
     font-weight: normal;
 }
 
 h1 {
-  font-size: 2.25rem;
+    font-size: 2.25rem;
 }
 
 h2 {
+    margin-top: var(--space-md);
     margin-bottom: var(--space-sm);
 }
 
@@ -140,6 +113,7 @@ h3 {
 }
 
 section > p {
+    font-size: 18px;
     margin-bottom: var(--space-sm);
 }
 
@@ -163,7 +137,7 @@ code-block {
     display: block;
     width: 100%;
     margin: var(--space-sm) 0;
-    padding: var(--space-xs) var(--space-xs);
+    padding: var(--space-sm) var(--space-md);
 }
 
 .key {
@@ -243,12 +217,12 @@ details.confirmation-btn > div {
 
 @keyframes animateDown {
   0% {
-    opacity: 0;
-    transform: translatey(-15px);
+      opacity: 0;
+      transform: translatey(-15px);
   }
   100% {
-    opacity: 1;
-    transform: translatey(0);
+      opacity: 1;
+      transform: translatey(0);
   }
 }
 
@@ -291,6 +265,7 @@ dialog .dialog-actions {
 
 details.toast > summary,
 aside {
+    font-weight: bold;
     padding: var(--space-sm) var(--space-md);
     border-width: var(--border-width);
     border-style: solid;
@@ -316,19 +291,19 @@ table {
 
     th,
     td {
-        width: 100%;
         white-space: nowrap;
         padding: var(--space-sm);
     }
-
+  
     tbody {
-        tr:nth-child(odd) {
-            background-color: var(--white);
+        tr {
+            border-bottom: 1px solid var(--grey);
         }
     }
 
-    .actions {
-        text-align: right;
+
+    td.actions {
+        float: right;
         display: flex;
         gap: var(--space-xs);
         white-space: nowrap;
@@ -337,15 +312,19 @@ table {
 
 table.birowed {
     tbody {
-        tr:nth-child(4n + 1),
+        tr:nth-child(4n + 2),
         tr:nth-child(4n + 4) {
-            background-color: var(--white);
+            border: none;
         }
 
-        tr:nth-child(4n + 2),
+        tr:nth-child(4n + 1),
         tr:nth-child(4n + 3) {
-            background-color: transparent;
         }
+    }
+
+    details {
+        cursor: pointer;
+        user-select: none;
     }
 }
 
@@ -356,6 +335,43 @@ table.autowidth {
     td {
         width: auto;
     }
+}
+
+.table-controls {
+    display: flex;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+    justify-content: space-between;
+    padding: 0 var(--space-sm);
+
+    .pagination {
+        a.btn, button {
+            color: var(--secondary);
+            background-color: inherit;
+            padding: 0 var(--space-sm);
+            border: inherit;
+        }
+    }
+    
+    [aria-disabled] {
+        color: var(--grey);
+    }
+
+    [aria-disabled]:hover {
+        color: var(--grey);
+        cursor: inherit;
+    }
+
+    [aria-current="page"] {
+        text-decoration: underline;
+    }
+}
+
+.table-filter {
+    margin: var(--space-sm) 0;
+    display: flex;
+    gap: var(--space-sm);
+    align-items: baseline;
 }
 
 .multivalue-box {

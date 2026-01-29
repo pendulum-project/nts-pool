@@ -8,7 +8,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use nts_pool_shared::IpVersion;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -21,6 +21,7 @@ use crate::{
         monitor::MonitorId,
         time_source::{self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm},
     },
+    pagination::{Pagination, PaginationInfo},
     templates::{HtmlTemplate, filters},
 };
 
@@ -60,6 +61,13 @@ struct DisplayLogRow {
     raw_sample: Value,
 }
 
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayLogRowSort {
+    #[default]
+    CreatedAt,
+}
+
 #[derive(Template)]
 #[template(path = "management/time_source_details.html.j2")]
 struct TimeSourceInfoTemplate {
@@ -70,6 +78,7 @@ struct TimeSourceInfoTemplate {
     monitors: Vec<String>,
     cur_monitor: Option<MonitorId>,
     cur_protocol: IpVersion,
+    pagination: PaginationInfo<DisplayLogRowSort>,
 }
 
 #[derive(Deserialize)]
@@ -125,6 +134,7 @@ pub async fn time_source_info(
     app: AppContext,
     State(state): State<AppState>,
     Query(log_choice): Query<LogSelection>,
+    pagination: Pagination<DisplayLogRowSort>,
 ) -> Result<impl IntoResponse, AppError> {
     #[derive(Default)]
     struct Scores {
@@ -152,10 +162,27 @@ pub async fn time_source_info(
         }
     }
     let monitors: Vec<String> = scoremap.iter().map(|v| v.0.clone()).collect();
-    let logs = if let Some(cur_monitor) = cur_monitor {
-        time_source::logs(&state.db, time_source_id, cur_monitor, cur_protocol, 0, 200).await?
+
+    let (pagination, logs) = if let Some(cur_monitor) = cur_monitor {
+        let total_items =
+            time_source::log_count(&state.db, time_source_id, cur_monitor, cur_protocol).await?
+                as u64;
+        let pagination = pagination.set_total(total_items);
+        (
+            pagination.clone(),
+            time_source::logs(
+                &state.db,
+                time_source_id,
+                cur_monitor,
+                cur_protocol,
+                pagination.offset(),
+                pagination.limit(),
+            )
+            .await?,
+        )
     } else {
-        vec![]
+        let pagination = pagination.set_total(0);
+        (pagination, vec![])
     };
 
     Ok(HtmlTemplate(TimeSourceInfoTemplate {
@@ -203,6 +230,7 @@ pub async fn time_source_info(
         monitors,
         cur_monitor,
         cur_protocol,
+        pagination,
     }))
 }
 

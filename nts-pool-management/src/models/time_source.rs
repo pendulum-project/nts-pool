@@ -308,6 +308,27 @@ pub async fn logs(
     .await
 }
 
+pub async fn log_count(
+    conn: impl DbConnLike<'_>,
+    time_source_id: TimeSourceId,
+    monitor_id: MonitorId,
+    protocol: IpVersion,
+) -> Result<i64, sqlx::Error> {
+    Ok(sqlx::query!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM monitor_samples
+        WHERE time_source_id = $1 AND protocol = $2 AND monitor_id = $3
+        "#,
+        time_source_id as _,
+        protocol as _,
+        monitor_id as _,
+    )
+    .fetch_one(conn)
+    .await?
+    .count)
+}
+
 pub async fn source_name(
     conn: impl DbConnLike<'_>,
     owner: UserId,
