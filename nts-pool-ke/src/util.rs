@@ -1,3 +1,5 @@
+use std::sync::{Arc, atomic::AtomicU64};
+
 use rustls::pki_types::pem::PemObject;
 
 pub fn load_certificates(
@@ -94,5 +96,40 @@ impl<T, const N: usize> ArrayDeque<N, T> {
         } else {
             Some(el)
         }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub(crate) struct ActiveCounter {
+    counter: Arc<AtomicU64>,
+}
+
+impl ActiveCounter {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn get_active_token(&self) -> ActiveCounterToken {
+        self.counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        ActiveCounterToken {
+            counter: self.counter.clone(),
+        }
+    }
+
+    pub(crate) fn current_count(&self) -> u64 {
+        self.counter.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ActiveCounterToken {
+    counter: Arc<AtomicU64>,
+}
+
+impl Drop for ActiveCounterToken {
+    fn drop(&mut self) {
+        self.counter
+            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
