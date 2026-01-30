@@ -121,6 +121,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             })
             .build();
 
+        let active_monitor_connection_counter = ActiveCounter::new();
+        let active_monitor_connection_counter_clone = active_monitor_connection_counter.clone();
+        let _active_monitor_connections_gauge = meter
+            .u64_observable_gauge("active_monitor_connections")
+            .with_description("number of currently active monitor connections")
+            .with_callback(move |observer| {
+                observer.observe(active_monitor_connection_counter_clone.current_count(), &[])
+            })
+            .build();
+
         info!("listening on '{:?}'", listener.local_addr());
 
         let tls_updater = self.clone().tls_config_updater().await?;
@@ -141,12 +151,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             prereserved_permits.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             let active_connection_token = active_connection_counter.get_active_token();
             let self_clone = self.clone();
+            let active_monitor_connection_counter_clone = active_monitor_connection_counter.clone();
 
             tracker.spawn(async move {
-                let mut is_monitor = false;
+                let mut monitor_count_token = None;
                 match tokio::time::timeout(
                     self_clone.config.key_exchange_timeout,
-                    self_clone.handle_client(client_stream, source_address, &mut is_monitor),
+                    self_clone.handle_client(client_stream, source_address, || {
+                        monitor_count_token =
+                            Some(active_monitor_connection_counter_clone.get_active_token());
+                    }),
                 )
                 .await
                 {
@@ -156,7 +170,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "timeout"),
-                                KeyValue::new("is_monitor", is_monitor),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
                     }
@@ -166,7 +180,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "error"),
-                                KeyValue::new("is_monitor", is_monitor),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
                     }
@@ -176,12 +190,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "success"),
-                                KeyValue::new("is_monitor", is_monitor),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
                     }
                 }
                 drop(permit);
+                drop(monitor_count_token);
                 drop(active_connection_token);
             });
         }
@@ -285,7 +300,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         &self,
         mut client_stream: tokio::net::TcpStream,
         mut source_address: SocketAddr,
-        is_monitor: &mut bool,
+        is_monitor: impl FnOnce(),
     ) -> Result<(), PoolError> {
         // Handle the proxy message if needed
         if self.config.use_proxy_protocol
@@ -346,7 +361,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 }
             }
             ClientRequest::Uuid { key, uuid, .. } if monitoring_keys.contains(key.as_ref()) => {
-                *is_monitor = true;
+                is_monitor();
                 if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
                     server
                 } else {
