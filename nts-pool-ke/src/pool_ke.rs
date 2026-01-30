@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicUsize},
 };
 
 use notify::{RecursiveMode, Watcher};
@@ -27,7 +27,7 @@ use crate::{
     error::PoolError,
     haproxy::parse_haproxy_header,
     servers::{ConnectionType, Server, ServerConnection, ServerManager},
-    util::load_certificates,
+    util::{ActiveCounter, load_certificates},
 };
 
 pub async fn run_nts_pool_ke(
@@ -85,9 +85,41 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn serve_inner(self: Arc<Self>, listener: TcpListener) -> std::io::Result<()> {
         let connectionpermits = Arc::new(tokio::sync::Semaphore::new(self.config.max_connections));
+        // In order to do proper counting for observability, we need to deal with the
+        // permit thats prereserved for the listen call.
+        let prereserved_permits = Arc::new(AtomicUsize::new(0));
         let mut shutdown =
             signal(SignalKind::terminate()).expect("Unable to configure termination signal");
         let tracker = TaskTracker::new();
+
+        let meter = opentelemetry::global::meter("PoolKe");
+
+        let observablepermits = connectionpermits.clone();
+        let obs_prereserved_permits = prereserved_permits.clone();
+        let _available_permits_gauge = meter
+            .u64_observable_gauge("available_connection_permits")
+            .with_description(
+                "number of connection permits currently available for new connections",
+            )
+            .with_callback(move |observer| {
+                observer.observe(
+                    (observablepermits.available_permits()
+                        + obs_prereserved_permits.load(std::sync::atomic::Ordering::Relaxed))
+                        as u64,
+                    &[],
+                )
+            })
+            .build();
+
+        let active_connection_counter = ActiveCounter::new();
+        let active_connection_counter_clone = active_connection_counter.clone();
+        let _active_connections_gauge = meter
+            .u64_observable_gauge("active_connections")
+            .with_description("number of currently active connections")
+            .with_callback(move |observer| {
+                observer.observe(active_connection_counter_clone.current_count(), &[])
+            })
+            .build();
 
         info!("listening on '{:?}'", listener.local_addr());
 
@@ -100,11 +132,14 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 .acquire_owned()
                 .await
                 .expect("Semaphore shouldn't be closed");
+            prereserved_permits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let (client_stream, source_address) = select! {
                 biased;
                 _ = shutdown.recv() => { break; }
                 accept_result = listener.accept() => { accept_result? }
             };
+            prereserved_permits.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            let active_connection_token = active_connection_counter.get_active_token();
             let self_clone = self.clone();
 
             tracker.spawn(async move {
@@ -147,6 +182,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     }
                 }
                 drop(permit);
+                drop(active_connection_token);
             });
         }
 
