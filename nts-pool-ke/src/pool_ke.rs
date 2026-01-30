@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, atomic::AtomicUsize},
 };
 
 use notify::{RecursiveMode, Watcher};
@@ -27,7 +27,7 @@ use crate::{
     error::PoolError,
     haproxy::parse_haproxy_header,
     servers::{ConnectionType, Server, ServerConnection, ServerManager},
-    util::load_certificates,
+    util::{ActiveCounter, load_certificates},
 };
 
 pub async fn run_nts_pool_ke(
@@ -76,9 +76,51 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
     async fn serve_inner(self: Arc<Self>, listener: TcpListener) -> std::io::Result<()> {
         let connectionpermits = Arc::new(tokio::sync::Semaphore::new(self.config.max_connections));
+        // In order to do proper counting for observability, we need to deal with the
+        // permit thats prereserved for the listen call.
+        let prereserved_permits = Arc::new(AtomicUsize::new(0));
         let mut shutdown =
             signal(SignalKind::terminate()).expect("Unable to configure termination signal");
         let tracker = TaskTracker::new();
+
+        let meter = opentelemetry::global::meter("PoolKe");
+
+        let observablepermits = connectionpermits.clone();
+        let obs_prereserved_permits = prereserved_permits.clone();
+        let _available_permits_gauge = meter
+            .u64_observable_gauge("available_connection_permits")
+            .with_description(
+                "number of connection permits currently available for new connections",
+            )
+            .with_callback(move |observer| {
+                observer.observe(
+                    (observablepermits.available_permits()
+                        + obs_prereserved_permits.load(std::sync::atomic::Ordering::Relaxed))
+                        as u64,
+                    &[],
+                )
+            })
+            .build();
+
+        let active_connection_counter = ActiveCounter::new();
+        let active_connection_counter_clone = active_connection_counter.clone();
+        let _active_connections_gauge = meter
+            .u64_observable_gauge("active_connections")
+            .with_description("number of currently active connections")
+            .with_callback(move |observer| {
+                observer.observe(active_connection_counter_clone.current_count(), &[])
+            })
+            .build();
+
+        let active_monitor_connection_counter = ActiveCounter::new();
+        let active_monitor_connection_counter_clone = active_monitor_connection_counter.clone();
+        let _active_monitor_connections_gauge = meter
+            .u64_observable_gauge("active_monitor_connections")
+            .with_description("number of currently active monitor connections")
+            .with_callback(move |observer| {
+                observer.observe(active_monitor_connection_counter_clone.current_count(), &[])
+            })
+            .build();
 
         info!("listening on '{:?}'", listener.local_addr());
 
@@ -91,18 +133,25 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 .acquire_owned()
                 .await
                 .expect("Semaphore shouldn't be closed");
+            prereserved_permits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let (client_stream, source_address) = select! {
                 biased;
                 _ = shutdown.recv() => { break; }
                 accept_result = listener.accept() => { accept_result? }
             };
+            prereserved_permits.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            let active_connection_token = active_connection_counter.get_active_token();
             let self_clone = self.clone();
+            let active_monitor_connection_counter_clone = active_monitor_connection_counter.clone();
 
             tracker.spawn(async move {
-                let mut is_monitor = false;
+                let mut monitor_count_token = None;
                 match tokio::time::timeout(
                     self_clone.config.key_exchange_timeout,
-                    self_clone.handle_client(client_stream, source_address, &mut is_monitor),
+                    self_clone.handle_client(client_stream, source_address, || {
+                        monitor_count_token =
+                            Some(active_monitor_connection_counter_clone.get_active_token());
+                    }),
                 )
                 .await
                 {
@@ -112,7 +161,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "timeout"),
-                                KeyValue::new("is_monitor", is_monitor),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
                     }
@@ -122,7 +171,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "error"),
-                                KeyValue::new("is_monitor", is_monitor),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
                     }
@@ -132,12 +181,14 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "success"),
-                                KeyValue::new("is_monitor", is_monitor),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
                     }
                 }
                 drop(permit);
+                drop(monitor_count_token);
+                drop(active_connection_token);
             });
         }
 
@@ -240,7 +291,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         &self,
         mut client_stream: tokio::net::TcpStream,
         mut source_address: SocketAddr,
-        is_monitor: &mut bool,
+        is_monitor: impl FnOnce(),
     ) -> Result<(), PoolError> {
         // Handle the proxy message if needed
         if self.config.use_proxy_protocol
@@ -298,7 +349,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 }
             },
             ClientRequest::Uuid { key, uuid, .. } if monitoring_keys.contains(key.as_ref()) => {
-                *is_monitor = true;
+                is_monitor();
                 if let Some(server) = self.server_manager.get_server_by_uuid(uuid) {
                     server
                 } else {
