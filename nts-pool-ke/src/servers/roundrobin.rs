@@ -22,7 +22,7 @@ use crate::{
 
 pub struct RoundRobinServerManager {
     servers: Box<[KeyExchangeServer]>,
-    uuid_lookup: HashMap<String, usize>,
+    uuid_lookup: HashMap<Arc<str>, usize>,
     allowed_protocols: HashSet<ProtocolId>,
     upstream_tls: TlsConnector,
     base_server_secret: Vec<String>,
