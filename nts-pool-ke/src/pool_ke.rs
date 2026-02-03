@@ -44,6 +44,7 @@ struct NtsPoolKe<S> {
     server_tls: RwLock<TlsAcceptor>,
     monitoring_keys: RwLock<Arc<HashSet<String>>>,
     session_counter: Counter<u64>,
+    upstream_session_counter: Counter<u64>,
     server_manager: S,
 }
 
@@ -55,9 +56,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         let monitoring_keys = RwLock::new(Arc::new(load_monitoring_keys(&config).await?));
 
-        let session_counter = opentelemetry::global::meter("PoolKe")
+        let meter = opentelemetry::global::meter("PoolKe");
+
+        let session_counter = meter
             .u64_counter("sessions")
             .with_description("number of ke sessions with clients")
+            .build();
+
+        let upstream_session_counter = meter
+            .u64_counter("upstream_cookie_sessions")
+            .with_description("number of ke sessions with upstream for getting cookies")
             .build();
 
         Ok(NtsPoolKe {
@@ -65,6 +73,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             server_tls,
             monitoring_keys,
             session_counter,
+            upstream_session_counter,
             server_manager,
         })
     }
@@ -380,6 +389,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 },
                 &pick,
                 source_address.into(),
+                matches!(client_request, ClientRequest::Uuid { .. }),
             )
             .await
         {
@@ -503,6 +513,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         request: FixedKeyRequest<'_>,
         server: &S::Server<'_>,
         connection_type: ConnectionType,
+        for_monitor: bool,
     ) -> Result<KeyExchangeResponse<'c>, PoolError> {
         // This function is needed to teach rust that the lifetimes actually do work.
         #[allow(clippy::manual_async_fn)]
@@ -535,8 +546,36 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         })
         .await
         {
-            Ok(v) => v,
-            Err(_) => Err(PoolError::Timeout),
+            Ok(v) => {
+                self.upstream_session_counter.add(
+                    1,
+                    &[
+                        KeyValue::new(
+                            "outcome",
+                            match v {
+                                Ok(_) => "success",
+                                Err(_) => "error",
+                            },
+                        ),
+                        KeyValue::new("server", server.name().clone()),
+                        KeyValue::new("uuid", server.uuid().clone()),
+                        KeyValue::new("is_monitor", for_monitor),
+                    ],
+                );
+                v
+            }
+            Err(_) => {
+                self.upstream_session_counter.add(
+                    1,
+                    &[
+                        KeyValue::new("outcome", "timeout"),
+                        KeyValue::new("server", server.name().clone()),
+                        KeyValue::new("uuid", server.uuid().clone()),
+                        KeyValue::new("is_monitor", for_monitor),
+                    ],
+                );
+                Err(PoolError::Timeout)
+            }
         }
     }
 }
