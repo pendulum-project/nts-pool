@@ -2,11 +2,12 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
     time::Duration,
 };
 
 use notify::{RecursiveMode, Watcher};
+use opentelemetry::{KeyValue, metrics::Counter};
 use pool_nts::{
     AlgorithmDescription, AlgorithmId, BufferBorrowingReader, MAX_MESSAGE_SIZE, ProtocolId,
     ServerInformationRequest, ServerInformationResponse,
@@ -166,6 +167,7 @@ fn calculate_auth_key(
 
 async fn fetch_support_data(
     mut connection: impl ServerConnection,
+    uuid: Arc<str>,
     key: String,
     allowed_protocols: &HashSet<ProtocolId>,
     timeout: Duration,
@@ -176,6 +178,15 @@ async fn fetch_support_data(
     ),
     PoolError,
 > {
+    static SUPPORT_REQUEST_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
+
+    let support_request_counter = SUPPORT_REQUEST_COUNTER.get_or_init(|| {
+        opentelemetry::global::meter("PoolKe")
+            .u64_counter("support_info_requests")
+            .with_description("Number of requests to server about what is supported")
+            .build()
+    });
+
     match tokio::time::timeout(timeout, async {
         ServerInformationRequest {
             key: key.into(),
@@ -209,8 +220,32 @@ async fn fetch_support_data(
     })
     .await
     {
-        Ok(v) => v,
-        Err(_) => Err(PoolError::Timeout),
+        Ok(v) => {
+            support_request_counter.add(
+                1,
+                &[
+                    KeyValue::new("uuid", uuid),
+                    KeyValue::new(
+                        "outcome",
+                        match v {
+                            Ok(_) => "success",
+                            Err(_) => "error",
+                        },
+                    ),
+                ],
+            );
+            v
+        }
+        Err(_) => {
+            support_request_counter.add(
+                1,
+                &[
+                    KeyValue::new("uuid", uuid),
+                    KeyValue::new("outcome", "timeout"),
+                ],
+            );
+            Err(PoolError::Timeout)
+        }
     }
 }
 
@@ -385,6 +420,7 @@ mod tests {
 
         let (protocols, algorithms) = fetch_support_data(
             connection,
+            "uuid".into(),
             "abcd".into(),
             &HashSet::from([0, 1]),
             Duration::from_secs(1),
@@ -431,6 +467,7 @@ mod tests {
 
         let (protocols, algorithms) = fetch_support_data(
             connection,
+            "uuid".into(),
             "abcd".into(),
             &HashSet::from([0, 1]),
             Duration::from_secs(1),
