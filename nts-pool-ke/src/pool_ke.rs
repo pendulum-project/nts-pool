@@ -422,7 +422,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             }
             Ok(mut response) => {
                 if response.server.is_none() {
-                    response.server = Some(pick.name().into());
+                    response.server = Some(pick.name().as_ref().into());
                 }
                 response.serialize(&mut client_stream).await?;
                 Ok(())
@@ -624,7 +624,7 @@ mod tests {
     }
 
     struct TestManagerInner {
-        name: String,
+        name: Arc<str>,
         supports: (
             std::collections::HashSet<ProtocolId>,
             std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
@@ -653,7 +653,7 @@ mod tests {
         ) -> Self {
             Self {
                 inner: Arc::new(TestManagerInner {
-                    name,
+                    name: name.into(),
                     supports: (
                         protocols.iter().copied().collect(),
                         algorithms.iter().copied().map(|v| (v.id, v)).collect(),
@@ -712,7 +712,7 @@ mod tests {
     }
 
     struct TestServer<'a> {
-        name: &'a str,
+        name: &'a Arc<str>,
         supports: (
             std::collections::HashSet<ProtocolId>,
             std::collections::HashMap<AlgorithmId, AlgorithmDescription>,
@@ -728,7 +728,7 @@ mod tests {
         where
             Self: 'a;
 
-        fn name(&self) -> &str {
+        fn name(&self) -> &Arc<str> {
             self.name
         }
 

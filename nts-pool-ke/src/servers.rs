@@ -85,7 +85,7 @@ pub trait Server: Sync + Send {
 
     /// Name of the server, to be passed in the server record if the server
     /// itself doesn't provide one.
-    fn name(&self) -> &str;
+    fn name(&self) -> &Arc<str>;
 
     /// Fetch which protocols and algorithms a server supports.
     fn support(
