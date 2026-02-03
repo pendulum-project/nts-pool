@@ -441,7 +441,7 @@ impl ServerManager for GeographicServerManager {
                 && skips.len() < MAX_SKIPS
                 && denied_servers
                     .iter()
-                    .any(|v| *v == inner.servers[region[pick].index].domain)
+                    .any(|v| *v == *inner.servers[region[pick].index].domain)
             {
                 let weight = inner.servers[region[pick].index].weight;
                 skips.push(Skip {
@@ -494,7 +494,7 @@ impl Server for GeographicServer {
     where
         Self: 'a;
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &Arc<str> {
         &self.inner.servers[self.index].domain
     }
 
@@ -941,12 +941,12 @@ mod tests {
         let server = manager
             .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
             .unwrap();
-        assert_ne!(server.name(), "a.test");
+        assert_ne!(server.name().as_ref(), "a.test");
 
         let server = manager
             .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
             .unwrap();
-        assert_ne!(server.name(), "a.test");
+        assert_ne!(server.name().as_ref(), "a.test");
     }
 
     #[tokio::test]
@@ -1039,7 +1039,7 @@ mod tests {
                 &["a.test".into(), "b.test".into()],
             )
             .unwrap();
-        assert!(first.name() == "a.test" || first.name() == "b.test");
+        assert!(first.name().as_ref() == "a.test" || first.name().as_ref() == "b.test");
     }
 
     #[tokio::test]
@@ -1166,17 +1166,17 @@ mod tests {
         let server = manager
             .assign_server("81.2.69.193:4460".parse().unwrap(), &[])
             .unwrap();
-        assert_eq!(server.name(), "gb.test");
+        assert_eq!(server.name().as_ref(), "gb.test");
         // SE
         let server = manager
             .assign_server("89.160.20.113:4460".parse().unwrap(), &[])
             .unwrap();
-        assert_eq!(server.name(), "eu.test");
+        assert_eq!(server.name().as_ref(), "eu.test");
         // US
         let server = manager
             .assign_server("50.114.0.1:4460".parse().unwrap(), &[])
             .unwrap();
-        assert_eq!(server.name(), "global.test");
+        assert_eq!(server.name().as_ref(), "global.test");
     }
 
     #[tokio::test]

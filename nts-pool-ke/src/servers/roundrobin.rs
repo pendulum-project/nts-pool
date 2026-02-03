@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::atomic::AtomicUsize,
+    sync::{Arc, atomic::AtomicUsize},
     time::Duration,
 };
 
@@ -78,7 +78,7 @@ impl ServerManager for RoundRobinServerManager {
         let rotated_servers = right.iter().chain(left.iter());
 
         for server in rotated_servers {
-            if denied_servers.iter().any(|v| *v == server.domain) {
+            if denied_servers.iter().any(|v| *v == *server.domain) {
                 continue;
             }
 
@@ -117,7 +117,7 @@ impl Server for RoundRobinServer<'_> {
     where
         Self: 'a;
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &Arc<str> {
         &self.server.domain
     }
 
@@ -291,10 +291,10 @@ mod tests {
         };
 
         let server = manager.get_server_by_uuid("UUID-a").unwrap();
-        assert_eq!(server.name(), "a.test");
+        assert_eq!(server.name().as_ref(), "a.test");
 
         let server = manager.get_server_by_uuid("UUID-b").unwrap();
-        assert_eq!(server.name(), "b.test");
+        assert_eq!(server.name().as_ref(), "b.test");
     }
 
     #[test]
@@ -339,12 +339,12 @@ mod tests {
         let server = manager
             .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
             .unwrap();
-        assert_ne!(server.name(), "a.test");
+        assert_ne!(server.name().as_ref(), "a.test");
 
         let server = manager
             .assign_server("127.0.0.1:4460".parse().unwrap(), &["a.test".into()])
             .unwrap();
-        assert_ne!(server.name(), "a.test");
+        assert_ne!(server.name().as_ref(), "a.test");
     }
 
     #[test]

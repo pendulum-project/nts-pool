@@ -5,6 +5,7 @@ use std::{
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -250,7 +251,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct KeyExchangeServer {
     pub uuid: String,
-    pub domain: String,
+    pub domain: Arc<str>,
     pub server_name: ServerName<'static>,
     pub weight: usize,
     pub base_key_index: usize,
@@ -277,7 +278,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
 
         Ok(KeyExchangeServer {
             uuid: bare.uuid,
-            domain: bare.domain.to_string(),
+            domain: bare.domain.clone().into(),
             server_name,
             weight: bare.weight.unwrap_or(1),
             base_key_index: bare.base_key_index,
@@ -388,7 +389,7 @@ mod tests {
             [
                 KeyExchangeServer {
                     uuid: String::from("UUID-foo"),
-                    domain: String::from("foo.bar"),
+                    domain: "foo.bar".into(),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     weight: 1,
                     base_key_index: 0,
@@ -400,7 +401,7 @@ mod tests {
                 },
                 KeyExchangeServer {
                     uuid: String::from("UUID-bar"),
-                    domain: String::from("bar.foo"),
+                    domain: "bar.foo".into(),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     weight: 2,
                     base_key_index: 0,
