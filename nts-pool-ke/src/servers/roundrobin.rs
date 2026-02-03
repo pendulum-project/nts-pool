@@ -137,6 +137,7 @@ impl Server for RoundRobinServer<'_> {
     > {
         fetch_support_data(
             self.connect(connection_type).await?,
+            self.uuid().clone(),
             self.auth_key(),
             &self.owner.allowed_protocols,
             self.owner.timeout,

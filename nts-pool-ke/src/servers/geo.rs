@@ -553,6 +553,7 @@ impl Server for GeographicServer {
             _ => {
                 let data = fetch_support_data(
                     self.connect(connection_type).await?,
+                    self.uuid().clone(),
                     self.auth_key(),
                     &self.config.allowed_protocols,
                     self.config.timesource_timeout,
