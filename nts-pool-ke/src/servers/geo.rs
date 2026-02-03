@@ -73,9 +73,9 @@ impl Default for ServerConnectionCacheEntry {
 #[derive(Clone)]
 pub struct GeographicServerManager {
     inner: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
-    server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
+    server_support_cache: Arc<scc::HashMap<(ConnectionType, Arc<str>), ServerSupportCacheEntry>>,
     server_connection_cache:
-        Arc<scc::HashMap<(ConnectionType, String), ServerConnectionCacheEntry>>,
+        Arc<scc::HashMap<(ConnectionType, Arc<str>), ServerConnectionCacheEntry>>,
     config: Arc<BackendConfig>,
     upstream_tls: Arc<RwLock<TlsConnector>>,
     // Kept around for their effect on drop.
@@ -92,7 +92,7 @@ struct GeographicServerManagerInner {
     regions_ipv4: HashMap<String, Vec<ServerLookup>>,
     regions_ipv6: HashMap<String, Vec<ServerLookup>>,
     geodb: maxminddb::Reader<Vec<u8>>,
-    uuid_lookup: HashMap<String, usize>,
+    uuid_lookup: HashMap<Arc<str>, usize>,
 }
 
 impl GeographicServerManager {
@@ -147,9 +147,11 @@ impl GeographicServerManager {
 
     fn cache_invalidator(
         serverdata: Arc<RwLock<Arc<GeographicServerManagerInner>>>,
-        server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
+        server_support_cache: Arc<
+            scc::HashMap<(ConnectionType, Arc<str>), ServerSupportCacheEntry>,
+        >,
         server_connection_cache: Arc<
-            scc::HashMap<(ConnectionType, String), ServerConnectionCacheEntry>,
+            scc::HashMap<(ConnectionType, Arc<str>), ServerConnectionCacheEntry>,
         >,
         config: Arc<BackendConfig>,
     ) -> tokio::task::JoinHandle<()> {
@@ -480,9 +482,9 @@ impl ServerManager for GeographicServerManager {
 
 pub struct GeographicServer {
     inner: Arc<GeographicServerManagerInner>,
-    server_support_cache: Arc<scc::HashMap<(ConnectionType, String), ServerSupportCacheEntry>>,
+    server_support_cache: Arc<scc::HashMap<(ConnectionType, Arc<str>), ServerSupportCacheEntry>>,
     server_connection_cache:
-        Arc<scc::HashMap<(ConnectionType, String), ServerConnectionCacheEntry>>,
+        Arc<scc::HashMap<(ConnectionType, Arc<str>), ServerConnectionCacheEntry>>,
     upstream_tls: Arc<RwLock<TlsConnector>>,
     config: Arc<BackendConfig>,
     index: usize,
@@ -620,9 +622,9 @@ impl Server for GeographicServer {
 
 pub struct GeoCachedTlsStream {
     inner: BufStream<TlsStream<TcpStream>>,
-    key: (ConnectionType, String),
+    key: (ConnectionType, Arc<str>),
     config: Arc<BackendConfig>,
-    cache: Arc<scc::HashMap<(ConnectionType, String), ServerConnectionCacheEntry>>,
+    cache: Arc<scc::HashMap<(ConnectionType, Arc<str>), ServerConnectionCacheEntry>>,
 }
 
 impl AsyncWrite for GeoCachedTlsStream {
@@ -1575,7 +1577,7 @@ mod tests {
         assert!(
             server_support_cache
                 .insert_async(
-                    (ConnectionType::IpV4, "UUID-a".to_owned()),
+                    (ConnectionType::IpV4, "UUID-a".into()),
                     ServerSupportCacheEntry {
                         age: tokio::time::Instant::now(),
                         data: (HashSet::new(), HashMap::new())
@@ -1706,7 +1708,7 @@ mod tests {
         assert!(
             server_connection_cache
                 .insert_async(
-                    (ConnectionType::IpV4, "UUID-a".to_owned()),
+                    (ConnectionType::IpV4, "UUID-a".into()),
                     server_connection_entry
                 )
                 .await

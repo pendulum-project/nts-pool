@@ -250,7 +250,7 @@ impl<'de> Deserialize<'de> for NtsPoolKeConfig {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct KeyExchangeServer {
-    pub uuid: String,
+    pub uuid: Arc<str>,
     pub domain: Arc<str>,
     pub server_name: ServerName<'static>,
     pub weight: usize,
@@ -277,7 +277,7 @@ impl<'de> Deserialize<'de> for KeyExchangeServer {
         };
 
         Ok(KeyExchangeServer {
-            uuid: bare.uuid,
+            uuid: bare.uuid.into(),
             domain: bare.domain.clone().into(),
             server_name,
             weight: bare.weight.unwrap_or(1),
@@ -388,7 +388,7 @@ mod tests {
             servers,
             [
                 KeyExchangeServer {
-                    uuid: String::from("UUID-foo"),
+                    uuid: "UUID-foo".into(),
                     domain: "foo.bar".into(),
                     server_name: ServerName::try_from("foo.bar").unwrap(),
                     weight: 1,
@@ -400,7 +400,7 @@ mod tests {
                     ipv6_capable: true,
                 },
                 KeyExchangeServer {
-                    uuid: String::from("UUID-bar"),
+                    uuid: "UUID-bar".into(),
                     domain: "bar.foo".into(),
                     server_name: ServerName::try_from("bar.foo").unwrap(),
                     weight: 2,
