@@ -624,6 +624,7 @@ mod tests {
     }
 
     struct TestManagerInner {
+        uuid: Arc<str>,
         name: Arc<str>,
         supports: (
             std::collections::HashSet<ProtocolId>,
@@ -653,6 +654,7 @@ mod tests {
         ) -> Self {
             Self {
                 inner: Arc::new(TestManagerInner {
+                    uuid: "any".into(),
                     name: name.into(),
                     supports: (
                         protocols.iter().copied().collect(),
@@ -687,6 +689,7 @@ mod tests {
                 .collect();
             *self.inner.received_addr.lock().unwrap() = Some(address);
             Some(TestServer {
+                uuid: &self.inner.uuid,
                 name: &self.inner.name,
                 supports: self.inner.supports.clone(),
                 written: &self.inner.written,
@@ -699,6 +702,7 @@ mod tests {
             *self.inner.received_uuid.lock().unwrap() = Some(uuid.as_ref().into());
             if self.inner.uuid_exists {
                 Some(TestServer {
+                    uuid: &self.inner.uuid,
                     name: &self.inner.name,
                     supports: self.inner.supports.clone(),
                     written: &self.inner.written,
@@ -712,6 +716,7 @@ mod tests {
     }
 
     struct TestServer<'a> {
+        uuid: &'a Arc<str>,
         name: &'a Arc<str>,
         supports: (
             std::collections::HashSet<ProtocolId>,
@@ -727,6 +732,10 @@ mod tests {
             = TestConnection<'a>
         where
             Self: 'a;
+
+        fn uuid(&self) -> &Arc<str> {
+            self.uuid
+        }
 
         fn name(&self) -> &Arc<str> {
             self.name
