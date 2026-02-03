@@ -496,6 +496,10 @@ impl Server for GeographicServer {
     where
         Self: 'a;
 
+    fn uuid(&self) -> &Arc<str> {
+        &self.inner.servers[self.index].uuid
+    }
+
     fn name(&self) -> &Arc<str> {
         &self.inner.servers[self.index].domain
     }

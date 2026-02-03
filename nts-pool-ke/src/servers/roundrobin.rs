@@ -117,6 +117,10 @@ impl Server for RoundRobinServer<'_> {
     where
         Self: 'a;
 
+    fn uuid(&self) -> &Arc<str> {
+        &self.server.uuid
+    }
+
     fn name(&self) -> &Arc<str> {
         &self.server.domain
     }

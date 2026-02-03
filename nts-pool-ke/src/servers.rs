@@ -83,6 +83,9 @@ pub trait Server: Sync + Send {
     where
         Self: 'a;
 
+    /// UUID of the server, for observability
+    fn uuid(&self) -> &Arc<str>;
+
     /// Name of the server, to be passed in the server record if the server
     /// itself doesn't provide one.
     fn name(&self) -> &Arc<str>;
