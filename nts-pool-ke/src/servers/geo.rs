@@ -3,11 +3,12 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     pin::Pin,
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
 };
 
 use maxminddb::geoip2;
 use notify::{RecursiveMode, Watcher};
+use opentelemetry::{KeyValue, metrics::Counter};
 use phf::phf_map;
 use pool_nts::{AlgorithmDescription, AlgorithmId, ProtocolId};
 use rand::Rng;
@@ -130,6 +131,30 @@ impl GeographicServerManager {
             )
             .into(),
         );
+
+        let server_connection_cache_clone = server_connection_cache.clone();
+        opentelemetry::global::meter("PoolKe")
+            .u64_observable_gauge("cached_connections")
+            .with_description("Number of currently cached connections.")
+            .with_callback(move |observer| {
+                server_connection_cache_clone.iter_sync(|key, value| {
+                    observer.observe(
+                        value.connections.size() as u64,
+                        &[
+                            KeyValue::new(
+                                "ip-type",
+                                match key.0 {
+                                    ConnectionType::IpV4 => "ipv4",
+                                    ConnectionType::IpV6 => "ipv6",
+                                    ConnectionType::Either => "either",
+                                },
+                            ),
+                            KeyValue::new("uuid", key.1.clone()),
+                        ],
+                    );
+                    true
+                });
+            });
 
         let result = Self {
             inner,
@@ -548,6 +573,17 @@ impl Server for GeographicServer {
         &'a self,
         connection_type: ConnectionType,
     ) -> Result<Self::Connection<'a>, crate::error::PoolError> {
+        static CONNECTION_COUNTER: OnceLock<Counter<u64>> = OnceLock::new();
+
+        let connection_counter = CONNECTION_COUNTER.get_or_init(|| {
+            opentelemetry::global::meter("PoolKe")
+                .u64_counter("upstream_connections")
+                .with_description(
+                    "Number of connections made to upstream time sources for various requests.",
+                )
+                .build()
+        });
+
         // First try the cache
         if let Some(mut entry) = self
             .server_connection_cache
@@ -575,6 +611,13 @@ impl Server for GeographicServer {
                     })
                     .await
                 {
+                    connection_counter.add(
+                        1,
+                        &[
+                            KeyValue::new("uuid", self.uuid().clone()),
+                            KeyValue::new("reused", true),
+                        ],
+                    );
                     return Ok(GeoCachedTlsStream {
                         inner: connection,
                         key: (connection_type, self.inner.servers[self.index].uuid.clone()),
@@ -603,6 +646,13 @@ impl Server for GeographicServer {
             upstream_tls
                 .connect(self.inner.servers[self.index].server_name.clone(), io)
                 .await?,
+        );
+        connection_counter.add(
+            1,
+            &[
+                KeyValue::new("uuid", self.uuid().clone()),
+                KeyValue::new("reused", false),
+            ],
         );
         Ok(GeoCachedTlsStream {
             inner,
