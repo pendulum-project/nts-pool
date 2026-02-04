@@ -9,7 +9,10 @@ use hickory_server::{
     authority::{Catalog, DnssecAuthority},
     proto::{
         dnssec::{Algorithm, SigSigner, SigningKey, crypto::signing_key_from_der, rdata::DNSKEY},
-        rr::{Name, RData, Record, rdata::SOA},
+        rr::{
+            Name, RData, Record, RecordSet, RecordType, RrKey,
+            rdata::{SOA, SRV},
+        },
     },
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
     store::in_memory::InMemoryAuthority,
@@ -130,15 +133,43 @@ impl GeoHandler {
         Ok(Arc::new(authority))
     }
 
+    /// Loads the servers list from the configured path and updates the SRV records accordingly.
     pub async fn load_servers_list(&self) -> eyre::Result<()> {
         let data = tokio::fs::read(self.config.servers_list_path.as_path())
             .await
             .wrap_err("Could not read servers list file")?;
-        let _servers: Vec<KeyExchangeServer> =
+        let servers: Vec<KeyExchangeServer> =
             serde_json::from_slice(&data).wrap_err("Could not parse servers list file")?;
 
+        let current_ts_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .wrap_err("Failed to get current unix timestamp")?
+            .as_secs();
+        let serial = current_ts_unix as u32; // intentional truncating behavior for serial number
+
+        // Create SRV record set
+        let mut rrset = RecordSet::new(self.config.zone_name.clone(), RecordType::SRV, serial);
+        for server in servers {
+            let record = SRV::new(
+                0,
+                0,
+                server.port,
+                server.domain.parse().wrap_err("Invalid domain name")?,
+            );
+            rrset.add_rdata(RData::SRV(record));
+        }
+
+        // Key under which the SRV record set is stored
+        let rrkey = RrKey::new(self.config.zone_name.clone().into(), RecordType::SRV);
+
+        // Update SRV record set
+        self.authority
+            .records_mut()
+            .await
+            .insert(rrkey, Arc::new(rrset));
+
         // Re-sign zone
-        self.sign_zone().await?;
+        self.sign_zone().await.wrap_err("Failed to sign zone")?;
         Ok(())
     }
 
@@ -151,6 +182,7 @@ impl GeoHandler {
     }
 }
 
+/// Helper wrapper to allow us to implement RequestHandler for `Arc<GeoHandler>`
 pub struct GeoHandlerArc(pub Arc<GeoHandler>);
 
 #[async_trait::async_trait]
