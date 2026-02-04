@@ -5,7 +5,10 @@ use std::{
 };
 
 use notify::{RecursiveMode, Watcher};
-use opentelemetry::{KeyValue, metrics::Counter};
+use opentelemetry::{
+    KeyValue,
+    metrics::{Counter, Histogram},
+};
 use pool_nts::{
     AlgorithmDescription, BufferBorrowingReader, ClientRequest, ErrorCode, ErrorResponse,
     FixedKeyRequest, KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError,
@@ -27,6 +30,7 @@ use crate::{
     error::PoolError,
     haproxy::parse_haproxy_header,
     servers::{ConnectionType, Server, ServerConnection, ServerManager},
+    telemetry::TIMING_HISTOGRAM_BUCKET_BOUNDARIES,
     util::{ActiveCounter, load_certificates},
 };
 
@@ -44,7 +48,9 @@ struct NtsPoolKe<S> {
     server_tls: RwLock<TlsAcceptor>,
     monitoring_keys: RwLock<Arc<HashSet<String>>>,
     session_counter: Counter<u64>,
+    session_duration: Histogram<f64>,
     upstream_session_counter: Counter<u64>,
+    upstream_session_duration: Histogram<f64>,
     server_manager: S,
 }
 
@@ -63,9 +69,23 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             .with_description("number of ke sessions with clients")
             .build();
 
+        let session_duration = meter
+            .f64_histogram("session_duration")
+            .with_description("Duration of the session")
+            .with_unit("s")
+            .with_boundaries(TIMING_HISTOGRAM_BUCKET_BOUNDARIES.to_vec())
+            .build();
+
         let upstream_session_counter = meter
             .u64_counter("upstream_cookie_sessions")
             .with_description("number of ke sessions with upstream for getting cookies")
+            .build();
+
+        let upstream_session_duration = meter
+            .f64_histogram("upstream_get_cookie_duration")
+            .with_description("Duration to get cookies from upstream time source")
+            .with_unit("s")
+            .with_boundaries(TIMING_HISTOGRAM_BUCKET_BOUNDARIES.to_vec())
             .build();
 
         Ok(NtsPoolKe {
@@ -73,7 +93,9 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             server_tls,
             monitoring_keys,
             session_counter,
+            session_duration,
             upstream_session_counter,
+            upstream_session_duration,
             server_manager,
         })
     }
@@ -150,6 +172,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             };
             prereserved_permits.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             let active_connection_token = active_connection_counter.get_active_token();
+            let start_time = std::time::Instant::now();
             let self_clone = self.clone();
             let active_monitor_connection_counter_clone = active_monitor_connection_counter.clone();
 
@@ -165,6 +188,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 .await
                 {
                     Err(_) => {
+                        self_clone.session_duration.record(
+                            start_time.elapsed().as_secs_f64(),
+                            &[
+                                KeyValue::new("outcome", "timeout"),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
+                            ],
+                        );
                         ::tracing::debug!(?source_address, "NTS Pool KE timed out");
                         self_clone.session_counter.add(
                             1,
@@ -175,6 +205,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                         );
                     }
                     Ok(Err(err)) => {
+                        self_clone.session_duration.record(
+                            start_time.elapsed().as_secs_f64(),
+                            &[
+                                KeyValue::new("outcome", "error"),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
+                            ],
+                        );
                         ::tracing::debug!(?err, ?source_address, "NTS Pool KE failed");
                         self_clone.session_counter.add(
                             1,
@@ -185,6 +222,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                         );
                     }
                     Ok(Ok(())) => {
+                        self_clone.session_duration.record(
+                            start_time.elapsed().as_secs_f64(),
+                            &[
+                                KeyValue::new("outcome", "success"),
+                                KeyValue::new("is_monitor", monitor_count_token.is_some()),
+                            ],
+                        );
                         ::tracing::debug!(?source_address, "NTS Pool KE completed");
                         self_clone.session_counter.add(
                             1,
@@ -593,7 +637,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             }
         }
 
-        // TODO: Implement connection reuse
+        let start_time = std::time::Instant::now();
         match tokio::time::timeout(self.config.timesource_timeout, async {
             let server_stream = server.connect(connection_type).await?;
             workaround_lifetime_bug(buffer, request, server_stream).await
@@ -601,6 +645,21 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         .await
         {
             Ok(v) => {
+                self.upstream_session_duration.record(
+                    start_time.elapsed().as_secs_f64(),
+                    &[
+                        KeyValue::new(
+                            "outcome",
+                            match v {
+                                Ok(_) => "success",
+                                Err(_) => "error",
+                            },
+                        ),
+                        KeyValue::new("server", server.name().clone()),
+                        KeyValue::new("uuid", server.uuid().clone()),
+                        KeyValue::new("is_monitor", for_monitor),
+                    ],
+                );
                 self.upstream_session_counter.add(
                     1,
                     &[
@@ -619,6 +678,15 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 v
             }
             Err(_) => {
+                self.upstream_session_duration.record(
+                    start_time.elapsed().as_secs_f64(),
+                    &[
+                        KeyValue::new("outcome", "timeout"),
+                        KeyValue::new("server", server.name().clone()),
+                        KeyValue::new("uuid", server.uuid().clone()),
+                        KeyValue::new("is_monitor", for_monitor),
+                    ],
+                );
                 self.upstream_session_counter.add(
                     1,
                     &[
