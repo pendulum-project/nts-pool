@@ -7,7 +7,10 @@ use std::{
 };
 
 use notify::{RecursiveMode, Watcher};
-use opentelemetry::{KeyValue, metrics::Counter};
+use opentelemetry::{
+    KeyValue,
+    metrics::{Counter, Histogram},
+};
 use pool_nts::{
     AlgorithmDescription, AlgorithmId, BufferBorrowingReader, MAX_MESSAGE_SIZE, ProtocolId,
     ServerInformationRequest, ServerInformationResponse,
@@ -21,7 +24,10 @@ use tokio::{
 };
 use tokio_rustls::{TlsConnector, client::TlsStream};
 
-use crate::{config::BackendConfig, error::PoolError, util::load_certificates};
+use crate::{
+    config::BackendConfig, error::PoolError, telemetry::TIMING_HISTOGRAM_BUCKET_BOUNDARIES,
+    util::load_certificates,
+};
 
 mod geo;
 pub use geo::GeographicServerManager;
@@ -188,6 +194,18 @@ async fn fetch_support_data(
             .build()
     });
 
+    static SUPPORT_REQUEST_DURATION: OnceLock<Histogram<f64>> = OnceLock::new();
+
+    let support_request_duration = SUPPORT_REQUEST_DURATION.get_or_init(|| {
+        opentelemetry::global::meter("PoolKe")
+            .f64_histogram("support_request_duration")
+            .with_description("Duration of support information requests to a server")
+            .with_unit("s")
+            .with_boundaries(TIMING_HISTOGRAM_BUCKET_BOUNDARIES.to_vec())
+            .build()
+    });
+
+    let start = std::time::Instant::now();
     match tokio::time::timeout(timeout, async {
         ServerInformationRequest {
             key: key.into(),
@@ -222,6 +240,19 @@ async fn fetch_support_data(
     .await
     {
         Ok(v) => {
+            support_request_duration.record(
+                start.elapsed().as_secs_f64(),
+                &[
+                    KeyValue::new("uuid", uuid.clone()),
+                    KeyValue::new(
+                        "outcome",
+                        match v {
+                            Ok(_) => "success",
+                            Err(_) => "error",
+                        },
+                    ),
+                ],
+            );
             support_request_counter.add(
                 1,
                 &[
@@ -238,6 +269,13 @@ async fn fetch_support_data(
             v
         }
         Err(_) => {
+            support_request_duration.record(
+                start.elapsed().as_secs_f64(),
+                &[
+                    KeyValue::new("uuid", uuid.clone()),
+                    KeyValue::new("outcome", "timeout"),
+                ],
+            );
             support_request_counter.add(
                 1,
                 &[
