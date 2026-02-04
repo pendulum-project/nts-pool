@@ -1,5 +1,5 @@
 [workspace]
-members = ["nts-pool-ke", "nts-pool-management", "nts-pool-monitor", "nts-pool-shared", "pool-nts"]
+members = ["nts-pool-ke", "nts-pool-dns", "nts-pool-management", "nts-pool-monitor", "nts-pool-shared", "pool-nts"]
 resolver = "3"
 
 # Global settings for our crates
