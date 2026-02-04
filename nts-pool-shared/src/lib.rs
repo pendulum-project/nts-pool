@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 mod monitoring;
 pub use monitoring::*;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct KeyExchangeServer {
     pub uuid: String,
