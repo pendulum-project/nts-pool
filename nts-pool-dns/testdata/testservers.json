@@ -1,0 +1,5 @@
+[
+    {"uuid": "abcd1234-1234-1234-1234-1234abcd1111", "domain": "a.test", "port": 4460, "weight": 10, "base_key_index": 0, "randomizer": "abcd", "regions": ["EUROPE", "NL"], "ipv4_capable": true, "ipv6_capable": true},
+    {"uuid": "abcd1234-1234-1234-1234-1234abcd2222", "domain": "b.test", "port": 4460, "base_key_index": 0, "randomizer": "efgh", "ipv4_capable": false},
+    {"uuid": "abcd1234-1234-1234-1234-1234abcd3333", "domain": "c.test", "port": 4460, "weight": 1, "base_key_index": 0, "randomizer": "ijkl", "regions": ["ASIA", "NL", "BE"], "ipv6_capable": false}
+]
