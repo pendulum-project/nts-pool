@@ -4,7 +4,7 @@
 
 {% block content %}
 {% if app.user_context.terms_accepted || app.user|is_logged_in %}
-  <section class="contained">
+  <section>
     <p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
 
     <h2>NTPSec</h2>
@@ -40,9 +40,7 @@ address = "2.{{ app.ke_domain }}"
 mode = "nts"
 address = "3.{{ app.ke_domain }}"</code-block>
     </p>
-
-{% else %}
-    <section class="contained">
+    <section>
       <form action = "/use" method="POST">
         <section>
           <p>

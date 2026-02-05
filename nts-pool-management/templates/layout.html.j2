@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NTS Pool</title>
     <link rel="icon" type="image/svg+xml" href="/assets/nts-pool.svg" />
     <link rel="stylesheet" href="/assets/reset.css" />
@@ -17,28 +18,29 @@
           <li>
             <a href="/"><img src="/assets/nts-pool.svg" /><strong>NTS Pool</strong></a>
           </li>
-        {% if app.user|is_logged_in %}
-          <li>
-            <a {% block nav_time_sources %}{% endblock %} href="/management/time-sources">Time sources</a>
-          </li>
-          {% if app.user|is_administrator %}
+          {% if app.user|is_logged_in %}
             <li>
+              <a {% block nav_time_sources %}{% endblock %} href="/management/time-sources">Time sources</a>
+            </li>
+            {% if app.user|is_administrator %}
+              <li>
                 <a {% block nav_overview %}{% endblock %} href="/admin">Admin Overview</a>
-            </li>
-            <li>
-                <a {% block nav_users %}{% endblock %} href="/admin/users">Users</a>
-            </li>
-            <li>
-                <a {% block nav_monitors %}{% endblock %} href="/admin/monitors">Monitors</a>
-            </li>
-            <li>
-                <a {% block nav_regions %}{% endblock %} href="/admin/regions">Regions</a>
-            </li>
-            <li>
-                <a {% block nav_admin_time_sources %}{% endblock %} href="/admin/time-sources">TS List</a>
-            </li>
-          {% endif %}
+              </li>
+          <li>
+            <a {% block nav_users %}{% endblock %} href="/admin/users">Users</a>
+          </li>
+          <li>
+            <a {% block nav_monitors %}{% endblock %} href="/admin/monitors">Monitors</a>
+          </li>
+          <li>
+            <a {% block nav_regions %}{% endblock %} href="/admin/regions">Regions</a>
+          </li>
+          <li>
+            <a {% block nav_admin_time_sources %}{% endblock %} href="/admin/time-sources">TS List</a>
+          </li>
         {% endif %}
+      {% endif %}
+    {% endif %}
         </menu>
         <div>
           {% if let Some(u) = app.user %}
@@ -52,20 +54,21 @@
           {% endif %}
         </div>
       </nav>
+
       <header>
-
         {% block header %}{% endblock %}
-
       </header>
-      {% if let Some((msg_type, msg)) = app.flash_message %}
-        <details class="toast {{ msg_type }}" open>
-          <summary>
-            {{ msg }}
-          </summary>
-        </details>
-      {% endif %}
+
+      <div class="left"></div>
       <main>
-      <aside class="info experimental contained">
+        {% if let Some((msg_type, msg)) = app.flash_message %}
+          <details class="toast {{ msg_type }}" open>
+            <summary>
+              {{ msg }}
+            </summary>
+          </details>
+        {% endif %}
+        <aside class="info experimental contained">
           The NTS pool is experimental. Please help us by leaving your feedback and reporting problems
           at <a href="https://github.com/pendulum-project/nts-pool/discussions">our discussion forum</a>,
           <a href="https://github.com/pendulum-project/nts-pool/issues">our issue tracker</a>, or via
@@ -73,12 +76,14 @@
         </aside>
         {% block content %}{% endblock %}
       </main>
+      <div class="right"></div>
+      
       <footer>
         {% block footer %}
-        <section>NTS Pool</section>
-        <section><a href="/terms">Terms and Conditions</a></section>
-        <section>Geolocation uses GeoLite2, created by <a href="https://www.maxmind.com">MaxMind</a></section>
-        <section><a href="https://github.com/pendulum-project/nts-pool">GitHub</a></section>
+          <section>NTS Pool</section>
+          <section><a href="/terms">Terms and Conditions</a></section>
+          <section>Geolocation uses GeoLite2, created by <a href="https://www.maxmind.com">MaxMind</a></section>
+          <section><a href="https://github.com/pendulum-project/nts-pool">GitHub</a></section>
         {% endblock %}
       </footer>
     </div>
