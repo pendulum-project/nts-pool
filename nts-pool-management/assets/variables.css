@@ -1,6 +1,7 @@
 :root {
   /* font */
   --font-size-body: 1rem;
+  --font-size-big: 1.1rem;
   --bold: 600;
 
   /* colors */
@@ -10,13 +11,15 @@
   --background: #f4f4f4;
   --background-alt: #ffffff;
   --white: #ffffff;
-  --black: #000000;
+  --black: #333333;
   --error: #ce4242;
   --success: #74ce42;
   --info: #99b6d5;
   --link: #0a57f0;
   --text-color-body: #333;
 
+  --text-color-body: var(--black);
+  
   --muted: var(--grey);
   
   /* spacing */
@@ -29,4 +32,6 @@
 
   --border-radius: 0.75rem;
   --border-width: 2px;
+
+  --alert-blackness: 33%;
 }

@@ -5,25 +5,47 @@ body {
 }
 
 .appcontainer {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+  display: grid;
   height: 100vh;
+  grid-template-columns: auto minmax(50ch, 1024px) auto;
+  grid-template-rows: var(--space-lg) 7rem 1fr var(--space-lg);
+  grid-template-areas:
+    "nav    nav    nav"
+    "....   header ...."
+    "left   main   right"
+    "footer footer footer";
+}
+
+.left {
+  background-color: var(--background);
+  grid-area: left;
+}
+
+.right {
+  background-color: var(--background);
+  grid-area: right;
 }
 
 header {
+  grid-area: header;
   background-color: var(--background-alt);
-  padding: var(--space-md) var(--space-md);
-  display: flex;
-  flex-wrap: wrap;
-  width: 100vw;
-  flex: 0;
+  align-content: center;
 }
 
 main {
+  grid-area: main;
   background-color: var(--background);
-  padding: var(--space-md) var(--space-xl) var(--space-md) var(--space-lg);
-  flex: auto;
+  padding-top: var(--space-md);
+}
+
+footer {
+  grid-area: footer;
+  display: flex;
+  flex: 0 0 5rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 var(--space-md) 0 var(--space-md);
+  background-color: var(--background-alt);
 }
 
 main section {
@@ -31,29 +53,28 @@ main section {
 }
 
 nav:not(.pagination) {
-  background-color: var(--secondary);
-  color: var(--white);
+  grid-area: nav;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex: 0;
   padding: 0 var(--space-md);
+  border-bottom: 1px solid var(--grey);
 
   menu {
+    height: 100%;
     display: flex;
     padding: 0;
-    box-sizing: content-box;
 
     li a {
+      height: 100%;
       display: flex;
       align-items: center;
-      height: 2rem;
       gap: var(--space-sm);
       text-decoration: none;
       color: inherit;
-      padding: var(--space-sm);
+      padding: 0 var(--space-sm);
       transition: border-bottom-color 150ms ease-in-out, transform 150ms ease;
-      border-bottom: 4px solid var(--secondary);
+      border-bottom: 4px solid transparent;
 
       img {
         height: 2rem;
@@ -61,7 +82,7 @@ nav:not(.pagination) {
     }
 
     li:first-child a {
-        padding-left: 0;
+      padding-left: 0;
     }
 
     a[aria-current="page"] {
@@ -76,15 +97,6 @@ nav:not(.pagination) {
   .username {
     font-weight: var(--bold);
   }
-}
-
-footer {
-  display: flex;
-  flex: 0 0 5rem;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 var(--space-md) 0 var(--space-md);
-  background-color: var(--background-alt);
 }
 
 section.form form {
@@ -105,7 +117,7 @@ section.form form {
     border: 0;
 
     label {
-      font-weight: bold;
+      color: black;
     }
   }
 }
