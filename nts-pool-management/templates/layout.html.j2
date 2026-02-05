@@ -25,22 +25,21 @@
             {% if app.user|is_administrator %}
               <li>
                 <a {% block nav_overview %}{% endblock %} href="/admin">Admin Overview</a>
-              </li>
-          <li>
-            <a {% block nav_users %}{% endblock %} href="/admin/users">Users</a>
-          </li>
-          <li>
-            <a {% block nav_monitors %}{% endblock %} href="/admin/monitors">Monitors</a>
-          </li>
-          <li>
-            <a {% block nav_regions %}{% endblock %} href="/admin/regions">Regions</a>
-          </li>
-          <li>
-            <a {% block nav_admin_time_sources %}{% endblock %} href="/admin/time-sources">TS List</a>
-          </li>
+            </li>
+            <li>
+                <a {% block nav_users %}{% endblock %} href="/admin/users">Users</a>
+            </li>
+            <li>
+                <a {% block nav_monitors %}{% endblock %} href="/admin/monitors">Monitors</a>
+            </li>
+            <li>
+                <a {% block nav_regions %}{% endblock %} href="/admin/regions">Regions</a>
+            </li>
+            <li>
+                <a {% block nav_admin_time_sources %}{% endblock %} href="/admin/time-sources">TS List</a>
+            </li>
         {% endif %}
       {% endif %}
-    {% endif %}
         </menu>
         <div>
           {% if let Some(u) = app.user %}
@@ -83,7 +82,7 @@
           <section>NTS Pool</section>
           <section><a href="/terms">Terms and Conditions</a></section>
           <section>Geolocation uses GeoLite2, created by <a href="https://www.maxmind.com">MaxMind</a></section>
-          <section><a href="https://github.com/pendulum-project/nts-pool">GitHub</a></section>
+        <section><a href="https://github.com/pendulum-project/nts-pool">GitHub</a></section>
         {% endblock %}
       </footer>
     </div>

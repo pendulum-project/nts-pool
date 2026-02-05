@@ -68,11 +68,11 @@
     </tbody>
   </table>
   <section class="table-controls">
-    {% if pagination.total_pages > 0 %}
-      {% include "components/pagination.html.j2" %}
-    {% endif %}
     <div>
       {{users.len()}} Total items
     </div>
+    {% if pagination.total_pages > 1 %}
+      {% include "components/pagination.html.j2" %}
+    {% endif %}
   </section>
 {% endblock %}
