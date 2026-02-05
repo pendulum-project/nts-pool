@@ -4,101 +4,101 @@ button,
 [type="reset"],
 .pagination button,
 a.btn {
-    color: var(--deep-black) !important;
-    display: inline-block;
-    background-color: var(--primary);
-    border: var(--border-width) solid var(--primary);
-    border-radius: var(--border-radius);
-    padding: var(--space-sm) var(--space-md);
-    text-decoration: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    transition:
-        color 150ms ease-in-out,
-        transform 150ms ease;
+  color: var(--deep-black) !important;
+  display: inline-block;
+  background-color: var(--primary);
+  border: var(--border-width) solid var(--primary);
+  border-radius: var(--border-radius);
+  padding: var(--space-sm) var(--space-md);
+  text-decoration: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition:
+    color 150ms ease-in-out,
+    transform 150ms ease;
 
-    &.important {
-        font-weight: bold;
-        display: flex;
+  &.important {
+    font-weight: bold;
+    display: flex;
 
-        & > svg {
-            margin: 0 5pt;
-        }
+    & > svg {
+      margin: 0 5pt;
     }
+  }
 
-    /* Hover effect */
-    &:hover,
+  /* Hover effect */
+  &:hover,
     &.important:hover {
-        background-color: color-mix(in lab, var(--primary), var(--white) 15%);
-        border: var(--border-width) solid var(--primary);
-        cursor: pointer;
+      background-color: color-mix(in lab, var(--primary), var(--white) 15%);
+      border: var(--border-width) solid var(--primary);
+      cursor: pointer;
     }
 }
 
 .btn-alt {
-    background-color: var(--primary-alt);
+  background-color: var(--primary-alt);
 }
 
 .btn-alt:hover {
-    background-color: color-mix(in lab, var(--primary-alt), var(--primary) 15%) !important;
+  background-color: color-mix(in lab, var(--primary-alt), var(--primary) 15%) !important;
 }
 
 .btn-link,
 .btn-link:hover {
-    border: none;
-    display: inline;
-    padding: 0;
-    background-color: inherit;
-    color: var(--link);
-    text-decoration: underline;
+  border: none;
+  display: inline;
+  padding: 0;
+  background-color: inherit;
+  color: var(--link);
+  text-decoration: underline;
 }
 
 .btn-sm {
-    max-width: fit-content;
-    padding: 0 var(--space-sm);
+  max-width: fit-content;
+  padding: 0 var(--space-sm);
 }
 
 highlight-actions {
-    display: flex;
-    justify-content: start;
-    margin-bottom: var(--space-md);
+  display: flex;
+  justify-content: start;
+  margin-bottom: var(--space-md);
 
-    & > * {
-        margin: var(--space-sm) var(--space-sm) var(--space-sm) 0;
-    }
+  & > * {
+    margin: var(--space-sm) var(--space-sm) var(--space-sm) 0;
+  }
 }
 
 main a,
 main a:visited {
-    color: var(--link);
+  color: var(--link);
 }
 
 input[type="text"],
 input[type="email"],
 input[type="number"],
 input[type="password"] {
-    padding: var(--space-sm);
-    border: var(--border-width) solid var(--grey);
-    border-radius: var(--border-radius);
+  padding: var(--space-sm);
+  border: var(--border-width) solid var(--grey);
+  border-radius: var(--border-radius);
 }
 
 input[type="text"]:hover,
 input[type="email"]:hover,
 input[type="number"]:hover,
 input[type="password"]:hover {
-    border: var(--border-width) solid var(--primary);
+  border: var(--border-width) solid var(--primary);
 }
 
 input[type="text"].error,
 input[type="email"].error,
 input[type="number"].error,
 input[type="password"].error {
-    border: var(--border-width) solid var(--error);
-    background-color: var(--white);
+  border: var(--border-width) solid var(--error);
+  background-color: var(--white);
 }
 
 #accept-terms + span {
-    font-weight: normal;
+  font-weight: normal;
 }
 
 h1 {
@@ -106,111 +106,111 @@ h1 {
 }
 
 h2 {
-    margin-top: var(--space-md);
-    margin-bottom: var(--space-sm);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-sm);
 }
 
 h3 {
-    color: var(--primary);
+  color: var(--primary);
 }
 
 section > p {
-    font-size: var(--font-size-big);
-    margin-bottom: var(--space-sm);
+  font-size: var(--font-size-big);
+  margin-bottom: var(--space-sm);
 }
 
 code,
 code-block {
-    font-family: monospace;
-    white-space: pre;
-    background-color: var(--white);
+  font-family: monospace;
+  white-space: pre;
+  background-color: var(--white);
 }
 
 code {
-    padding: var(--space-xxs) var(--space-xs);
+  padding: var(--space-xxs) var(--space-xs);
 }
 
 code-block {
-    white-space: pre;
-    display: block;
-    width: 100%;
-    margin: var(--space-sm) 0;
-    padding: var(--space-sm) var(--space-md);
+  white-space: pre;
+  display: block;
+  width: 100%;
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm) var(--space-md);
 }
 
 .key {
-    display: block;
-    border-radius: var(--border-radius);
-    padding: var(--space-sm) var(--space-sm);
-    margin: var(--space-sm) 0;
-    width: fit-content;
+  display: block;
+  border-radius: var(--border-radius);
+  padding: var(--space-sm) var(--space-sm);
+  margin: var(--space-sm) 0;
+  width: fit-content;
 }
 
 .card {
-    background-color: var(--white);
-    border-radius: var(--border-radius);
-    padding: calc((var(--space-md) + var(--space-sm)) / 2) var(--space-md) var(--space-sm) var(--space-md);
+  background-color: var(--white);
+  border-radius: var(--border-radius);
+  padding: calc((var(--space-md) + var(--space-sm)) / 2) var(--space-md) var(--space-sm) var(--space-md);
 }
 
 .card-action {
-    margin-top: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 
 dl {
-    margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
 
 dd {
-    font-weight: var(--bold);
-    margin-top: var(--space-sm);
+  font-weight: var(--bold);
+  margin-top: var(--space-sm);
 }
 
 dt {
-    padding-left: var(--space-sm);
+  padding-left: var(--space-sm);
 
-    input[type="text"],
+  input[type="text"],
     input[type="number"],
     input[type="password"] {
-        margin-top: var(--space-xs);
+      margin-top: var(--space-xs);
     }
 
-    input[type="number"] {
-        max-width: var(--space-xl);
-    }
+  input[type="number"] {
+    max-width: var(--space-xl);
+  }
 }
 
 details.confirmation-btn {
-    width: 200px;
-    padding: var(--space-sm) 0;
+  width: 200px;
+  padding: var(--space-sm) 0;
 
-    summary {
-        color: var(--primary);
-        cursor: pointer;
-        text-decoration: underline;
-        user-select: none;
-    }
+  summary {
+    color: var(--primary);
+    cursor: pointer;
+    text-decoration: underline;
+    user-select: none;
+  }
 
-    summary::marker {
-        content: "Delete";
-    }
+  summary::marker {
+    content: "Delete";
+  }
 }
 
 details.confirmation-btn[open] summary::marker {
-    content: "Cancel";
+  content: "Cancel";
 }
 
 details.confirmation-btn[open] > div {
-    margin-top: var(--space-sm);
-    display: block;
-    animation: animateDown 0.1s ease-in-out forwards;
+  margin-top: var(--space-sm);
+  display: block;
+  animation: animateDown 0.1s ease-in-out forwards;
 }
 
 details.confirmation-btn > div {
-    display: none;
+  display: none;
 
-    & p {
-        margin-bottom: var(--space-sm);
-    }
+  & p {
+    margin-bottom: var(--space-sm);
+  }
 }
 
 @keyframes animateDown {
@@ -225,87 +225,86 @@ details.confirmation-btn > div {
 }
 
 .confirmation[popover]:popover-open {
-    border: none;
-    border-radius: var(--border-radius);
-    padding: var(--space-md);
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    translate: -50% -50%;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: var(--space-md);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
 }
 
 .confirmation[popover]::backdrop {
-    background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.5);
 }
 
 dialog .dialog-actions {
-    display: flex;
-    gap: var(--space-xs);
+  display: flex;
+  gap: var(--space-xs);
 }
 
 .success {
-    color: color-mix(in lab, var(--success), var(--black) --alert-blackness);
-    background-color: color-mix(in lab, var(--success), var(--white) 70%);
-    border-color: var(--success)
+  color: color-mix(in lab, var(--success), var(--black) --alert-blackness);
+  background-color: color-mix(in lab, var(--success), var(--white) 70%);
+  border-color: var(--success)
 }
 
 .error {
-    color: color-mix(in lab, var(--error), var(--black) --alert-blackness);
-    background-color: color-mix(in lab, var(--error), var(--white) 70%);
-    border-color: var(--error)
+  color: color-mix(in lab, var(--error), var(--black) --alert-blackness);
+  background-color: color-mix(in lab, var(--error), var(--white) 70%);
+  border-color: var(--error)
 }
 
 .info {
-    color: color-mix(in lab, var(--info), var(--black) --alert-blackness);
-    background-color: color-mix(in lab, var(--info), var(--white) 70%);
-    border-color: var(--info)
+  color: color-mix(in lab, var(--info), var(--black) --alert-blackness);
+  background-color: color-mix(in lab, var(--info), var(--white) 70%);
+  border-color: var(--info)
 }
 
 details.toast > summary,
 aside {
-    font-weight: bold;
-    padding: var(--space-sm) var(--space-md);
-    border-width: var(--border-width);
-    border-style: solid;
-    border-radius: var(--border-radius);
+  padding: var(--space-sm) var(--space-md);
+  border-width: var(--border-width);
+  border-style: solid;
+  border-radius: var(--border-radius);
 }
 
 aside {
-    margin-bottom: var(--space-md);
+  margin-bottom: var(--space-md);
 }
 
 table {
-    table-layout: auto;
-    border-collapse: collapse;
-    width: 100%;
-    th {
-        text-align: left;
+  table-layout: auto;
+  border-collapse: collapse;
+  width: 100%;
+  th {
+    text-align: left;
       
-        a,
+    a,
         a:visited {
-            color: inherit;
+          color: inherit;
         }
-    }
+  }
 
-    th,
+  th,
     td {
-        white-space: nowrap;
-        padding: var(--space-sm);
+      white-space: nowrap;
+      padding: var(--space-sm);
     }
   
-    tbody {
-        tr {
-            border-bottom: 1px solid var(--grey);
-        }
+  tbody {
+    tr {
+      border-bottom: 1px solid var(--grey);
     }
+  }
 
 
-    td.actions {
-        float: right;
-        display: flex;
-        gap: var(--space-xs);
-        white-space: nowrap;
-    }
+  td.actions {
+    float: right;
+    display: flex;
+    gap: var(--space-xs);
+    white-space: nowrap;
+  }
 }
 
 table.birowed {
@@ -327,11 +326,11 @@ table.birowed {
 }
 
 table.autowidth {
-    width: auto;
+  width: auto;
 
-    th,
+  th,
     td {
-        width: auto;
+      width: auto;
     }
 }
 
@@ -373,14 +372,14 @@ table.autowidth {
 }
 
 .multivalue-box {
-    display: flex;
-    width: fit-content;
-    flex-direction: row;
-    gap: var(--space-sm);
-    padding: var(--space-sm);
-    background-color: var(--white);
+  display: flex;
+  width: fit-content;
+  flex-direction: row;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background-color: var(--white);
 }
 
 .nowrap {
-    white-space: nowrap;
+  white-space: nowrap;
 }
