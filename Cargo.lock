@@ -2268,7 +2268,6 @@ dependencies = [
  "async-trait",
  "eyre",
  "hickory-server",
- "maxminddb",
  "notify",
  "nts-pool-shared",
  "serde",
