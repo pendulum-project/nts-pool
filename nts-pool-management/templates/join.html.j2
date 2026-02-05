@@ -13,10 +13,30 @@
     <p>Your server will now be shown on your <a href="/management/time-sources">Time sources</a> page after logging in. If it is functioning correctly, it's score will start increasing after about 15 minutes. If not, please check the domain name is correct, the server is reachable on that domain name, and that the pool authentication token has been correctly configured.</p>
 
     <h2>Supported server software</h2>
-    <ul>
-      <li><a href="https://docs.ntpd-rs.pendulum-project.org/guide/nts-pool/">ntpd-rs version 1.7.0-alpha.20251003 or newer</a></li>
-      <li><a href="https://github.com/pendulum-project/chrony/releases">Modified versions of chrony</a></li>
-      <li><a href="https://github.com/pendulum-project/pool-ntpsec/releases">Modified versions of NTPsec</a></li>
-    </ul>
+
+    <h3><a href="https://docs.ntpd-rs.pendulum-project.org/guide/nts-pool/">ntpd-rs version 1.7.0-alpha.20251003 or newer</a></h3>
+
+    <p>To join the pool, setup the ntpd-rs as an NTS server, for example by following <a href="https://docs.ntpd-rs.pendulum-project.org/guide/nts/">the NTS guide in the ntpd-rs documentation</a>. Then register the server for the pool, and add the token to the <code>[[nts-ke-server]]</code> section as follows:</p>
+    <code-block>
+    accepted-pool-authentication-tokens = ["&lt;YOUR TOKEN HERE&gt;"]
+    </code-block>
+
+    <p>After doing this, you should see the score of your server start to increase over time.</p>
+
+    <h3><a href="https://github.com/pendulum-project/chrony/releases">Modified versions of chrony</a></h3>
+
+    <p>Please note that when using chrony, a <a href="https://github.com/pendulum-project/chrony/releases">custom version of chrony</a> is currently needed for the pool. To join the pool, setup chrony to be an NTS server. Once your chrony server works as a regular NTS server, you are ready to register it for the pool. Having got the authentication token, create a file containing the token on a single line ended by a newline, and give it rights so that only chrony and root can read it. Then add the following to your chrony configuration:</p>
+    <code-block>
+    ntsauthtokenfile /path/to/file/with/your/token
+    </code-block>
+
+    <p>After doing this, you should see the score of your server start to increase over time.</p>
+
+    <h3><a href="https://github.com/pendulum-project/pool-ntpsec/releases">Modified versions of NTPsec</a></h3>
+
+    <p>Please note that when using NTPsec, a <a href="https://github.com/pendulum-project/pool-ntpsec/releases">custom version of NTPsec</a> is currently needed for the pool. To join the pool, setup NTPsec to be an NTS server. Once your NTPsec server works as a regular NTS server, you are ready to register it for the pool. Having got the authentication token, create a file containing the token on a single line ended by a newline, and give it rights so that only NTPsec and root can read it. Then add the following to your NTPsec configuration:</p>
+    <code-block>
+    nts poolauth /path/to/file/with/your/token
+    </code-block>
   </section>
 {% endblock %}
