@@ -27,7 +27,6 @@ default = []
 fuzz = []
 
 [dependencies]
-maxminddb.workspace = true
 notify.workspace = true
 nts-pool-shared.workspace = true
 
