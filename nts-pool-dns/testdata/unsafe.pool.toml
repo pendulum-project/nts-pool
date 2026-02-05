@@ -1,0 +1,15 @@
+[observability]
+log-level = "debug"
+
+# part of the test setup for the NTS pool KE. Do not use in production!
+# (the private key of the certificate is public!)
+[zone]
+zone-name = "example.com."
+dns-server-name = "example.com."
+responsible-name = "example.com."
+private-key-path = "./nts-pool-dns/testdata/pool.test.key"
+servers-list-path = "./nts-pool-dns/testdata/testservers.json"
+
+[server]
+listen = "0.0.0.0:5354"
+
