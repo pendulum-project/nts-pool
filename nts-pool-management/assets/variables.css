@@ -12,6 +12,7 @@
   --background-alt: #ffffff;
   --white: #ffffff;
   --black: #333333;
+  --deep-black: #000;
   --error: #ce4242;
   --success: #74ce42;
   --info: #99b6d5;
@@ -20,6 +21,7 @@
 
   --text-color-body: var(--black);
   
+  --primary-alt: color-mix(in lab, var(--primary), var(--white) 90%);
   --muted: var(--grey);
   
   /* spacing */

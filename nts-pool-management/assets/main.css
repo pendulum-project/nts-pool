@@ -81,12 +81,16 @@ nav:not(.pagination) {
       }
     }
 
+    li a:hover {
+      border-bottom: 4px solid var(--grey);
+    }
+
     li:first-child a {
       padding-left: 0;
     }
 
     a[aria-current="page"] {
-      border-bottom: 4px solid var(--primary);
+      border-bottom: 4px solid var(--primary) !important;
     }
   }
 

@@ -4,6 +4,7 @@ button,
 [type="reset"],
 .pagination button,
 a.btn {
+    color: var(--deep-black) !important;
     display: inline-block;
     background-color: var(--primary);
     border: var(--border-width) solid var(--primary);
@@ -26,19 +27,20 @@ a.btn {
     }
 
     /* Hover effect */
-    &:hover {
-        color: color-mix(in lab, var(--primary), var(--white) 90%);
+    &:hover,
+    &.important:hover {
+        background-color: color-mix(in lab, var(--primary), var(--white) 15%);
         border: var(--border-width) solid var(--primary);
         cursor: pointer;
     }
 }
 
 .btn-alt {
-    background-color: color-mix(in lab, var(--primary), var(--white) 90%);
+    background-color: var(--primary-alt);
 }
 
 .btn-alt:hover {
-    color: color-mix(in lab, var(--primary), var(--black) 30%) !important;
+    background-color: color-mix(in lab, var(--primary-alt), var(--primary) 15%) !important;
 }
 
 .btn-link,
