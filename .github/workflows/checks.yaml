@@ -63,7 +63,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@650c5ca14212efbbf3e580844b04bdccf68dac31
+        uses: taiki-e/install-action@509565405a8a987e73cf742e26b26dcc72c4b01a
         with:
           tool: cargo-llvm-cov
       - name: Rust cache
@@ -99,7 +99,7 @@ jobs:
         with:
           toolchain: nightly-2025-08-11
       - name: Install udeps
-        uses: taiki-e/install-action@650c5ca14212efbbf3e580844b04bdccf68dac31
+        uses: taiki-e/install-action@509565405a8a987e73cf742e26b26dcc72c4b01a
         with:
           tool: cargo-udeps
       - name: cargo udeps
@@ -159,7 +159,7 @@ jobs:
         if: ${{matrix.runs_on == 'ubuntu-latest'}}
 
       - name: Install bindgen-cli
-        uses: taiki-e/install-action@650c5ca14212efbbf3e580844b04bdccf68dac31
+        uses: taiki-e/install-action@509565405a8a987e73cf742e26b26dcc72c4b01a
         with:
           tool: bindgen-cli
         if: ${{matrix.runs_on == 'ubuntu-latest'}}
@@ -214,7 +214,7 @@ jobs:
           toolchain: nightly-2025-08-11
           components: llvm-tools-preview
       - name: Install cargo fuzz & rustfilt
-        uses: taiki-e/install-action@650c5ca14212efbbf3e580844b04bdccf68dac31
+        uses: taiki-e/install-action@509565405a8a987e73cf742e26b26dcc72c4b01a
         with:
           tool: cargo-fuzz,rustfilt
       - name: Run `cargo fuzz`
