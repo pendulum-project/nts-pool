@@ -34,6 +34,53 @@ use crate::{
     util::{ActiveCounter, load_certificates},
 };
 
+#[derive(Debug)]
+enum ConnectionError {
+    Proxy(PoolError),
+    TlsHandshake(std::io::Error),
+    NoSuchServer(PoolError),
+    FailedAuthentication(PoolError),
+    InvalidRequest(PoolError),
+    SendResponse(std::io::Error),
+    UpstreamSupport(PoolError),
+    TlsKeyExtraction(PoolError),
+    UpstreamCookies(PoolError),
+}
+
+impl ConnectionError {
+    fn metrics_label(&self) -> &'static str {
+        match self {
+            Self::Proxy(_) => "proxy_protocol",
+            Self::TlsHandshake(_) => "tls_handshake",
+            Self::NoSuchServer(_) => "no_server",
+            Self::FailedAuthentication(_) => "failed_auth",
+            Self::InvalidRequest(_) => "invalid_request",
+            Self::SendResponse(_) => "send_failure",
+            Self::UpstreamSupport(_) => "upstream_support",
+            Self::TlsKeyExtraction(_) => "key_extraction",
+            Self::UpstreamCookies(_) => "upstream_cookies",
+        }
+    }
+}
+
+impl std::fmt::Display for ConnectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Proxy(pool_error) => pool_error.fmt(f),
+            Self::TlsHandshake(error) => error.fmt(f),
+            Self::NoSuchServer(error) => error.fmt(f),
+            Self::FailedAuthentication(error) => error.fmt(f),
+            Self::InvalidRequest(error) => error.fmt(f),
+            Self::SendResponse(error) => error.fmt(f),
+            Self::UpstreamSupport(error) => error.fmt(f),
+            Self::TlsKeyExtraction(error) => error.fmt(f),
+            Self::UpstreamCookies(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for ConnectionError {}
+
 pub async fn run_nts_pool_ke(
     nts_pool_ke_config: NtsPoolKeConfig,
     server_manager: impl ServerManager + 'static,
@@ -217,6 +264,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             1,
                             &[
                                 KeyValue::new("outcome", "error"),
+                                KeyValue::new("reason", err.metrics_label()),
                                 KeyValue::new("is_monitor", monitor_count_token.is_some()),
                             ],
                         );
@@ -345,10 +393,12 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         mut client_stream: tokio::net::TcpStream,
         mut source_address: SocketAddr,
         is_monitor: impl FnOnce(),
-    ) -> Result<(), PoolError> {
+    ) -> Result<(), ConnectionError> {
         // Handle the proxy message if needed
         if self.config.use_proxy_protocol
-            && let Some(addr) = parse_haproxy_header(&mut client_stream).await?
+            && let Some(addr) = parse_haproxy_header(&mut client_stream)
+                .await
+                .map_err(ConnectionError::Proxy)?
         {
             info!("Proxy protocol used, change address from {source_address:?} to {addr:?}");
             source_address = addr;
@@ -358,7 +408,12 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
 
         // handle the initial client to pool
         let server_tls = self.server_tls.read().unwrap().clone();
-        let mut client_stream = BufStream::new(server_tls.accept(client_stream).await?);
+        let mut client_stream = BufStream::new(
+            server_tls
+                .accept(client_stream)
+                .await
+                .map_err(ConnectionError::TlsHandshake)?,
+        );
 
         let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
         let client_request = match ClientRequest::parse(&mut BufferBorrowingReader::new(
@@ -373,12 +428,16 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     errorcode: ErrorCode::BadRequest,
                 }
                 .serialize(&mut client_stream)
-                .await?;
-                client_stream.shutdown().await?;
-                return Err(e.into());
+                .await
+                .map_err(|e| ConnectionError::InvalidRequest(e.into()))?;
+                client_stream
+                    .shutdown()
+                    .await
+                    .map_err(|e| ConnectionError::InvalidRequest(e.into()))?;
+                return Err(ConnectionError::InvalidRequest(e.into()));
             }
             // Nothing we can do for the other errors as the connection is the main culprit.
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(ConnectionError::InvalidRequest(e.into())),
         };
 
         debug!("Recevied request from client: {:?}", client_request);
@@ -398,9 +457,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                             errorcode: ErrorCode::InternalServerError,
                         }
                         .serialize(&mut client_stream)
-                        .await?;
-                        client_stream.shutdown().await?;
-                        return Err(PoolError::NoSuchServer);
+                        .await
+                        .map_err(|e| ConnectionError::NoSuchServer(e.into()))?;
+                        client_stream
+                            .shutdown()
+                            .await
+                            .map_err(|e| ConnectionError::NoSuchServer(e.into()))?;
+                        return Err(ConnectionError::NoSuchServer(PoolError::NoSuchServer));
                     }
                 }
             }
@@ -413,9 +476,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                         errorcode: ErrorCode::NoSuchServer,
                     }
                     .serialize(&mut client_stream)
-                    .await?;
-                    client_stream.shutdown().await?;
-                    return Err(PoolError::NoSuchServer);
+                    .await
+                    .map_err(|e| ConnectionError::NoSuchServer(e.into()))?;
+                    client_stream
+                        .shutdown()
+                        .await
+                        .map_err(|e| ConnectionError::NoSuchServer(e.into()))?;
+                    return Err(ConnectionError::NoSuchServer(PoolError::NoSuchServer));
                 }
             }
             ClientRequest::Uuid { .. } => {
@@ -423,9 +490,15 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     errorcode: ErrorCode::BadRequest,
                 }
                 .serialize(&mut client_stream)
-                .await?;
-                client_stream.shutdown().await?;
-                return Err(PoolError::FailedAuthentication);
+                .await
+                .map_err(|e| ConnectionError::FailedAuthentication(e.into()))?;
+                client_stream
+                    .shutdown()
+                    .await
+                    .map_err(|e| ConnectionError::FailedAuthentication(e.into()))?;
+                return Err(ConnectionError::FailedAuthentication(
+                    PoolError::FailedAuthentication,
+                ));
             }
         };
 
@@ -435,8 +508,14 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         {
             Ok(Some(result)) => result,
             Ok(None) => {
-                NoAgreementResponse.serialize(&mut client_stream).await?;
-                client_stream.shutdown().await?;
+                NoAgreementResponse
+                    .serialize(&mut client_stream)
+                    .await
+                    .map_err(ConnectionError::SendResponse)?;
+                client_stream
+                    .shutdown()
+                    .await
+                    .map_err(ConnectionError::SendResponse)?;
                 return Ok(());
             }
             Err(e) => {
@@ -452,9 +531,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     },
                 }
                 .serialize(&mut client_stream)
-                .await?;
-                client_stream.shutdown().await?;
-                return Err(e);
+                .await
+                .map_err(|e| ConnectionError::UpstreamSupport(e.into()))?;
+                client_stream
+                    .shutdown()
+                    .await
+                    .map_err(|e| ConnectionError::UpstreamSupport(e.into()))?;
+                return Err(ConnectionError::UpstreamSupport(e));
             }
         };
         let (c2s, s2c) =
@@ -465,9 +548,13 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                         errorcode: ErrorCode::InternalServerError,
                     }
                     .serialize(&mut client_stream)
-                    .await?;
-                    client_stream.shutdown().await?;
-                    return Err(e);
+                    .await
+                    .map_err(|e| ConnectionError::TlsKeyExtraction(e.into()))?;
+                    client_stream
+                        .shutdown()
+                        .await
+                        .map_err(|e| ConnectionError::TlsKeyExtraction(e.into()))?;
+                    return Err(ConnectionError::TlsKeyExtraction(e));
                 }
             };
 
@@ -504,15 +591,17 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     },
                 }
                 .serialize(&mut client_stream)
-                .await?;
-                Err(e)
+                .await
+                .map_err(|e| ConnectionError::UpstreamCookies(e.into()))?;
+                Err(ConnectionError::UpstreamCookies(e))
             }
             // Pass other errors from the server on unchanged
             Err(e @ PoolError::NtsError(NtsError::Error(errorcode))) => {
                 ErrorResponse { errorcode }
                     .serialize(&mut client_stream)
-                    .await?;
-                Err(e)
+                    .await
+                    .map_err(|e| ConnectionError::UpstreamCookies(e.into()))?;
+                Err(ConnectionError::UpstreamCookies(e))
             }
             // All other errors indicate we are doing something strange or cant connect to the time source
             Err(e) => {
@@ -525,19 +614,26 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                     },
                 }
                 .serialize(&mut client_stream)
-                .await?;
-                Err(e)
+                .await
+                .map_err(|e| ConnectionError::UpstreamCookies(e.into()))?;
+                Err(ConnectionError::UpstreamCookies(e))
             }
             Ok(mut response) => {
                 if response.server.is_none() {
                     response.server = Some(pick.name().as_ref().into());
                 }
-                response.serialize(&mut client_stream).await?;
+                response
+                    .serialize(&mut client_stream)
+                    .await
+                    .map_err(ConnectionError::SendResponse)?;
                 Ok(())
             }
         };
 
-        client_stream.shutdown().await?;
+        client_stream
+            .shutdown()
+            .await
+            .map_err(ConnectionError::SendResponse)?;
         result
     }
 
