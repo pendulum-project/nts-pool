@@ -196,3 +196,46 @@ impl RequestHandler for GeoHandlerArc {
         self.0.catalog.handle_request(request, response).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn load_test_key() {
+        load_key("testdata/pool.test.key", Algorithm::RSASHA256)
+            .await
+            .expect("Failed to load test key");
+    }
+
+    #[tokio::test]
+    async fn create_test_handler() {
+        let config = GeoHandlerConfig {
+            zone_name: "pool.test.".parse().unwrap(),
+            dns_server_name: "ns1.pool.test.".parse().unwrap(),
+            responsible_name: "admin.pool.test.".parse().unwrap(),
+            key_path: "testdata/pool.test.key".into(),
+            servers_list_path: "testdata/testservers.json".into(),
+            algorithm: Algorithm::RSASHA256,
+            sign_duration: Duration::from_secs(120),
+            ttl: Duration::from_secs(300),
+        };
+
+        let authority = GeoHandler::new(config)
+            .await
+            .expect("Failed to create test handler");
+        authority
+            .authority
+            .records()
+            .await
+            .iter()
+            .for_each(|(key, _record)| {
+                assert_eq!(key.name(), &Name::from_ascii("pool.test.").unwrap().into());
+            });
+        assert!(
+            authority
+                .catalog
+                .contains(&Name::from_ascii("pool.test.").unwrap().into())
+        );
+    }
+}
