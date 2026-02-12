@@ -31,7 +31,8 @@
   --space-md: 2.5rem;
   --space-lg: 5rem;
   --space-xl: 10rem;
-
+  --container-width: 1280px;
+  
   --border-radius: 0.75rem;
   --border-width: 2px;
 

@@ -7,7 +7,7 @@ body {
 .appcontainer {
   display: grid;
   height: 100vh;
-  grid-template-columns: auto minmax(50ch, 1024px) auto;
+  grid-template-columns: auto minmax(50ch, var(--container-width)) auto;
   grid-template-rows: var(--space-lg) 7rem 1fr var(--space-lg);
   grid-template-areas:
     "nav    nav    nav"
