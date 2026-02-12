@@ -24,44 +24,51 @@
   </section>
   <section>
     <h2>Time source servers</h2>
-    <div class="time-sources-list">
-      {% if time_sources.is_empty() %}
-        No time sources servers added
-      {% endif %}
-      {%- for ts in time_sources %}
-        <article class="card">
-          <a href="/management/time-sources/{{ ts.id }}"><h3>{{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</h3></a>
-          <form action="/management/time-sources/{{ ts.id }}/update" method="POST">
-            <dl>
-              <dd>Ipv4 score</dd>
-              <dt>{{ ts.ipv4_score | fmt("{:.1}") }}</dt>
-              <dd>Ipv6 score</dd>
-              <dt>{{ ts.ipv6_score | fmt("{:.1}") }}</dt>
-              <dd>SRV score (Ipv4)</dd>
-              <dt>{{ ts.srv4_score | fmt("{:.1}") }}</dt>
-              <dd>SRV score (Ipv6)</dd>
-              <dt>{{ ts.srv6_score | fmt("{:.1}") }}</dt>
-              <dd>Weight</dd>
-              <dt><input type="number" name="weight" min="1" max="{{ app.max_timesource_weight }}" value="{{ ts.weight }}" /></dt>
-            </dl>
-            <button type="submit" class="btn-sm">Save</button>
-          </form>
-          <form class="card-action" action="/management/time-sources/{{ ts.id }}/delete" method="POST">
-            <button type="button" class="btn-link" popovertarget="confirm-{{ ts.id }}">Delete</button>
-            <dialog class="confirmation" popover id="confirm-{{ ts.id }}">
-              <p>Are you sure you want to delete <strong> {{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</strong>?
-              </p>
-              <div class="dialog-actions">
-                <button type="submit">Yes, delete</button>
-                <button type="button" popovertarget="confirm-{{ ts.id }}" popovertargetaction="hide" class="btn-alt">Cancel</button>
-              </div>
-            </dialog>
-          </form>
-          <form action="/management/time-sources/{{ ts.id }}/rekey" method="POST">
-            <button type="submit" class="btn-link">Rekey</button>
-          </form>
-        </article>
-      {% endfor %}
-    </div>
+    <table>
+      <thead>
+        <th>Time Source</th>
+        <th>IPv4 Score</th>
+        <th>IPv6 Score</th>
+        <th>SRV Score (Ipv4)</th>
+        <th>SRV Score (Ipv6)</th>
+        <th>Weight</th>
+        <td><!-- Actions --></td>
+      </thead>
+      <tbody>
+        {%- for ts in time_sources %}
+          <tr>
+            <td>
+              <a href="/management/time-sources/{{ ts.id }}">{{ ts.hostname }}</a>
+            </td>
+            <td>{{ ts.ipv4_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.ipv6_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.srv4_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.srv6_score | fmt("{:.1}") }}</td>
+            <td>
+              <form action="/management/time-sources/{{ ts.id }}/update" method="POST">
+                <input type="number" class="input-sm" name="weight" min="1" max="{{ app.max_timesource_weight }}" value="{{ ts.weight }}" />
+                <button type="submit" class="btn-sm">Save</button>
+              </form>
+            </td>
+            <td class="actions">
+              <form action="/management/time-sources/{{ ts.id }}/rekey" method="POST">
+                <button type="submit" class="btn-sm btn-alt">Rekey</button>
+              </form>
+              <form action="/management/time-sources/{{ ts.id }}/delete" method="POST">
+                <button type="button" class="btn-sm error" popovertarget="confirm-{{ ts.id }}">Delete</button>
+                <dialog class="confirmation" popover id="confirm-{{ ts.id }}">
+                  <p>Are you sure you want to delete <strong> {{ ts.hostname }}{% if let Some(p) = ts.port %}<span class="port">:{{ p }}</span>{% endif %}</strong>?
+                  </p>
+                  <div class="dialog-actions">
+                    <button type="submit" class="error">Yes, delete</button>
+                    <button type="button" class="btn-alt" popovertarget="confirm-{{ ts.id }}" popovertargetaction="hide">Cancel</button>
+                  </div>
+                </dialog>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </section>
 {% endblock %}
