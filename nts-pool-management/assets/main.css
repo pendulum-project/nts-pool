@@ -36,6 +36,9 @@ main {
   grid-area: main;
   background-color: var(--background);
   padding-top: var(--space-md);
+
+  /* Temporary fix until we figure out how we handle content that is wider than main */
+  overflow-x: auto;
 }
 
 footer {
