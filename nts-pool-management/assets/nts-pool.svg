@@ -6,19 +6,42 @@
    viewBox="0 0 1024 1024"
    preserveAspectRatio="xMidYMid"
    id="svg14"
+   sodipodi:docname="nts-pool.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="pt"
+     inkscape:zoom="0.67456055"
+     inkscape:cx="681.92544"
+     inkscape:cy="682.66667"
+     inkscape:window-width="1920"
+     inkscape:window-height="1172"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg14" />
   <defs
      id="defs14">
     <linearGradient
        id="linearGradient14">
       <stop
-         style="stop-color:#ffcc3b;stop-opacity:1;"
+         style="stop-color:#fdc153;stop-opacity:1;"
          offset="0.1638587"
          id="stop14" />
       <stop
-         style="stop-color:#b80808;stop-opacity:1;"
+         style="stop-color:#fd6c53;stop-opacity:1;"
          offset="1"
          id="stop15" />
     </linearGradient>
