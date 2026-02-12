@@ -6,7 +6,7 @@ button,
 a.btn {
   color: var(--deep-black) !important;
   display: inline-block;
-  background-color: var(--primary);
+  background-color: color-mix(in lab, var(--primary), var(--white) 30%);
   border: var(--border-width) solid var(--primary);
   border-radius: var(--border-radius);
   padding: var(--space-sm) var(--space-md);
@@ -29,7 +29,7 @@ a.btn {
   /* Hover effect */
   &:hover,
     &.important:hover {
-      background-color: color-mix(in lab, var(--primary), var(--white) 15%);
+      background-color: color-mix(in lab, var(--primary), var(--white) 40%);
       border: var(--border-width) solid var(--primary);
       cursor: pointer;
     }
@@ -97,6 +97,10 @@ input[type="password"].error {
   background-color: var(--white);
 }
 
+.input-sm {
+  padding: 0 var(--space-sm) !important;
+}
+
 #accept-terms + span {
   font-weight: normal;
 }
@@ -106,7 +110,6 @@ h1 {
 }
 
 h2 {
-  margin-top: var(--space-md);
   margin-bottom: var(--space-sm);
 }
 
@@ -114,7 +117,8 @@ h3 {
   color: var(--primary);
 }
 
-section > p {
+section > p,
+dialog p {
   font-size: var(--font-size-big);
   margin-bottom: var(--space-sm);
 }
@@ -123,7 +127,7 @@ code,
 code-block {
   font-family: monospace;
   white-space: pre;
-  background-color: var(--white);
+  background-color: color-mix(in lab, var(--black), var(--white) 97%);
 }
 
 code {
@@ -244,21 +248,21 @@ dialog .dialog-actions {
 }
 
 .success {
-  color: color-mix(in lab, var(--success), var(--black) --alert-blackness);
-  background-color: color-mix(in lab, var(--success), var(--white) 70%);
-  border-color: var(--success)
+  color: color-mix(in lab, var(--success), var(--black) var(--alert-color-shade));
+  background-color: color-mix(in lab, var(--success), var(--white) var(--alert-bg-shade));
+  border-color: color-mix(in lab, var(--success), var(--black) var(--alert-border-shade));
 }
 
 .error {
-  color: color-mix(in lab, var(--error), var(--black) --alert-blackness);
-  background-color: color-mix(in lab, var(--error), var(--white) 70%);
-  border-color: var(--error)
+  color: color-mix(in lab, var(--error), var(--black) var(--alert-color-shade));
+  background-color: color-mix(in lab, var(--error), var(--white) var(--alert-bg-shade));
+  border-color: color-mix(in lab, var(--error), var(--black) var(--alert-border-shade));
 }
 
 .info {
-  color: color-mix(in lab, var(--info), var(--black) --alert-blackness);
-  background-color: color-mix(in lab, var(--info), var(--white) 70%);
-  border-color: var(--info)
+  color: color-mix(in lab, var(--info), var(--black) var(--alert-color-shade));
+  background-color: color-mix(in lab, var(--info), var(--white) var(--alert-bg-shade));
+  border-color: color-mix(in lab, var(--info), var(--black) var(--alert-border-shade));
 }
 
 details.toast > summary,
@@ -295,6 +299,7 @@ table {
   tbody {
     tr {
       border-bottom: 1px solid var(--grey);
+      color: var(--table-text-color);
     }
   }
 
@@ -343,7 +348,6 @@ table.autowidth {
 
     .pagination {
         a.btn, button {
-            color: var(--secondary);
             background-color: inherit;
             padding: 0 var(--space-sm);
             border: inherit;
