@@ -54,10 +54,6 @@
         </div>
       </nav>
 
-      <header>
-        {% block header %}{% endblock %}
-      </header>
-
       <div class="left"></div>
       <main>
         {% if let Some((msg_type, msg)) = app.flash_message %}
@@ -67,7 +63,7 @@
             </summary>
           </details>
         {% endif %}
-        <aside class="info experimental contained">
+        <aside class="info contained">
           The NTS pool is experimental. Please help us by leaving your feedback and reporting problems
           at <a href="https://github.com/pendulum-project/nts-pool/discussions">our discussion forum</a>,
           <a href="https://github.com/pendulum-project/nts-pool/issues">our issue tracker</a>, or via
