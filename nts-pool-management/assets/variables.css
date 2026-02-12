@@ -5,23 +5,30 @@
   --bold: bold;
 
   /* colors */
-  --primary: #fdc153;
-  --secondary: #202020;
-  --grey: #cccccc;
-  --background: #f4f4f4;
-  --background-alt: #ffffff;
-  --white: #ffffff;
-  --black: #333333;
-  --deep-black: #000;
-  --error: #ce4242;
-  --success: #74ce42;
-  --info: #99b6d5;
-  --link: #0a57f0;
-  --text-color-body: #333;
-
-  --text-color-body: var(--black);
-  
+/* Orange Delight */
+  --orange-delight: #fdc153;
+  --blistering-mars: #fd6c53;
+  --green-ooze: #e4fd53;
+  --electric-lemonade: #53e4fd;
+    
+  --primary: var(--orange-delight);
   --primary-alt: color-mix(in lab, var(--primary), var(--white) 90%);
+  --grey: #ddd;
+  --background: #ffffff;
+  --background-alt: color-mix(in lab, var(--electric-lemonade), var(--white) 90%);
+  --white: #ffffff;
+  --black: #333;
+  --deep-black: #000;
+  --error: var(--blistering-mars);
+  --warning: var(--orange-delight);
+  --success: color-mix(in lab, var(--green-ooze), var(--black) 10%);
+  --info: var(--electric-lemonade);
+  --link: color-mix(in lab, var(--primary), var(--black) 40%);
+  --text-color-body: #333;
+  --table-text-color: #444;
+  --text-color-body: var(--black);
+  --menu-footer-color: color-mix(in lab, var(--electric-lemonade), var(--white) 95%);
+  
   --muted: var(--grey);
   
   /* spacing */
@@ -36,7 +43,9 @@
   --border-radius: 0.75rem;
   --border-width: 2px;
 
-  --alert-blackness: 33%;
+  --alert-color-shade: 90%;
+  --alert-bg-shade: 70%;
+  --alert-border-shade: 10%;
 }
 
 @font-face {

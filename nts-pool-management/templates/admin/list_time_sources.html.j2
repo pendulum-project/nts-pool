@@ -6,34 +6,37 @@
 {% block header %}<h1>Time Sources List</h1>{% endblock %}
 
 {% block content %}
-  <table>
-    <thead>
-      <th>Time Source</th>
-      <th>Owner</th>
-      <th>IPv4 Score</th>
-      <th>IPv6 Score</th>
-      <th>SRV Score (Ipv4)</th>
-      <th>SRV Score (Ipv6)</th>
-      <th>Weight</th>
-      <th>Countries</th>
-      <td><!-- Actions --></td>
-    </thead>
-    <tbody>
-      {%- for ts in time_sources %}
-        <tr>
-          <td>{{ ts.time_source.hostname }}</td>
-          <td>{{ ts.user_email }}</td>
-          <td>{{ ts.time_source.ipv4_score | fmt("{:.1}") }}</td>
-          <td>{{ ts.time_source.ipv6_score | fmt("{:.1}") }}</td>
-          <td>{{ ts.time_source.srv4_score | fmt("{:.1}") }}</td>
-          <td>{{ ts.time_source.srv6_score | fmt("{:.1}") }}</td>
-          <td>{{ ts.time_source.weight }}</td>
-          <td>{{ ts.time_source.countries.join(", ") }}</td>
-          <td>
-            <a href="/management/time-sources/{{ ts.time_source.id }}">View</a>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <section>
+    <h2>Time source list</h2>
+    <table>
+      <thead>
+        <th>Time Source</th>
+        <th>Owner</th>
+        <th>IPv4 Score</th>
+        <th>IPv6 Score</th>
+        <th>SRV Score (Ipv4)</th>
+        <th>SRV Score (Ipv6)</th>
+        <th>Weight</th>
+        <th>Countries</th>
+        <td><!-- Actions --></td>
+      </thead>
+      <tbody>
+        {%- for ts in time_sources %}
+          <tr>
+            <td>{{ ts.time_source.hostname }}</td>
+            <td>{{ ts.user_email }}</td>
+            <td>{{ ts.time_source.ipv4_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.time_source.ipv6_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.time_source.srv4_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.time_source.srv6_score | fmt("{:.1}") }}</td>
+            <td>{{ ts.time_source.weight }}</td>
+            <td>{{ ts.time_source.countries.join(", ") }}</td>
+            <td>
+              <a href="/management/time-sources/{{ ts.time_source.id }}">View</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
 {% endblock %}

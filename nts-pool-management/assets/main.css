@@ -8,10 +8,9 @@ body {
   display: grid;
   height: 100vh;
   grid-template-columns: auto minmax(50ch, var(--container-width)) auto;
-  grid-template-rows: var(--space-lg) 7rem 1fr var(--space-lg);
+  grid-template-rows: var(--space-lg) 1fr var(--space-lg);
   grid-template-areas:
     "nav    nav    nav"
-    "....   header ...."
     "left   main   right"
     "footer footer footer";
 }
@@ -39,13 +38,15 @@ main {
 }
 
 footer {
+  font-size: .75rem;
   grid-area: footer;
   display: flex;
   flex: 0 0 5rem;
   justify-content: space-between;
   align-items: center;
   padding: 0 var(--space-md) 0 var(--space-md);
-  background-color: var(--background-alt);
+  background-color: var(--menu-footer-color);
+  border-top: 1px solid var(--grey);
 }
 
 main section {
@@ -53,6 +54,7 @@ main section {
 }
 
 nav:not(.pagination) {
+  background-color: var(--menu-footer-color);
   grid-area: nav;
   display: flex;
   justify-content: space-between;
@@ -90,6 +92,7 @@ nav:not(.pagination) {
     }
 
     a[aria-current="page"] {
+      font-weight: var(--bold);
       border-bottom: 4px solid var(--primary) !important;
     }
   }
