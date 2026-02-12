@@ -97,6 +97,10 @@ input[type="password"].error {
   background-color: var(--white);
 }
 
+.input-sm {
+  padding: 0 var(--space-sm) !important;
+}
+
 #accept-terms + span {
   font-weight: normal;
 }
@@ -113,7 +117,8 @@ h3 {
   color: var(--primary);
 }
 
-section > p {
+section > p,
+dialog p {
   font-size: var(--font-size-big);
   margin-bottom: var(--space-sm);
 }
@@ -122,7 +127,7 @@ code,
 code-block {
   font-family: monospace;
   white-space: pre;
-  background-color: var(--white);
+  background-color: color-mix(in lab, var(--black), var(--white) 97%);
 }
 
 code {
