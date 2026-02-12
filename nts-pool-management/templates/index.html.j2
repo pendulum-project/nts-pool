@@ -2,22 +2,9 @@
 
 {% block nav_home %}aria-current="page"{% endblock %}
 
-{% block header %}<h1>NTS Pool</h1>{% endblock %}
-
 {% block content %}
-
-
   <section class="contained">
-    <highlight-actions>
-      <a href="/use" class="btn important">
-        {% include "icons/user-shield.svg.html.j2" %}
-        Use the pool
-      </a>
-      <a href="/join" class="btn important">
-        {% include "icons/clock-plus.svg.html.j2" %}
-        Join the pool
-      </a>
-    </highlight-actions>
+    <h1>NTS Pool</h1>    
     <p>
       The NTS pool provides Network Time Security (NTS) servers from around the
       world for secure time synchronization over the internet.
@@ -49,7 +36,17 @@
       non-profit organization that develops open infrastructure software in the
       public interest.
     </p>
-
+    <highlight-actions>
+      <a href="/use" class="btn important">
+        {% include "icons/user-shield.svg.html.j2" %}
+        Use the pool
+      </a>
+      <a href="/join" class="btn important">
+        {% include "icons/clock-plus.svg.html.j2" %}
+        Join the pool
+      </a>
+    </highlight-actions>
+    
     {% if !(app.user|is_logged_in) %}
       <p role="alert">
         You are not logged in. To manage your servers, please <a href="/login">log in</a> to access the pool management system. You can also <a href="/register">register</a> for a new account.

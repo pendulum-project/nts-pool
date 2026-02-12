@@ -106,7 +106,8 @@ input[type="password"].error {
 }
 
 h1 {
-    font-size: 2.25rem;
+  font-size: 2.25rem;
+  margin-bottom: var(--space-md);
 }
 
 h2 {
