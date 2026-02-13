@@ -143,48 +143,88 @@ impl Probe {
                 resolve_as_version((self.poolke.as_str(), 4460), ipprot).await?,
             )
         };
-        let io = TcpStream::connect(addr).await?;
 
         let exchange_start = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
         let start_time = Instant::now();
-        let ke_result = match timeout(
-            self.nts_timeout,
-            self.ntske
-                .exchange_keys(io, domain, if ipprot.is_srv() { None } else { Some(uuid) }),
-        )
+        match timeout(self.nts_timeout, async {
+            let io = match TcpStream::connect(addr).await {
+                Ok(io) => io,
+                Err(_) if ipprot.is_srv() => {
+                    let end_time = Instant::now();
+                    return Ok((
+                        KeyExchangeProbeResult {
+                            status: KeyExchangeStatus::Failed,
+                            description: "Time source NTS key exchange server was not reachable."
+                                .into(),
+                            exchange_start,
+                            exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
+                            num_cookies: 0,
+                        },
+                        None,
+                    ));
+                }
+                Err(e) => return Err(e.into()),
+            };
+            match self
+                .ntske
+                .exchange_keys(io, domain, if ipprot.is_srv() { None } else { Some(uuid) })
+                .await
+            {
+                Ok(ke_result) => {
+                    let end_time = Instant::now();
+                    Ok((
+                        KeyExchangeProbeResult {
+                            status: KeyExchangeStatus::Success,
+                            description: String::new(),
+                            exchange_start,
+                            exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
+                            num_cookies: ke_result.cookies.len(),
+                        },
+                        Some(NtpInputs {
+                            ipprot,
+                            host: ke_result.remote,
+                            port: ke_result.port,
+                            cookie: ke_result.cookies.into_iter().next().unwrap(),
+                            c2s: ke_result.c2s,
+                            s2c: ke_result.s2c,
+                        }),
+                    ))
+                }
+                Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer)) if !ipprot.is_srv() => {
+                    Err(eyre::eyre!("Server not known (yet)"))
+                }
+                Err(e) => {
+                    let end_time = Instant::now();
+                    Ok((
+                        KeyExchangeProbeResult {
+                            status: KeyExchangeStatus::Failed,
+                            description: match e {
+                                NtsError::Invalid => {
+                                    "Time source's response was invalid but well-structured".into()
+                                }
+                                NtsError::Error(e) => e.to_string(),
+                                e => {
+                                    format!("Unexpected error during key exchange: {e}")
+                                }
+                            },
+                            exchange_start,
+                            exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
+                            num_cookies: 0,
+                        },
+                        None,
+                    ))
+                }
+            }
+        })
         .await
         {
-            Ok(Ok(result)) => result,
-            Ok(Err(NtsError::Error(pool_nts::ErrorCode::NoSuchServer))) if !ipprot.is_srv() => {
-                return Err(eyre::eyre!("Server not known (yet)"));
-            }
-            Ok(Err(e)) => {
-                let end_time = Instant::now();
-                return Ok((
-                    KeyExchangeProbeResult {
-                        status: KeyExchangeStatus::Failed,
-                        description: match e {
-                            NtsError::Invalid => {
-                                "Time source's response was invalid but well-structured".into()
-                            }
-                            NtsError::Error(e) => e.to_string(),
-                            e => {
-                                format!("Unexpected error during key exchange: {e}")
-                            }
-                        },
-                        exchange_start,
-                        exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
-                        num_cookies: 0,
-                    },
-                    None,
-                ));
-            }
+            Ok(result) => result,
             Err(_) => {
                 let end_time = Instant::now();
-                return Ok((
+                Ok((
                     KeyExchangeProbeResult {
                         status: KeyExchangeStatus::Timeout,
                         description: String::new(),
@@ -193,28 +233,9 @@ impl Probe {
                         num_cookies: 0,
                     },
                     None,
-                ));
+                ))
             }
-        };
-        let end_time = Instant::now();
-
-        Ok((
-            KeyExchangeProbeResult {
-                status: KeyExchangeStatus::Success,
-                description: String::new(),
-                exchange_start,
-                exchange_duration: end_time.duration_since(start_time).as_secs_f64(),
-                num_cookies: ke_result.cookies.len(),
-            },
-            Some(NtpInputs {
-                ipprot,
-                host: ke_result.remote,
-                port: ke_result.port,
-                cookie: ke_result.cookies.into_iter().next().unwrap(),
-                c2s: ke_result.c2s,
-                s2c: ke_result.s2c,
-            }),
-        ))
+        }
     }
 
     async fn probe_ntp(
