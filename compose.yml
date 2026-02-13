@@ -102,4 +102,4 @@ services:
     working_dir: /app/nts-pool-management
     ulimits:
       core: 0
-    command: ["watchexec", "--shell=none", "-o", "restart", "--", "cargo", "run", "-p", "nts-pool-management", "--features", "livereload", "--"]
+    command: ["watchexec", "--shell=none", "-o", "restart", "--", "cargo", "run", "-p", "nts-pool-management", "--features", "livereload,dev-database", "--"]

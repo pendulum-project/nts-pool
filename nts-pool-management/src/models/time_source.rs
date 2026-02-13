@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use eyre::Context;
 use nts_pool_shared::IpVersion;
-use phf::phf_map;
 use serde::Deserialize;
 use sha3::Digest;
 
@@ -11,21 +10,12 @@ use crate::{
     DbConnLike,
     context::AppContext,
     error::AppError,
+    geo::GeoLookupSource,
     models::{
         monitor::MonitorId,
         user::UserId,
         util::{port::Port, uuid},
     },
-};
-
-static CONTINENTS: phf::Map<&'static str, &'static str> = phf_map! {
-    "AF" => "AFRICA",
-    "AN" => "ANTARCTICA",
-    "AS" => "ASIA",
-    "EU" => "EUROPE",
-    "NA" => "NORTH-AMERICA",
-    "OC" => "OCEANIA",
-    "SA" => "SOUTH_AMERICA",
 };
 
 uuid!(TimeSourceId);
@@ -104,10 +94,7 @@ fn check_hostname_reasonable(hostname: &str, context: &AppContext) -> Result<(),
     Ok(())
 }
 
-pub async fn infer_regions(
-    hostname: impl AsRef<str>,
-    geodb: &maxminddb::Reader<impl AsRef<[u8]>>,
-) -> Vec<String> {
+pub async fn infer_regions(hostname: impl AsRef<str>, geodb: &impl GeoLookupSource) -> Vec<String> {
     // Note: port doesn't matter but is needed for the lookup_host interface
     let addresses = match tokio::net::lookup_host((hostname.as_ref(), 4460)).await {
         Ok(addresses) => addresses,
@@ -122,24 +109,20 @@ pub async fn infer_regions(
 
     let mut result = HashSet::new();
     for addr in addresses {
-        let Some(lookup) = (match geodb
-            .lookup(addr.ip())
-            .and_then(|r| r.decode::<maxminddb::geoip2::Country>())
-        {
+        let lookup = match geodb.lookup(addr.ip()) {
             Ok(lookup) => lookup,
             Err(e) => {
                 tracing::error!("Failure during geoip lookup: {e}");
-                None
+                continue;
             }
-        }) else {
-            continue;
         };
 
-        if let Some(continent) = lookup.continent.code.and_then(|c| CONTINENTS.get(c)) {
-            result.insert((*continent).to_owned());
+        if let Some(continent) = lookup.continent_code {
+            result.insert(continent);
         }
-        if let Some(country) = lookup.country.iso_code {
-            result.insert(country.to_owned());
+
+        if let Some(country) = lookup.country_iso_code {
+            result.insert(country);
         }
     }
 
@@ -174,7 +157,7 @@ pub async fn create(
     owner: UserId,
     new_time_source: NewTimeSource,
     base_secret_index: i32,
-    geodb: &maxminddb::Reader<impl AsRef<[u8]>>,
+    geodb: &impl GeoLookupSource,
 ) -> Result<TimeSourceId, sqlx::Error> {
     let regions = infer_regions(&new_time_source.hostname, geodb).await;
 
