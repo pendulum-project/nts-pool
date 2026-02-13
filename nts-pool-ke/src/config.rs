@@ -112,9 +112,12 @@ struct BareBackendConfig {
     /// Validity duration for server support statements in seconds
     #[serde(default = "default_server_support_cache_validity")]
     server_support_cache_validity: u64,
-    /// Length of time a connection needs to be kept open in seconds
-    #[serde(default = "default_server_connection_cache_duration")]
-    server_connection_cache_duration: u64,
+    /// Length of time a cached connection is allowed to remain idle before discarding it
+    #[serde(default = "default_server_connection_cache_max_idle")]
+    server_connection_cache_max_idle: u64,
+    /// Length of time a cached connection is allowed to exist in total
+    #[serde(default = "default_server_connection_cache_max_age")]
+    server_connection_cache_max_age: u64,
 }
 
 #[derive(Clone)]
@@ -128,7 +131,8 @@ pub struct BackendConfig {
     pub geolocation_db: Option<PathBuf>,
     pub timesource_timeout: Duration,
     pub server_support_cache_validity: Duration,
-    pub server_connection_cache_duration: Duration,
+    pub server_connection_cache_max_idle: Duration,
+    pub server_connection_cache_max_age: Duration,
 }
 
 impl<'de> Deserialize<'de> for BackendConfig {
@@ -163,8 +167,11 @@ impl<'de> Deserialize<'de> for BackendConfig {
             server_support_cache_validity: std::time::Duration::from_secs(
                 bare.server_support_cache_validity,
             ),
-            server_connection_cache_duration: std::time::Duration::from_secs(
-                bare.server_connection_cache_duration,
+            server_connection_cache_max_idle: std::time::Duration::from_secs(
+                bare.server_connection_cache_max_idle,
+            ),
+            server_connection_cache_max_age: std::time::Duration::from_secs(
+                bare.server_connection_cache_max_age,
             ),
         })
     }
@@ -208,8 +215,12 @@ fn default_server_support_cache_validity() -> u64 {
     5 * 60
 }
 
-fn default_server_connection_cache_duration() -> u64 {
+fn default_server_connection_cache_max_idle() -> u64 {
     5 * 60
+}
+
+fn default_server_connection_cache_max_age() -> u64 {
+    60 * 60
 }
 
 fn default_max_connections() -> usize {

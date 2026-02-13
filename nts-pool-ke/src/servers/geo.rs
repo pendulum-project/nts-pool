@@ -56,10 +56,15 @@ struct ServerSupportCacheEntry {
 
 const MAX_CACHED_PER_SERVER: usize = 5;
 
+struct CachedConnection {
+    idle: tokio::time::Instant,
+    age: tokio::time::Instant,
+    connection: BufStream<TlsStream<TcpStream>>,
+}
+
 struct ServerConnectionCacheEntry {
     len_age: [tokio::time::Instant; MAX_CACHED_PER_SERVER],
-    connections:
-        ArrayDeque<MAX_CACHED_PER_SERVER, (tokio::time::Instant, BufStream<TlsStream<TcpStream>>)>,
+    connections: ArrayDeque<MAX_CACHED_PER_SERVER, CachedConnection>,
 }
 
 impl Default for ServerConnectionCacheEntry {
@@ -212,7 +217,9 @@ impl GeographicServerManager {
                     .iter_mut_async(|entry| {
                         if !serverdata.uuid_lookup.contains_key(&entry.0.1) {
                             let mut consumed = entry.consume();
-                            while let Some((_, connection)) = consumed.1.connections.pop() {
+                            while let Some(CachedConnection { connection, .. }) =
+                                consumed.1.connections.pop()
+                            {
                                 connections_to_dispose.push(connection);
                             }
                         }
@@ -596,7 +603,12 @@ impl Server for GeographicServer {
             .get_async(&(connection_type, self.inner.servers[self.index].uuid.clone()))
             .await
         {
-            while let Some((age, mut connection)) = entry.connections.pop() {
+            while let Some(CachedConnection {
+                age,
+                idle,
+                mut connection,
+            }) = entry.connections.pop()
+            {
                 let mut buf = [0u8; 4];
                 let mut buf = ReadBuf::new(&mut buf);
                 // There are two criteria used here for wether the connection is usable.
@@ -607,7 +619,9 @@ impl Server for GeographicServer {
                 //  - Errors are self-evidently problematic
                 //  - Any data means that the state of the connection is not well understood
                 //  - No data means and no error means the remote closed the connection.
-                if age + self.config.server_connection_cache_duration > tokio::time::Instant::now()
+                let now = tokio::time::Instant::now();
+                if idle + self.config.server_connection_cache_max_idle > now
+                    && age + self.config.server_connection_cache_max_age > now
                     && std::future::poll_fn(|cx| {
                         std::task::Poll::Ready(
                             Pin::new(&mut connection)
@@ -629,6 +643,7 @@ impl Server for GeographicServer {
                         key: (connection_type, self.inner.servers[self.index].uuid.clone()),
                         config: self.config.clone(),
                         cache: self.server_connection_cache.clone(),
+                        age,
                     });
                 }
 
@@ -665,6 +680,7 @@ impl Server for GeographicServer {
             key: (connection_type, self.inner.servers[self.index].uuid.clone()),
             config: self.config.clone(),
             cache: self.server_connection_cache.clone(),
+            age: tokio::time::Instant::now(),
         })
     }
 
@@ -685,6 +701,7 @@ pub struct GeoCachedTlsStream {
     key: (ConnectionType, Arc<str>),
     config: Arc<BackendConfig>,
     cache: Arc<scc::HashMap<(ConnectionType, Arc<str>), ServerConnectionCacheEntry>>,
+    age: tokio::time::Instant,
 }
 
 impl AsyncWrite for GeoCachedTlsStream {
@@ -725,37 +742,43 @@ impl ServerConnection for GeoCachedTlsStream {
     #[allow(unused)]
     async fn reuse(self) {
         let mut entry = self.cache.entry_async(self.key).await.or_default();
-        // Don't add new connection if we had current amount of connections for at least 2 times the individual connection cache duration.
+        // Don't add new connection if we had current amount of connections for at least 2 times the individual connection maximum idle time.
         if (entry.connections.is_empty()
             || entry.len_age[entry.connections.size() - 1]
-                + self.config.server_connection_cache_duration
-                + self.config.server_connection_cache_duration
+                + self.config.server_connection_cache_max_idle
+                + self.config.server_connection_cache_max_idle
                 > tokio::time::Instant::now())
             && !entry.connections.is_full()
         {
-            if let Some((_, mut conn)) = entry
-                .connections
-                .try_push((tokio::time::Instant::now(), self.inner))
+            if let Some(CachedConnection { mut connection, .. }) =
+                entry.connections.try_push(CachedConnection {
+                    idle: tokio::time::Instant::now(),
+                    age: self.age,
+                    connection: self.inner,
+                })
             {
                 error!("Could not add connection to cache even though it is not full");
-                let _ = conn.shutdown().await;
+                let _ = connection.shutdown().await;
                 return;
             }
             let idx = entry.connections.size() - 1;
             entry.len_age[idx] = tokio::time::Instant::now();
         } else {
             // Replace the oldest entry
-            if let Some((_, mut conn)) = entry.connections.pop() {
-                let _ = conn.shutdown().await;
+            if let Some(CachedConnection { mut connection, .. }) = entry.connections.pop() {
+                let _ = connection.shutdown().await;
             } else {
                 error!("Could not get connection from cache even though there should be one");
             }
-            if let Some((_, mut conn)) = entry
-                .connections
-                .try_push((tokio::time::Instant::now(), self.inner))
+            if let Some(CachedConnection { mut connection, .. }) =
+                entry.connections.try_push(CachedConnection {
+                    idle: tokio::time::Instant::now(),
+                    age: self.age,
+                    connection: self.inner,
+                })
             {
                 error!("Could not add connection to cache even though it is not full");
-                let _ = conn.shutdown().await;
+                let _ = connection.shutdown().await;
             }
         }
     }
@@ -875,7 +898,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -961,7 +985,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1038,7 +1063,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1128,7 +1154,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1241,7 +1268,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1278,7 +1306,8 @@ mod tests {
             allowed_protocols: HashSet::new(),
             timesource_timeout: Duration::from_secs(1),
             server_support_cache_validity: Duration::from_secs(300),
-            server_connection_cache_duration: Duration::from_secs(300),
+            server_connection_cache_max_idle: Duration::from_secs(300),
+            server_connection_cache_max_age: Duration::from_secs(3600),
         })
         .await
         .unwrap();
@@ -1434,7 +1463,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1528,7 +1558,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1635,7 +1666,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             tls_updater: Arc::new(tokio::spawn(async {}).into()),
             server_list_updater: Arc::new(tokio::spawn(async {}).into()),
@@ -1749,7 +1781,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             index: 0,
         };
@@ -1789,7 +1822,11 @@ mod tests {
         assert!(
             server_connection_entry
                 .connections
-                .try_push((tokio::time::Instant::now(), BufStream::new(conn)))
+                .try_push(CachedConnection {
+                    age: tokio::time::Instant::now(),
+                    idle: tokio::time::Instant::now(),
+                    connection: BufStream::new(conn)
+                })
                 .is_none()
         );
 
@@ -1846,7 +1883,8 @@ mod tests {
                 geolocation_db: None,
                 timesource_timeout: Duration::from_secs(1),
                 server_support_cache_validity: Duration::from_secs(300),
-                server_connection_cache_duration: Duration::from_secs(300),
+                server_connection_cache_max_idle: Duration::from_secs(300),
+                server_connection_cache_max_age: Duration::from_secs(3600),
             }),
             index: 0,
         };
