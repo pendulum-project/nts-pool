@@ -14,6 +14,12 @@ use sqlx::{
 #[repr(transparent)]
 pub struct Port(NonZeroU16);
 
+impl Port {
+    pub fn new(port: u16) -> Result<Self, TryFromIntError> {
+        port.try_into()
+    }
+}
+
 impl TryFrom<u16> for Port {
     type Error = TryFromIntError;
 

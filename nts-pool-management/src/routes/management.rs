@@ -256,7 +256,7 @@ pub async fn create_time_source(
         user.id,
         new_time_source.clone().into_new_source(&app)?,
         state.config.base_secret_index,
-        &geodb,
+        geodb.as_ref(),
     )
     .await
     {

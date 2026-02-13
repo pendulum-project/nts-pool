@@ -22,6 +22,9 @@ use crate::{
 pub use common::*;
 
 mod common;
+#[cfg(feature = "dev-database")]
+pub mod fixtures;
+pub mod geo;
 pub mod models;
 mod pagination;
 pub mod routes;
@@ -87,18 +90,6 @@ pub async fn pool_conn(
     }
 }
 
-async fn load_geodb(
-    geodb_path: &std::path::Path,
-) -> Result<Arc<maxminddb::Reader<Vec<u8>>>, AppError> {
-    let geodb_raw = tokio::fs::read(geodb_path)
-        .await
-        .wrap_err("Could not load geolocation database from disk")?;
-
-    Ok(Arc::new(
-        maxminddb::Reader::from_source(geodb_raw).wrap_err("Invalid geolocation database")?,
-    ))
-}
-
 async fn manage_geodb(
     geodb_path: impl AsRef<std::path::Path> + Send + 'static,
 ) -> Result<Arc<RwLock<Arc<maxminddb::Reader<Vec<u8>>>>>, AppError> {
@@ -120,7 +111,7 @@ async fn manage_geodb(
         .watch(geodb_path.as_ref(), notify::RecursiveMode::NonRecursive)
         .wrap_err("Could not watch geolocation database for changes")?;
 
-    let geodb = Arc::new(RwLock::new(load_geodb(geodb_path.as_ref()).await?));
+    let geodb = Arc::new(RwLock::new(geo::load_geodb(geodb_path.as_ref()).await?));
     let geodb_cloned = geodb.clone();
 
     tokio::spawn(async move {
@@ -128,7 +119,7 @@ async fn manage_geodb(
         let _w = watcher;
         loop {
             change_receiver.recv().await;
-            match load_geodb(geodb_path.as_ref()).await {
+            match geo::load_geodb(geodb_path.as_ref()).await {
                 Ok(new_geodb) => {
                     *geodb.write().unwrap() = new_geodb;
                 }
@@ -168,6 +159,28 @@ async fn main() {
     if config.database_run_migrations == RunDatabaseMigrations::OnlyMigrate {
         info!("Migrations applied, exiting as requested.");
         return;
+    } else {
+        info!("Database connection established, migrated to latest version.");
+    }
+
+    #[cfg(feature = "dev-database")]
+    if crate::models::user::count(&db)
+        .await
+        .expect("Failed to load user count")
+        > 0
+    {
+        info!("Database already contains data, skipping fixture loading.");
+    } else {
+        info!("Loading fixtures into the database...");
+        let mut tx = db
+            .begin()
+            .await
+            .expect("Failed to start database transaction for fixtures");
+        fixtures::default_fixture(&mut *tx)
+            .await
+            .expect("Failed to load default fixture");
+        tx.commit().await.expect("Failed to load fixtures");
+        info!("Fixtures loaded successfully.");
     }
 
     // Setup JWT encoding and decoding keys
