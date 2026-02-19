@@ -2,10 +2,7 @@ use sqlx::PgConnection;
 
 use crate::{
     fixtures::{FixtureContext, FixtureError},
-    models::{
-        monitor::{self, MonitorId, NewMonitor},
-        user::UserId,
-    },
+    models::monitor::{self, MonitorId, NewMonitor},
 };
 
 pub async fn monitor_fixture(

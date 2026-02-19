@@ -24,12 +24,6 @@ macro_rules! uuid {
             }
         }
 
-        impl From<$name> for uuid::Uuid {
-            fn from(uuid: $name) -> Self {
-                uuid.0
-            }
-        }
-
         impl std::ops::Deref for $name {
             type Target = uuid::Uuid;
 
@@ -55,6 +49,13 @@ macro_rules! uuid {
         impl $name {
             pub(crate) fn new_test() -> Self {
                 Self(uuid::Uuid::new_v4())
+            }
+        }
+
+        impl $name {
+            /// Get the inner `Uuid` value. Should only be used when necessary.
+            pub fn get_inner_uuid(self) -> uuid::Uuid {
+                self.0
             }
         }
     };

@@ -40,6 +40,20 @@ pub struct TimeSource {
 pub struct NewTimeSource {
     pub hostname: String,
     pub port: Port,
+    #[cfg(feature = "dev-database")]
+    #[serde(skip)]
+    pub id: Option<TimeSourceId>,
+}
+
+impl NewTimeSource {
+    pub fn new(hostname: impl Into<String>, port: Port) -> Self {
+        Self {
+            hostname: hostname.into(),
+            port,
+            #[cfg(feature = "dev-database")]
+            id: None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -71,10 +85,7 @@ impl NewTimeSourceForm {
 
         check_hostname_reasonable(&self.hostname, context)?;
 
-        Ok(NewTimeSource {
-            hostname: self.hostname,
-            port,
-        })
+        Ok(NewTimeSource::new(self.hostname, port))
     }
 }
 
@@ -160,13 +171,18 @@ pub async fn create(
     geodb: &impl GeoLookupSource,
 ) -> Result<TimeSourceId, sqlx::Error> {
     let regions = infer_regions(&new_time_source.hostname, geodb).await;
+    #[cfg(feature = "dev-database")]
+    let ts_id = new_time_source.id;
+    #[cfg(not(feature = "dev-database"))]
+    let ts_id: Option<TimeSourceId> = None;
 
     sqlx::query!(
         r#"
-            INSERT INTO time_sources (owner, hostname, port, countries, base_secret_index)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO time_sources (id, owner, hostname, port, countries, base_secret_index)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
         "#,
+        ts_id as _,
         owner as _,
         new_time_source.hostname,
         new_time_source.port as _,
@@ -495,10 +511,7 @@ mod tests {
             }
             .into_new_source(&AppContext::default())
             .unwrap(),
-            NewTimeSource {
-                hostname: "test".into(),
-                port: 4460.try_into().unwrap()
-            }
+            NewTimeSource::new("test", 4460.try_into().unwrap())
         );
     }
 
@@ -511,10 +524,7 @@ mod tests {
             }
             .into_new_source(&AppContext::default())
             .unwrap(),
-            NewTimeSource {
-                hostname: "ExAmPlE.com".into(),
-                port: 4460.try_into().unwrap(),
-            }
+            NewTimeSource::new("ExAmPlE.com", 4460.try_into().unwrap())
         );
     }
 
@@ -527,10 +537,7 @@ mod tests {
             }
             .into_new_source(&AppContext::default())
             .unwrap(),
-            NewTimeSource {
-                hostname: "test".into(),
-                port: 456.try_into().unwrap()
-            }
+            NewTimeSource::new("test", 456.try_into().unwrap())
         );
     }
 
