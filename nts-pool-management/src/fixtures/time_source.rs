@@ -55,7 +55,7 @@ pub async fn fixture(
         conn,
         context
             .with("time-source-user", admin)
-            .with("time-source-hostname", "test-time-local1".to_string())
+            .with("time-source-hostname", "time-a".to_string())
             .with(
                 "time-source-port",
                 Port::new(4460).wrap_err("Invalid port")?,
@@ -69,7 +69,7 @@ pub async fn fixture(
         conn,
         context
             .with("time-source-user", admin)
-            .with("time-source-hostname", "test-time-local2".to_string())
+            .with("time-source-hostname", "time-b".to_string())
             .with(
                 "time-source-port",
                 Port::new(4460).wrap_err("Invalid port")?,
