@@ -9,3 +9,5 @@
 /nts-pool-management/core.*
 /nts-pool-ke/core.*
 /helm-charts-output/
+/nts-pool-ke/servers.json
+/nts-pool-ke/monitoring.json

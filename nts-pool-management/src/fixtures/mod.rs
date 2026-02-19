@@ -8,11 +8,16 @@ use std::{
 
 use sqlx::PgConnection;
 
+pub mod monitor;
 pub mod time_source;
 pub mod user;
 
 pub async fn default_fixture(conn: &mut PgConnection) -> Result<(), FixtureError> {
-    run_fixtures!(conn, [user::fixture, time_source::fixture,]).await?;
+    run_fixtures!(
+        conn,
+        [user::fixture, time_source::fixture, monitor::fixture]
+    )
+    .await?;
 
     Ok(())
 }
