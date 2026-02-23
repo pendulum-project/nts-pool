@@ -45,7 +45,7 @@ jobs:
           key: cache-mount-${{ hashFiles('Dockerfile') }}
 
       - name: Restore Docker cache mounts
-        uses: reproducible-containers/buildkit-cache-dance@5b81f4d29dc8397a7d341dba3aeecc7ec54d6361 # v3.3.0
+        uses: reproducible-containers/buildkit-cache-dance@6f699a72a59e4252f05a7435430009b77e25fe06 # v3.3.1
         with:
           builder: ${{ steps.setup-buildx.outputs.name }}
           cache-dir: cache-mount
@@ -53,7 +53,7 @@ jobs:
           skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
       - name: Build and push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           cache-from: type=gha
