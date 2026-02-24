@@ -55,6 +55,8 @@ tracing-subscriber = { workspace = true, default-features = false, features = [
 hickory-server = { version = "0.25.2", features = ["dnssec-aws-lc-rs"] }
 async-trait = "0.1.89"
 eyre.workspace = true
+phf.workspace = true
+maxminddb.workspace = true
 
 [[bin]]
 name = "nts-pool-dns"
