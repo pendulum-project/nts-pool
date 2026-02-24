@@ -36,6 +36,7 @@ pub struct ZoneConfig {
     )]
     pub sign_duration: Duration,
     pub servers_list_path: PathBuf,
+    pub geolocation_db_path: PathBuf,
 }
 
 /// Default signing duration for the DNS zone
@@ -150,6 +151,7 @@ mod tests {
             private-key-path = "/path/to/key.pem"
             sign-duration-seconds = 120
             servers-list-path = "/path/to/servers.txt"
+            geolocation-db-path = "/path/to/geodb"
         "#;
         let zone_config: ZoneConfig =
             toml::from_str(config_content).expect("Failed to deserialize ZoneConfig");
@@ -164,6 +166,10 @@ mod tests {
         assert_eq!(
             zone_config.servers_list_path,
             PathBuf::from("/path/to/servers.txt")
+        );
+        assert_eq!(
+            zone_config.geolocation_db_path,
+            PathBuf::from("/path/to/geodb")
         );
     }
 
@@ -204,6 +210,7 @@ mod tests {
             responsible-name = "admin.example.com."
             private-key-path = "/path/to/key.pem"
             servers-list-path = "/path/to/servers.txt"
+            geolocation-db-path = "/path/to/geodb"
 
             [server]
             listen = "[::1]:53"
@@ -221,6 +228,10 @@ mod tests {
         assert_eq!(
             config.zone.servers_list_path,
             PathBuf::from("/path/to/servers.txt")
+        );
+        assert_eq!(
+            config.zone.geolocation_db_path,
+            PathBuf::from("/path/to/geodb")
         );
         assert_eq!(config.server.listen_addr, "[::1]:53".parse().unwrap());
         assert_eq!(config.server.tcp_timeout, Duration::from_secs(5));

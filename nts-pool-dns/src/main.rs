@@ -121,6 +121,8 @@ async fn main_run(options: NtsPoolDnsOptions) -> eyre::Result<()> {
 async fn server_list_updater(
     handler: Arc<GeoHandler>,
     servers_list_path: PathBuf,
+    signing_key_path: PathBuf,
+    geolocation_db_path: PathBuf,
 ) -> eyre::Result<tokio::task::JoinHandle<()>> {
     info!(
         "Listening for changes to server list file at {:?}",
@@ -143,13 +145,19 @@ async fn server_list_updater(
     watcher
         .watch(servers_list_path.as_path(), RecursiveMode::NonRecursive)
         .wrap_err("Could not watch servers list path")?;
+    watcher
+        .watch(signing_key_path.as_path(), RecursiveMode::NonRecursive)
+        .wrap_err("Could not watch signing key path")?;
+    watcher
+        .watch(geolocation_db_path.as_path(), RecursiveMode::NonRecursive)
+        .wrap_err("Could not watch geolocation db list path")?;
 
     Ok(tokio::spawn(async move {
         // keep the watcher alive
         let _w = watcher;
         loop {
             change_receiver.recv().await;
-            match handler.load_servers_list().await {
+            match handler.reload().await {
                 Ok(_) => {
                     info!("Successfully reloaded server list");
                 }
@@ -174,6 +182,7 @@ async fn run_nts_pool_dns(config: Config) -> eyre::Result<()> {
         responsible_name: responsible_name.clone(),
         key_path: config.zone.private_key_path.clone(),
         servers_list_path: config.zone.servers_list_path.clone(),
+        geolocation_db_path: config.zone.geolocation_db_path.clone(),
         algorithm: Algorithm::RSASHA256,
         sign_duration: config.zone.sign_duration,
         ttl: config.zone.sign_duration,
@@ -198,9 +207,14 @@ async fn run_nts_pool_dns(config: Config) -> eyre::Result<()> {
     );
 
     let _updater_handle: Arc<AbortingJoinHandle<_>> = Arc::new(
-        server_list_updater(geo_handler.clone(), config.zone.servers_list_path.clone())
-            .await?
-            .into(),
+        server_list_updater(
+            geo_handler.clone(),
+            config.zone.servers_list_path.clone(),
+            config.zone.private_key_path.clone(),
+            config.zone.geolocation_db_path.clone(),
+        )
+        .await?
+        .into(),
     );
 
     server.register_socket(udp_socket);
