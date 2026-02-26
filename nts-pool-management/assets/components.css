@@ -284,18 +284,19 @@ table {
   width: 100%;
   th {
     text-align: left;
-      
+    white-space: collapse;
+    padding: var(--space-sm);
     a,
         a:visited {
           color: inherit;
         }
   }
 
-  th,
-    td {
-      white-space: nowrap;
-      padding: var(--space-sm);
-    }
+  td {
+    font-size: var(--font-size-table);
+    white-space: nowrap;
+    padding: var(--space-sm);
+  }
   
   tbody {
     tr {
