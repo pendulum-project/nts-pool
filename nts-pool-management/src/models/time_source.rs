@@ -179,7 +179,7 @@ pub async fn create(
     sqlx::query!(
         r#"
             INSERT INTO time_sources (id, owner, hostname, port, countries, base_secret_index)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6)
             RETURNING id
         "#,
         ts_id as _,
