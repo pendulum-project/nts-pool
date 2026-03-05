@@ -68,9 +68,13 @@ highlight-actions {
   }
 }
 
-main a,
-main a:visited {
+a,
+a:visited {
   color: var(--link);
+}
+
+a:hover {
+  color: var(--link-hover);
 }
 
 input[type="text"],
@@ -106,7 +110,7 @@ input[type="password"].error {
 }
 
 h1 {
-  font-size: 2.25rem;
+  font-size: var(--font-size-huge);
   margin-bottom: var(--space-md);
 }
 
@@ -315,21 +319,22 @@ table {
 }
 
 table.birowed {
-    tbody {
-        tr:nth-child(4n + 2),
+  tbody {
+    tr:nth-child(4n + 2),
         tr:nth-child(4n + 4) {
-            border: none;
+          
         }
 
-        tr:nth-child(4n + 1),
+    tr:nth-child(4n + 1),
         tr:nth-child(4n + 3) {
+	  border: none;
         }
-    }
+  }
 
-    details {
-        cursor: pointer;
-        user-select: none;
-    }
+  details {
+    cursor: pointer;
+    user-select: none;
+  }
 }
 
 table.autowidth {

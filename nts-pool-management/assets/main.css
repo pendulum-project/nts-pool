@@ -7,29 +7,53 @@ body {
 .appcontainer {
   display: grid;
   height: 100vh;
-  grid-template-columns: minmax(0, 1fr) minmax(50ch, var(--container-width)) minmax(0, 1fr);
-  grid-template-rows: var(--space-lg) 1fr var(--space-lg);
+  grid-template-columns: minmax(content-width, 1fr) minmax(50ch, var(--container-width)) minmax(--content-width, 1fr);
+  grid-template-rows: var(--space-lg) auto  1fr var(--space-lg);
   grid-template-areas:
     "nav    nav    nav"
+    "...    alert  ..."
     "left   main   right"
     "footer footer footer";
 }
 
+.experimental-alert {
+  margin-top: var(--space-md);
+  margin-bottom: 0;
+  grid-area: alert;
+}
+
 .left {
+  min-width: var(--space-xs);
+  padding: var(--space-md) 0 var(--space-sm) 0;
   background-color: var(--background);
   grid-area: left;
+  text-align: right;
+
+  a {
+    display: inline-block;
+    padding: var(--space-xs);
+    width: 57.6px;
+    height: 57.6px;
+    color: var(--link);
+
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+  }
 }
 
 .right {
+  min-width: var(--space-xs);
+  padding: var(--space-md) 0 var(--space-sm) 0;
   background-color: var(--background);
   grid-area: right;
 }
 
 main {
-  padding: 0 var(--space-sm);
+  padding: var(--space-md) 0 var(--space-sm) 0;
   grid-area: main;
   background-color: var(--background);
-  padding-top: var(--space-md);
 }
 
 footer {
@@ -98,6 +122,7 @@ nav:not(.pagination) {
 
   .username {
     font-weight: var(--bold);
+    margin-right: var(--space-xs);
   }
 }
 
