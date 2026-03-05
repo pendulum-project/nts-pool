@@ -25,12 +25,6 @@ body {
   grid-area: right;
 }
 
-header {
-  grid-area: header;
-  background-color: var(--background-alt);
-  align-content: center;
-}
-
 main {
   padding: 0 var(--space-sm);
   grid-area: main;
@@ -134,7 +128,7 @@ details.toast {
   position: absolute;
   display: none;
   border-radius: var(--border-radius);
-  top: 5rem;
+  top: calc(var(--space-lg) + var(--space-sm));
   right: var(--space-sm);
 
   summary::marker {

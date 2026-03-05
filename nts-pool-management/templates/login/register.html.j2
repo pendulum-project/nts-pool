@@ -1,8 +1,7 @@
 {% extends "../layout.html.j2" %}
 
-{% block header %}<h1>Register</h1>{% endblock %}
-
 {% block content %}
+  <h1>Register</h1>
   <section class="form">
   {% if !fields_with_errors.is_empty() %}
     <aside class="error">

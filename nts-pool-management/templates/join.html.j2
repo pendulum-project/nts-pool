@@ -1,8 +1,7 @@
 {% extends "layout.html.j2" %}
 
-{% block header %}<h1>Using the NTS pool for time synchronization</h1>{% endblock %}
-
 {% block content %}
+  <h1>Using the NTS pool for time synchronization</h1>
   <section class="contained">
     <p>When running a compatible NTS server, you can join the pool. {% if !(app.user|is_logged_in) %} To do so, you will have to <a href="/login">log in</a> or <a href="/register">register</a> for an account. {% endif %} Your server must have a proper domain name, and use a generally accepted TLS certificate.</p>
 

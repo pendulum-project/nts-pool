@@ -1,8 +1,7 @@
 {% extends "../layout.html.j2" %}
 
-{% block header %}<h1>Activate registration</h1>{% endblock %}
-
 {% block content %}
+  <h1>Activate registration</h1>
   <section class="form">
     <form class="login" method="post">
       {% if let Some(reason) = resend_reason %}
