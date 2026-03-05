@@ -1,9 +1,7 @@
 {% extends "../layout.html.j2" %}
 
-{% block header %}<h1>{{ ts.hostname }}</h1>{% endblock %}
-
 {% block content %}
-
+  <h1>{{ ts.hostname }}</h1>
   <section>
     <h2>Scores</h2>
     <p>Current scores (servers are only used for traffic if their score for that type is higher than 10):
