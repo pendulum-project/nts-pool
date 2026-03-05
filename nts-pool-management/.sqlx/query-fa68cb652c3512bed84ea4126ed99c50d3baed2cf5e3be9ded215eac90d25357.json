@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO time_sources (id, owner, hostname, port, countries, base_secret_index)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id\n        ",
+  "query": "\n            INSERT INTO time_sources (id, owner, hostname, port, countries, base_secret_index)\n            VALUES (COALESCE($1, uuid_generate_v4()), $2, $3, $4, $5, $6)\n            RETURNING id\n        ",
   "describe": {
     "columns": [
       {
@@ -23,5 +23,5 @@
       false
     ]
   },
-  "hash": "23e14991da5a902f07e1bf53b770f3193f36a6f78071d5e7ad438269e45feaf8"
+  "hash": "fa68cb652c3512bed84ea4126ed99c50d3baed2cf5e3be9ded215eac90d25357"
 }
