@@ -1,5 +1,11 @@
 {% extends "../layout.html.j2" %}
 
+{% block left %}
+  <a href="/management/time-sources">
+    {% include "icons/arrow-left.svg.html.j2" %}
+  </a>
+{% endblock %}
+
 {% block content %}
   <h1>{{ ts.hostname }}</h1>
   <section>
@@ -8,13 +14,14 @@
       <div class="multivalue-box"><div class="multivalue-element">Ipv4: {{ ts.ipv4_score | fmt("{:.1}") }}</div><div class="multivalue-element">Ipv6: {{ ts.ipv6_score | fmt("{:.1}") }}</div></div></p>
     <p>Current per-monitor scores:
       <table class="autowidth">
-        <tr>
+	<thead>
           <th>Monitor</th>
           <th>Ipv4 Score</th>
           <th>Ipv6 Score</th>
           <th>SRV Score (IPv4)</th>
           <th>SRV Score (IPv6)</th>
-       </tr>
+	</thead>
+	<tbody>
         {% for row in scores %}
           <tr>
             <td>{{ row.monitor }}</td>
@@ -24,6 +31,7 @@
             <td>{{ row.srvv6 | fmt("{:.1}") }}</td>
           </tr>
         {% endfor %}
+	</tbody>
     </table></p>
   </section>
 
@@ -50,25 +58,27 @@
         <button class="btn-sm" type="submit">Apply</button>
       </form>
       <table class="birowed">
-        <tr>
+        <thead>
           <th>Time</th>
           <th>Key exchange</th>
           <th>Ntp (cookie from KE)</th>
           <th>Ntp (cookie from NTP)</th>
           <th>New score</th>
-        </tr>
-        {% for row in log %}
+        </thead>
+	<tbody>
+          {% for row in log %}
+            <tr>
+              <td rowspan=2>{{ row.time.format("%Y-%m-%d %H:%M") }}</td>
+              <td>{{ row.ke_status }}</td>
+              <td>{{ row.ntp_from_ke_status }}</td>
+              <td>{{ row.ntp_from_ntp_status }}</td>
+              <td>{{ row.score | fmt("{:.1}") }}</td>
+            </tr>
           <tr>
-            <td rowspan=2>{{ row.time.format("%Y-%m-%d %H:%M") }}</td>
-            <td>{{ row.ke_status }}</td>
-            <td>{{ row.ntp_from_ke_status }}</td>
-            <td>{{ row.ntp_from_ntp_status }}</td>
-            <td>{{ row.score | fmt("{:.1}") }}</td>
+            <td colspan="4"><details name="samples"><summary>raw sample</summary><code-block>{{ row.raw_sample | fmt("{:#}") }}</code-block></details></td>
           </tr>
-        <tr>
-          <td colspan="4"><details name="samples"><summary>raw sample</summary><code-block>{{ row.raw_sample | fmt("{:#}") }}</code-block></details></td>
-        </tr>
-      {% endfor %}
+	{% endfor %}
+      	</tbody>
       </table>
       <section class="table-controls">
         {% if pagination.total_pages > 1 %}

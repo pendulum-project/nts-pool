@@ -3,6 +3,7 @@
   --font-size-body: 1rem;
   --font-size-table: 0.9rem;
   --font-size-big: 1.1rem;
+  --font-size-huge: 2.25rem;
   --bold: bold;
 
   /* colors */
@@ -24,11 +25,12 @@
   --warning: var(--orange-delight);
   --success: color-mix(in lab, var(--green-ooze), var(--black) 10%);
   --info: var(--electric-lemonade);
-  --link: color-mix(in lab, var(--primary), var(--black) 40%);
+  --link: color-mix(in lab, var(--electric-lemonade), var(--black) 40%);
+  --link-hover: color-mix(in lab, var(--electric-lemonade), var(--black) 20%);
   --text-color-body: #333;
   --table-text-color: #444;
   --text-color-body: var(--black);
-  --menu-footer-color: color-mix(in lab, var(--electric-lemonade), var(--white) 95%);
+  --menu-footer-color: #fbfbfb;
   
   --muted: var(--grey);
   

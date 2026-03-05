@@ -2,7 +2,7 @@
 
 {% block content %}
   <h1>Using the NTS pool for time synchronization</h1>
-  <section class="contained">
+  <section>
     <p>When running a compatible NTS server, you can join the pool. {% if !(app.user|is_logged_in) %} To do so, you will have to <a href="/login">log in</a> or <a href="/register">register</a> for an account. {% endif %} Your server must have a proper domain name, and use a generally accepted TLS certificate.</p>
 
     <p>New servers can be added on the <a href="/management/time-sources">Time sources</a> page. For this, use the add a time source form at the top of the page, providing the domain name at which your NTS server is reachable.</p>

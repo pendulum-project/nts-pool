@@ -2,6 +2,12 @@
 
 {% block nav_overview %}aria-current="page"{% endblock %}
 
+{% block left %}
+  <a href="/admin/monitors">
+    {% include "icons/arrow-left.svg.html.j2" %}
+  </a>
+{% endblock %}
+
 {% block content %}
 <h1>{{ monitor.name }}</h1>
 {% endblock %}
