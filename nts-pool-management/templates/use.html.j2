@@ -1,29 +1,29 @@
 {% extends "layout.html.j2" %}
 
 {% block content %}
-{% if app.user_context.terms_accepted || app.user|is_logged_in %}
-  <section>
-    <h1>Using the NTS pool for time synchronization</h1>
-    <p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
+  {% if app.user_context.terms_accepted || app.user|is_logged_in %}
+    <section>
+      <h1>Using the NTS pool for time synchronization</h1>
+      <p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
 
-    <h2>NTPSec</h2>
-    <p>
-    <code-block>server 0.{{ app.ke_domain }} iburst nts
+      <h2>NTPSec</h2>
+      <p>
+	<code-block>server 0.{{ app.ke_domain }} iburst nts
 server 1.{{ app.ke_domain }} iburst nts
 server 2.{{ app.ke_domain }} iburst nts
 server 3.{{ app.ke_domain }} iburst nts</code-block>
-    </p>
-    <h2>Chrony</h2>
-    <p>
-    <code-block>server 0.{{ app.ke_domain }} iburst nts
+      </p>
+      <h2>Chrony</h2>
+      <p>
+	<code-block>server 0.{{ app.ke_domain }} iburst nts
 server 1.{{ app.ke_domain }} iburst nts
 server 2.{{ app.ke_domain }} iburst nts
 server 3.{{ app.ke_domain }} iburst nts</code-block>
-    </p>
+      </p>
 
-    <h2>NTPD-rs</h2>
-    <p>
-    <code-block>[[source]]
+      <h2>NTPD-rs</h2>
+      <p>
+	<code-block>[[source]]
 mode = "nts"
 address = "0.{{ app.ke_domain }}"
 
@@ -38,7 +38,9 @@ address = "2.{{ app.ke_domain }}"
 [[source]]
 mode = "nts"
 address = "3.{{ app.ke_domain }}"</code-block>
-    </p>
+      </p>
+    </section>
+  {% else %}
     <section>
       <form action = "/use" method="POST">
         <section>
@@ -52,5 +54,4 @@ address = "3.{{ app.ke_domain }}"</code-block>
       </form>
     </section>
   {% endif %}
-</section>
 {% endblock %}
