@@ -23,7 +23,7 @@ body {
 }
 
 .left {
-  padding: var(--space-md) var(--space-xs) var(--space-sm) 0;
+  padding: var(--space-md) var(--space-xs) 0 0;
   background-color: var(--background);
   grid-area: left;
   text-align: right;
@@ -44,7 +44,7 @@ body {
 
 .right {
   width: content-width;
-  padding: var(--space-md) 0 var(--space-xs) var(--space-xs);
+  padding: var(--space-md) 0 0 var(--space-xs);
   background-color: var(--background);
   grid-area: right;
 }
