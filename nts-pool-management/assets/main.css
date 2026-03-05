@@ -7,7 +7,7 @@ body {
 .appcontainer {
   display: grid;
   height: 100vh;
-  grid-template-columns: minmax(content-width, 1fr) minmax(50ch, var(--container-width)) minmax(--content-width, 1fr);
+  grid-template-columns: 1fr minmax(50ch, var(--container-width)) 1fr;
   grid-template-rows: var(--space-lg) auto  1fr var(--space-lg);
   grid-template-areas:
     "nav    nav    nav"
@@ -23,8 +23,7 @@ body {
 }
 
 .left {
-  min-width: var(--space-xs);
-  padding: var(--space-md) 0 var(--space-sm) 0;
+  padding: var(--space-md) var(--space-xs) var(--space-sm) 0;
   background-color: var(--background);
   grid-area: left;
   text-align: right;
@@ -44,7 +43,7 @@ body {
 }
 
 .right {
-  min-width: var(--space-xs);
+  width: content-width;
   padding: var(--space-md) 0 var(--space-sm) 0;
   background-color: var(--background);
   grid-area: right;
