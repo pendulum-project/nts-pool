@@ -79,6 +79,18 @@ impl std::fmt::Display for ConnectionError {
     }
 }
 
+enum SelectionOutcome {
+    NoSharedProtocol,
+    NoSharedAlgorithm {
+        #[expect(unused)]
+        protocol: ProtocolId,
+    },
+    Selection {
+        protocol: ProtocolId,
+        algorithm: AlgorithmDescription,
+    },
+}
+
 impl std::error::Error for ConnectionError {}
 
 pub async fn run_nts_pool_ke(
@@ -506,8 +518,11 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             .select_protocol_algorithm(source_address.into(), &client_request, &pick)
             .await
         {
-            Ok(Some(result)) => result,
-            Ok(None) => {
+            Ok(SelectionOutcome::Selection {
+                protocol,
+                algorithm,
+            }) => (protocol, algorithm),
+            Ok(SelectionOutcome::NoSharedAlgorithm { .. } | SelectionOutcome::NoSharedProtocol) => {
                 NoAgreementResponse
                     .serialize(&mut client_stream)
                     .await
@@ -675,7 +690,7 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
         connection_type: ConnectionType,
         client_request: &ClientRequest<'_>,
         server: &S::Server<'_>,
-    ) -> Result<Option<(ProtocolId, AlgorithmDescription)>, PoolError> {
+    ) -> Result<SelectionOutcome, PoolError> {
         let (supported_protocols, supported_algorithms) =
             server.support(connection_type).await.map_err(|e| {
                 debug!("Error querying protocol support: {e}");
@@ -696,8 +711,12 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             }
         }
         Ok(match (protocol, algorithm) {
-            (Some(protocol), Some(algorithm)) => Some((protocol, algorithm)),
-            _ => None,
+            (Some(protocol), Some(algorithm)) => SelectionOutcome::Selection {
+                protocol,
+                algorithm,
+            },
+            (Some(protocol), _) => SelectionOutcome::NoSharedAlgorithm { protocol },
+            _ => SelectionOutcome::NoSharedProtocol,
         })
     }
 
