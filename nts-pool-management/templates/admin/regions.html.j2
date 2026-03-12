@@ -4,40 +4,38 @@
 {% block nav_regions %}aria-current="page"{% endblock %}
 
 {% block content %}
-<section class="form">
-  <h2>Add a region</h2>
-  <form action="/admin/regions/enable" method="POST">
-    <div class="hostname-port">
+  <section class="form">
+    <h2>Add a region</h2>
+    <form action="/admin/regions/enable" method="POST">
       <fieldset class="hostname">
         <label for="region">Region</label>
         <input name="region" type="text" />
       </fieldset>
-    </div>
-    <div>
-      <button type="submit">Enable</button>
-    </div>
-  </form>
-</section>
-<section>
-  <h2>Regions</h2>
-  <table>
-    <thead>
-      <th>Region</th>
-      <td><!-- Actions --></td>
-    </thead>
-    <tbody>
-      {%- for region in regions %}
-        <tr>
-          <td>{{ region }}</td>
-          <td class="actions">
-            <form action="/admin/regions/disable" method="POST">
-              <input type="hidden" name="region" value="{{ region }}"/>
-              <button class="btn-sm btn-alt" type="submit">Disable</button>
-            </form>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+      <div>
+	<button type="submit">Enable</button>
+      </div>
+    </form>
+  </section>
+  <section>
+    <h2>Regions</h2>
+    <table>
+      <thead>
+	<th>Region</th>
+	<td><!-- Actions --></td>
+      </thead>
+      <tbody>
+	{%- for region in regions %}
+          <tr>
+            <td>{{ region }}</td>
+            <td class="actions">
+              <form action="/admin/regions/disable" method="POST">
+		<input type="hidden" name="region" value="{{ region }}"/>
+		<button class="btn-sm btn-alt" type="submit">Disable</button>
+              </form>
+            </td>
+          </tr>
+	{% endfor %}
+      </tbody>
+    </table>
+  </section>
 {% endblock %}
