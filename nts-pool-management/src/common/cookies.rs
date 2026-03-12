@@ -1,7 +1,10 @@
 use std::{convert::Infallible, fmt::Display};
 
 use axum::{extract::FromRequestParts, http::request::Parts, response::IntoResponseParts};
-use axum_extra::extract::{PrivateCookieJar, cookie::Cookie};
+use axum_extra::extract::{
+    PrivateCookieJar,
+    cookie::{Cookie, SameSite},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -65,11 +68,20 @@ impl CookieService {
         self.0
     }
 
+    fn flash_cookie<'c>() -> Cookie<'c> {
+        let mut cookie = Cookie::from(FLASH_COOKIE_NAME);
+        cookie.set_secure(true);
+        cookie.set_http_only(true);
+        cookie.set_same_site(SameSite::Strict);
+        cookie.set_path("/");
+        cookie
+    }
+
     pub fn set_flash_message(&mut self, level: MessageType, msg: String) {
-        self.0 = self
-            .0
-            .clone()
-            .add(Cookie::new(FLASH_COOKIE_NAME, format!("{}|{}", level, msg)))
+        let mut cookie = Self::flash_cookie();
+        cookie.set_value(format!("{}|{}", level, msg));
+
+        self.0 = self.0.clone().add(cookie)
     }
 
     pub fn flash_success(&mut self, msg: String) {
@@ -83,10 +95,10 @@ impl CookieService {
     pub fn flash_message(&mut self) -> Result<Option<(MessageType, String)>, AppError> {
         if let Some(flash) = self.0.get(FLASH_COOKIE_NAME) {
             if let Some((msg_type, msg)) = flash.value().split_once("|") {
-                self.0 = self.0.clone().remove(FLASH_COOKIE_NAME);
+                self.0 = self.0.clone().remove(Self::flash_cookie());
                 Ok(Some((msg_type.try_into()?, msg.to_string())))
             } else {
-                self.0 = self.0.clone().remove(FLASH_COOKIE_NAME);
+                self.0 = self.0.clone().remove(Self::flash_cookie());
                 Ok(None)
             }
         } else {
