@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id AS \"id!\",\n                owner AS \"owner!\",\n                hostname AS \"hostname!\",\n                port AS \"port: _\",\n                countries AS \"countries!\",\n                auth_token_randomizer AS \"auth_token_randomizer!\",\n                base_secret_index AS \"base_secret_index!\",\n                weight AS \"weight!\",\n                ipv4_score AS \"ipv4_score!: _\",\n                ipv6_score AS \"ipv6_score!: _\",\n                srv4_score AS \"srv4_score!: _\",\n                srv6_score AS \"srv6_score!: _\"\n            FROM time_source_scores\n            WHERE deleted = false;\n        ",
+  "query": "\n            SELECT\n                id AS \"id!\",\n                owner AS \"owner!\",\n                hostname AS \"hostname!\",\n                port AS \"port: _\",\n                countries AS \"countries!\",\n                auth_token_randomizer AS \"auth_token_randomizer!\",\n                base_secret_index AS \"base_secret_index!\",\n                weight AS \"weight!\",\n                ipv4_score AS \"ipv4_score!: _\",\n                ipv6_score AS \"ipv6_score!: _\",\n                srv4_score AS \"srv4_score!: _\",\n                srv6_score AS \"srv6_score!: _\"\n            FROM time_source_scores\n            WHERE deleted = false\n            ORDER BY owner ASC, hostname ASC;\n        ",
   "describe": {
     "columns": [
       {
@@ -82,5 +82,5 @@
       true
     ]
   },
-  "hash": "44206d6268686fd775902f78e6a7bce4475beef54273e55eb6a5d4e4e432108f"
+  "hash": "93ccb97f22fe51f0a359115733478f9001c4304610737f82c6c0a8a0e7ffbbb3"
 }
