@@ -112,6 +112,8 @@ impl WarningCode {
 pub enum NtsError {
     IO(Error),
     UnrecognizedCriticalRecord,
+    NoOverlappingProtocol,
+    NoOverlappingAeadAlgorithm,
     Invalid,
     UnknownWarning(u16),
     Error(ErrorCode),
@@ -128,6 +130,10 @@ impl Display for NtsError {
         match self {
             NtsError::IO(error) => error.fmt(f),
             NtsError::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
+            NtsError::NoOverlappingProtocol => f.write_str("No support for requested protocol(s)"),
+            NtsError::NoOverlappingAeadAlgorithm => {
+                f.write_str("No support for requested aead algorithm(s)")
+            }
             NtsError::Invalid => f.write_str("Invalid request or response"),
             NtsError::UnknownWarning(code) => {
                 write!(f, "Received unknown warning from remote: {code}")
@@ -630,14 +636,14 @@ impl<'a> KeyExchangeResponse<'a> {
                 NtsRecord::EndOfMessage => break,
                 NtsRecord::NextProtocol { protocol_ids } => {
                     if protocol.is_some() || protocol_ids.iter().count() != 1 {
-                        return Err(NtsError::Invalid);
+                        return Err(NtsError::NoOverlappingProtocol);
                     }
 
                     protocol = Some(protocol_ids.iter().next().unwrap());
                 }
                 NtsRecord::AeadAlgorithm { algorithm_ids } => {
                     if algorithm.is_some() || algorithm_ids.iter().count() != 1 {
-                        return Err(NtsError::Invalid);
+                        return Err(NtsError::NoOverlappingAeadAlgorithm);
                     }
 
                     algorithm = Some(algorithm_ids.iter().next().unwrap());
@@ -1672,6 +1678,20 @@ mod tests {
         assert!(matches!(
             pwrap!(KeyExchangeResponse::parse, &mut arr2),
             Err(NtsError::UnknownWarning(1))
+        ));
+    }
+
+    #[test]
+    fn test_key_exchange_response_parse_negotiation_failure() {
+        let mut arr1 = [0x80, 1, 0, 0, 0x80, 0, 0, 0];
+        assert!(matches!(
+            dbg!(pwrap!(KeyExchangeResponse::parse, &mut arr1)),
+            Err(NtsError::NoOverlappingProtocol)
+        ));
+        let mut arr1 = [0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 0, 0x80, 0, 0, 0];
+        assert!(matches!(
+            pwrap!(KeyExchangeResponse::parse, &mut arr1),
+            Err(NtsError::NoOverlappingAeadAlgorithm)
         ));
     }
 
