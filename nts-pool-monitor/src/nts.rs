@@ -145,6 +145,8 @@ pub enum NtsError {
     Tls(tls_utils::Error),
     Dns(tls_utils::InvalidDnsNameError),
     UnrecognizedCriticalRecord,
+    NoOverlappingProtocol,
+    NoOverlappingAeadAlgorithm,
     Invalid,
     UnknownWarning(u16),
     Error(ErrorCode),
@@ -173,6 +175,8 @@ impl From<pool_nts::NtsError> for NtsError {
         match value {
             pool_nts::NtsError::IO(error) => NtsError::IO(error),
             pool_nts::NtsError::UnrecognizedCriticalRecord => NtsError::UnrecognizedCriticalRecord,
+            pool_nts::NtsError::NoOverlappingProtocol => NtsError::NoOverlappingProtocol,
+            pool_nts::NtsError::NoOverlappingAeadAlgorithm => NtsError::NoOverlappingAeadAlgorithm,
             pool_nts::NtsError::Invalid => NtsError::Invalid,
             pool_nts::NtsError::UnknownWarning(v) => NtsError::UnknownWarning(v),
             pool_nts::NtsError::Error(error_code) => NtsError::Error(error_code),
@@ -187,6 +191,10 @@ impl std::fmt::Display for NtsError {
             NtsError::Tls(error) => error.fmt(f),
             NtsError::Dns(error) => error.fmt(f),
             NtsError::UnrecognizedCriticalRecord => f.write_str("Unrecognized critical record"),
+            NtsError::NoOverlappingProtocol => f.write_str("No support for requested protocol(s)"),
+            NtsError::NoOverlappingAeadAlgorithm => {
+                f.write_str("No support for requested aead algorithm(s)")
+            }
             NtsError::Invalid => f.write_str("Invalid request or response"),
             NtsError::UnknownWarning(code) => {
                 write!(f, "Received unknown warning from remote: {code}")
