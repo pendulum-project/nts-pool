@@ -732,9 +732,9 @@ impl<'a> KeyExchangeResponse<'a> {
 }
 
 #[derive(Debug)]
-pub struct NoAgreementResponse;
+pub struct NoProtocolAgreementResponse;
 
-impl NoAgreementResponse {
+impl NoProtocolAgreementResponse {
     pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin + Send) -> Result<(), Error> {
         NtsRecord::NextProtocol {
             protocol_ids: [].as_slice().into(),
@@ -743,6 +743,27 @@ impl NoAgreementResponse {
         .await?;
         NtsRecord::EndOfMessage.serialize(&mut writer).await?;
 
+        Ok(())
+    }
+}
+
+pub struct NoAeadAlgorithmAgreementResponse {
+    pub protocol: ProtocolId,
+}
+
+impl NoAeadAlgorithmAgreementResponse {
+    pub async fn serialize(self, mut writer: impl AsyncWrite + Unpin + Send) -> Result<(), Error> {
+        NtsRecord::NextProtocol {
+            protocol_ids: [self.protocol].as_slice().into(),
+        }
+        .serialize(&mut writer)
+        .await?;
+        NtsRecord::AeadAlgorithm {
+            algorithm_ids: [].as_slice().into(),
+        }
+        .serialize(&mut writer)
+        .await?;
+        NtsRecord::EndOfMessage.serialize(&mut writer).await?;
         Ok(())
     }
 }
@@ -775,11 +796,14 @@ mod tests {
         task::{Context, Poll, Waker},
     };
 
-    use crate::record::{AlgorithmList, ProtocolList};
+    use crate::{
+        NoAeadAlgorithmAgreementResponse,
+        record::{AlgorithmList, ProtocolList},
+    };
 
     use super::{
         AlgorithmDescription, ClientRequest, ErrorCode, ErrorResponse, FixedKeyRequest,
-        KeyExchangeResponse, NoAgreementResponse, NtsError, ServerInformationRequest,
+        KeyExchangeResponse, NoProtocolAgreementResponse, NtsError, ServerInformationRequest,
         ServerInformationResponse,
     };
 
@@ -1842,12 +1866,26 @@ mod tests {
         let mut buf = vec![];
         assert!(
             swrap(
-                NoAgreementResponse::serialize,
-                NoAgreementResponse,
+                NoProtocolAgreementResponse::serialize,
+                NoProtocolAgreementResponse,
                 &mut buf
             )
             .is_ok()
         );
         assert_eq!(buf, [0x80, 1, 0, 0, 0x80, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_no_algorithm_agreement_response() {
+        let mut buf = vec![];
+        assert!(
+            swrap(
+                NoAeadAlgorithmAgreementResponse::serialize,
+                NoAeadAlgorithmAgreementResponse { protocol: 1 },
+                &mut buf
+            )
+            .is_ok()
+        );
+        assert_eq!(buf, [0x80, 1, 0, 2, 0, 1, 0x80, 4, 0, 0, 0x80, 0, 0, 0]);
     }
 }

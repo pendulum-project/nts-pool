@@ -11,8 +11,8 @@ use opentelemetry::{
 };
 use pool_nts::{
     AlgorithmDescription, BufferBorrowingReader, ClientRequest, ErrorCode, ErrorResponse,
-    FixedKeyRequest, KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAgreementResponse, NtsError,
-    ProtocolId,
+    FixedKeyRequest, KeyExchangeResponse, MAX_MESSAGE_SIZE, NoAeadAlgorithmAgreementResponse,
+    NoProtocolAgreementResponse, NtsError, ProtocolId,
 };
 use rustls::{pki_types::pem::PemObject, version::TLS13};
 use tokio::{
@@ -82,7 +82,6 @@ impl std::fmt::Display for ConnectionError {
 enum SelectionOutcome {
     NoSharedProtocol,
     NoSharedAlgorithm {
-        #[expect(unused)]
         protocol: ProtocolId,
     },
     Selection {
@@ -522,8 +521,19 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
                 protocol,
                 algorithm,
             }) => (protocol, algorithm),
-            Ok(SelectionOutcome::NoSharedAlgorithm { .. } | SelectionOutcome::NoSharedProtocol) => {
-                NoAgreementResponse
+            Ok(SelectionOutcome::NoSharedAlgorithm { protocol }) => {
+                NoAeadAlgorithmAgreementResponse { protocol }
+                    .serialize(&mut client_stream)
+                    .await
+                    .map_err(ConnectionError::SendResponse)?;
+                client_stream
+                    .shutdown()
+                    .await
+                    .map_err(ConnectionError::SendResponse)?;
+                return Ok(());
+            }
+            Ok(SelectionOutcome::NoSharedProtocol) => {
+                NoProtocolAgreementResponse
                     .serialize(&mut client_stream)
                     .await
                     .map_err(ConnectionError::SendResponse)?;
@@ -1176,6 +1186,146 @@ mod tests {
         assert_eq!(response.algorithm, 0);
         assert_eq!(response.protocol, 0);
         assert_eq!(response.server.as_deref(), Some("a.test"));
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_protocol_negotiation_failure() {
+        crate::test_init();
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            false,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: None,
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[0x80, 1, 0, 2, 0, 2, 0x80, 4, 0, 2, 0, 0, 0x80, 0, 0, 0])
+            .await
+            .unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
+                .await
+                .unwrap_err();
+        conn.shutdown().await.unwrap();
+
+        assert_eq!(manager.inner.written.lock().unwrap().len(), 0);
+        assert!(matches!(response, NtsError::NoOverlappingProtocol));
+        assert_eq!(
+            manager
+                .inner
+                .reuse_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+
+        pool_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_keyexchange_algorithm_negotiation_failure() {
+        crate::test_init();
+        let pool_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let pool_addr = pool_listener.local_addr().unwrap();
+
+        let manager = TestManager::new(
+            "a.test".into(),
+            vec![
+                0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 0, 0, 5, 0, 2, 1, 2, 0, 5, 0, 2, 3, 4, 0x80,
+                0, 0, 0,
+            ],
+            &[0],
+            &[AlgorithmDescription { id: 0, keysize: 16 }],
+            false,
+        );
+        let pool_manager = manager.clone();
+
+        let pool_handle = tokio::spawn(async move {
+            let pool_config = NtsPoolKeConfig {
+                certificate_chain: PathBuf::from(format!(
+                    "{}/testdata/pool.test.fullchain.pem",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                private_key: PathBuf::from(format!(
+                    "{}/testdata/pool.test.key",
+                    env!("CARGO_MANIFEST_DIR"),
+                )),
+                listen: pool_addr,
+                key_exchange_timeout: Duration::from_millis(1000),
+                timesource_timeout: Duration::from_millis(500),
+                max_connections: 1,
+                use_proxy_protocol: false,
+                monitoring_keys: None,
+            };
+
+            let pool = Arc::new(NtsPoolKe::new(pool_config, pool_manager).await.unwrap());
+            pool.serve_inner(pool_listener).await
+        });
+
+        let pool_connector = upstream_tls_config();
+        let conn = TcpStream::connect(pool_addr).await.unwrap();
+        let mut conn = pool_connector
+            .connect(ServerName::try_from("pool.test").unwrap(), conn)
+            .await
+            .unwrap();
+
+        conn.write_all(&[0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 1, 0x80, 0, 0, 0])
+            .await
+            .unwrap();
+        let mut buf = [0u8; MAX_MESSAGE_SIZE as _];
+        let response =
+            KeyExchangeResponse::parse(&mut BufferBorrowingReader::new(&mut conn, &mut buf))
+                .await
+                .unwrap_err();
+        conn.shutdown().await.unwrap();
+
+        assert_eq!(manager.inner.written.lock().unwrap().len(), 0);
+        assert!(matches!(response, NtsError::NoOverlappingAeadAlgorithm));
         assert_eq!(
             manager
                 .inner
