@@ -428,7 +428,8 @@ pub async fn by_user(
                 srv4_score AS "srv4_score!: _",
                 srv6_score AS "srv6_score!: _"
             FROM time_source_scores
-            WHERE owner = $1 AND deleted = false;
+            WHERE owner = $1 AND deleted = false
+            ORDER BY owner ASC, hostname ASC;
         "#,
         owner as _,
     )
@@ -454,7 +455,8 @@ pub async fn list(conn: impl DbConnLike<'_>) -> Result<Vec<TimeSource>, sqlx::Er
                 srv4_score AS "srv4_score!: _",
                 srv6_score AS "srv6_score!: _"
             FROM time_source_scores
-            WHERE deleted = false;
+            WHERE deleted = false
+            ORDER BY owner ASC, hostname ASC;
         "#,
     )
     .fetch_all(conn)
@@ -491,7 +493,8 @@ pub async fn list_with_owner_names(
                 u.email AS "user_email!"
             FROM time_source_scores AS ts
             LEFT JOIN users AS u ON ts.owner = u.id
-            WHERE ts.deleted = false;
+            WHERE ts.deleted = false
+            ORDER BY owner ASC, hostname ASC;
         "#,
     )
     .fetch_all(conn)
