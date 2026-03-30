@@ -59,15 +59,15 @@ jobs:
         run: cargo +nightly-2025-08-11 update -Z direct-minimal-versions
         if: ${{ matrix.rust == 'msrv' }}
       - name: Install cross-compilation tools
-        uses: taiki-e/setup-cross-toolchain-action@20dbac418ca692fd1a9377acf2cec38161169a39
+        uses: taiki-e/setup-cross-toolchain-action@d62f33b587e73b0004731caebc7d2d46b18a7567
         with:
           target: ${{ matrix.target }}
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@a37010ded18ff788be4440302bd6830b1ae50d8b
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf
         with:
           tool: cargo-llvm-cov
       - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
             shared-key: "${{matrix.rust}}-${{matrix.target}}"
       - name: cargo build
@@ -77,7 +77,7 @@ jobs:
         env:
           RUST_BACKTRACE: 1
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -99,7 +99,7 @@ jobs:
         with:
           toolchain: nightly-2025-08-11
       - name: Install udeps
-        uses: taiki-e/install-action@a37010ded18ff788be4440302bd6830b1ae50d8b
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf
         with:
           tool: cargo-udeps
       - name: cargo udeps
@@ -159,13 +159,13 @@ jobs:
         if: ${{matrix.runs_on == 'ubuntu-latest'}}
 
       - name: Install bindgen-cli
-        uses: taiki-e/install-action@a37010ded18ff788be4440302bd6830b1ae50d8b
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf
         with:
           tool: bindgen-cli
         if: ${{matrix.runs_on == 'ubuntu-latest'}}
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
             shared-key: "stable-${{matrix.target}}"
 
@@ -214,7 +214,7 @@ jobs:
           toolchain: nightly-2025-08-11
           components: llvm-tools-preview
       - name: Install cargo fuzz & rustfilt
-        uses: taiki-e/install-action@a37010ded18ff788be4440302bd6830b1ae50d8b
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf
         with:
           tool: cargo-fuzz,rustfilt
       - name: Run `cargo fuzz`
@@ -233,7 +233,7 @@ jobs:
               --format=lcov \
               -ignore-filename-regex="\.cargo|\.rustup" > lcov.info
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
         with:
           files: ./lcov.info
           fail_ci_if_error: false
