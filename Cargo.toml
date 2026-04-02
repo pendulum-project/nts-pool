@@ -43,6 +43,7 @@ opentelemetry-otlp = { version = "0.31.0", features = ["reqwest-rustls"] }
 opentelemetry_sdk = "0.31.0"
 opentelemetry-stdout = "0.31.0"
 phf = { version = "0.12.1", features = ["macros"] }
+plotters = { version = "0.3.7", default-features = false, features = ["ab_glyph", "svg_backend", "point_series"] }
 rand = "0.9.1"
 reqwest = { version = "0.12.15", default-features = false }
 rustls-platform-verifier = "0.6.0"
