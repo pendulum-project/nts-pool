@@ -26,6 +26,8 @@ pub(crate) mod auth;
 mod management;
 mod monitoring;
 
+pub use management::DisplayLogRow;
+
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))

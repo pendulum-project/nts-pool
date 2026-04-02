@@ -17,6 +17,7 @@ use crate::{
     context::AppContext,
     cookies::CookieService,
     error::AppError,
+    graph::render_graph,
     models::{
         monitor::MonitorId,
         time_source::{self, NewTimeSourceForm, TimeSource, TimeSourceId, UpdateTimeSourceForm},
@@ -52,12 +53,12 @@ struct ScoreTableData {
     srvv6: f64,
 }
 
-struct DisplayLogRow {
-    time: DateTime<Utc>,
+pub struct DisplayLogRow {
+    pub time: DateTime<Utc>,
     ke_status: String,
     ntp_from_ke_status: String,
     ntp_from_ntp_status: String,
-    score: f64,
+    pub score: f64,
     raw_sample: Value,
 }
 
@@ -73,6 +74,7 @@ pub enum DisplayLogRowSort {
 struct TimeSourceInfoTemplate {
     app: AppContext,
     ts: TimeSource,
+    graph: String,
     log: Vec<DisplayLogRow>,
     scores: Vec<ScoreTableData>,
     monitors: Vec<String>,
@@ -185,9 +187,43 @@ pub async fn time_source_info(
         (pagination, vec![])
     };
 
+    let log: Vec<DisplayLogRow> = logs
+        .into_iter()
+        .map(|v| DisplayLogRow {
+            time: v
+                .sample
+                .get("keyexchange")
+                .and_then(|ke| ke.get("exchange_start"))
+                .and_then(|start| start.as_i64())
+                .and_then(|start| DateTime::from_timestamp(start, 0))
+                .unwrap_or(v.received_at),
+            ke_status: v
+                .sample
+                .get("keyexchange")
+                .and_then(extract_keyexchange_status)
+                .unwrap_or_default(),
+            ntp_from_ke_status: v
+                .sample
+                .get("ntp_with_ke_cookie")
+                .and_then(extract_ntp_status)
+                .unwrap_or_default(),
+            ntp_from_ntp_status: v
+                .sample
+                .get("ntp_with_ntp_cookie")
+                .and_then(extract_ntp_status)
+                .unwrap_or_default(),
+            score: v.score,
+            raw_sample: v.sample,
+        })
+        .collect();
+
+    let mut graph = String::new();
+    render_graph(&mut graph, &log).unwrap();
+
     Ok(HtmlTemplate(TimeSourceInfoTemplate {
         app,
         ts,
+        graph,
         scores: scoremap
             .into_iter()
             .map(|v| ScoreTableData {
@@ -198,35 +234,7 @@ pub async fn time_source_info(
                 srvv6: v.1.srvv6,
             })
             .collect(),
-        log: logs
-            .into_iter()
-            .map(|v| DisplayLogRow {
-                time: v
-                    .sample
-                    .get("keyexchange")
-                    .and_then(|ke| ke.get("exchange_start"))
-                    .and_then(|start| start.as_i64())
-                    .and_then(|start| DateTime::from_timestamp(start, 0))
-                    .unwrap_or(v.received_at),
-                ke_status: v
-                    .sample
-                    .get("keyexchange")
-                    .and_then(extract_keyexchange_status)
-                    .unwrap_or_default(),
-                ntp_from_ke_status: v
-                    .sample
-                    .get("ntp_with_ke_cookie")
-                    .and_then(extract_ntp_status)
-                    .unwrap_or_default(),
-                ntp_from_ntp_status: v
-                    .sample
-                    .get("ntp_with_ntp_cookie")
-                    .and_then(extract_ntp_status)
-                    .unwrap_or_default(),
-                score: v.score,
-                raw_sample: v.sample,
-            })
-            .collect(),
+        log,
         monitors,
         cur_monitor,
         cur_protocol,

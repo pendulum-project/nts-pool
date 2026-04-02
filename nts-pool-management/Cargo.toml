@@ -39,6 +39,7 @@ maxminddb.workspace = true
 notify.workspace = true
 nts-pool-shared = { workspace = true, features = ["sqlx"] }
 phf.workspace = true
+plotters = { workspace = true }
 rand = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

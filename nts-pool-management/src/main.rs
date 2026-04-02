@@ -25,6 +25,7 @@ mod common;
 #[cfg(feature = "dev-database")]
 pub mod fixtures;
 pub mod geo;
+pub mod graph;
 pub mod models;
 mod pagination;
 pub mod routes;
