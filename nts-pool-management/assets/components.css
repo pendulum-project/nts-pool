@@ -394,3 +394,7 @@ table.autowidth {
 .nowrap {
   white-space: nowrap;
 }
+
+.graph svg circle {
+  fill: var(--electric-lemonade);
+}
