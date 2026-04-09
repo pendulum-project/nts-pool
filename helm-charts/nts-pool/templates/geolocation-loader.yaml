@@ -46,18 +46,21 @@ metadata:
   namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
   labels:
     {{- include "nts-pool.labels" . | nindent 4 }}
-  {{- with .Values.services.management.annotations }}
+  {{- with .Values.services.geodb.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.services.geodb.type }}
   selector:
     app.kubernetes.io/component: geodb-cache
     {{- include "nts-pool.selectorLabels" . | nindent 4 }}
   ports:
   - port: 80
     targetPort: 80
+    {{- with .Values.services.geodb.nodePort }}
+    nodePort: {{ . }}
+    {{- end }}
     name: http
 ---
 apiVersion: apps/v1

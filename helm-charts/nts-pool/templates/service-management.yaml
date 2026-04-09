@@ -11,14 +11,20 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: ClusterIP
+  type: {{.Values.services.management.type }}
   selector:
     app.kubernetes.io/component: management
     {{- include "nts-pool.selectorLabels" . | nindent 4 }}
   ports:
   - port: 3000
     targetPort: 3000
+    {{- with .Values.services.management.managementNodePort }}
+    nodePort: {{ . }}
+    {{- end }}
     name: http
   - port: 3001
     targetPort: 3001
+    {{- with .Values.services.management.internalNodePort }}
+    nodePort: {{ . }}
+    {{- end }}
     name: http-internal
