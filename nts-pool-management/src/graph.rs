@@ -1,11 +1,13 @@
-use chrono::{DateTime, Datelike};
+use chrono::DateTime;
 use plotters::prelude::*;
 
-use crate::routes::DisplayLogRow;
+use nts_pool_shared::IpVersion;
+
+use crate::models::time_source::LogRow;
 
 pub fn render_graph(
     buffer: &mut String,
-    logs: &[DisplayLogRow],
+    logs: &[LogRow],
 ) -> Result<(), Box<dyn core::error::Error>> {
     let root_drawing_area = SVGBackend::with_string(buffer, (830, 500)).into_drawing_area();
 
@@ -14,12 +16,12 @@ pub fn render_graph(
     // X-axis bounds
     let from = logs
         .iter()
-        .map(|l| l.time.timestamp())
+        .map(|l| l.received_at.timestamp())
         .min()
         .unwrap_or_default();
     let to = logs
         .iter()
-        .map(|l| l.time.timestamp())
+        .map(|l| l.received_at.timestamp())
         .max()
         .unwrap_or_default();
 
@@ -31,23 +33,49 @@ pub fn render_graph(
 
     chart
         .configure_mesh()
-        .x_label_formatter(&|vt| {
-            let y = DateTime::from_timestamp(*vt, 0).unwrap().year();
-            let m = DateTime::from_timestamp(*vt, 0).unwrap().month();
-            let d = DateTime::from_timestamp(*vt, 0).unwrap().day();
-            let t = DateTime::from_timestamp(*vt, 0).unwrap().time();
-            format!("{y}-{m}-{d} {t}")
-        })
+        .x_label_formatter(&|vt| format!("{}", DateTime::from_timestamp(*vt, 0).unwrap().time()))
         .draw()
         .unwrap();
 
+    // Color names align with colors as defined in CSS
+    const ORANGE_DELIGHT: RGBColor = RGBColor(253, 193, 83);
+    const ELECTRIC_LEMONADE: RGBColor = RGBColor(83, 228, 253);
+    const BLISTERING_MARS: RGBColor = RGBColor(253, 108, 83);
+    const GREEN_OOZE: RGBColor = RGBColor(142, 253, 83);
+
+    // Convenience alias to keep shapes of graph point and legend in sync
+    type Shape<C, S> = Circle<C, S>;
+
+    for (color, protocol) in [
+        (ORANGE_DELIGHT, IpVersion::Ipv4),
+        (ELECTRIC_LEMONADE, IpVersion::Ipv6),
+        (BLISTERING_MARS, IpVersion::Srvv4),
+        (GREEN_OOZE, IpVersion::Srvv6),
+    ]
+    .iter()
+    {
+        chart
+            .draw_series(logs.iter().filter_map(|log| {
+                if log.protocol == *protocol {
+                    Some(Shape::new(
+                        (log.received_at.timestamp(), log.score),
+                        3,
+                        color.filled(),
+                    ))
+                } else {
+                    None
+                }
+            }))?
+            .label(protocol.to_string())
+            .legend(|(x, y)| Shape::new((x + 12, y - 1), 4, color.filled()));
+    }
+
     chart
-        .draw_series(
-            // We don't care about the color given here, we'll set it in CSS anyway
-            logs.iter()
-                .map(|log| Circle::new((log.time.timestamp(), log.score), 3, BLACK.filled())),
-        )
-        .unwrap();
+        .configure_series_labels()
+        .label_font(("Roboto", 20))
+        .border_style(BLACK)
+        .background_style(WHITE)
+        .draw()?;
 
     Ok(())
 }

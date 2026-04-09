@@ -9,6 +9,7 @@ use axum::{extract::FromRef, middleware};
 use axum_extra::extract::cookie;
 use eyre::Context;
 use notify::Watcher;
+use plotters::style::{FontStyle, register_font};
 use sqlx::PgPool;
 use tracing::info;
 
@@ -238,6 +239,14 @@ async fn main() {
             state.clone(),
             error::error_middleware,
         ));
+
+    register_font(
+        "Roboto",
+        FontStyle::Normal,
+        include_bytes!(".././assets/fonts/Roboto-Regular.ttf"),
+    )
+    .map_err(|_| eyre::Error::msg("Unable to load font"))
+    .unwrap();
 
     #[cfg(feature = "livereload")]
     let router_external = router_external.merge(common::livereload::livereload_router());

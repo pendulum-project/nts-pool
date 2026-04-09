@@ -172,7 +172,7 @@ pub async fn time_source_info(
         let pagination = pagination.set_total(total_items);
         (
             pagination.clone(),
-            time_source::logs(
+            time_source::logs_by_monitor_and_protocol(
                 &state.db,
                 time_source_id,
                 cur_monitor,
@@ -217,8 +217,9 @@ pub async fn time_source_info(
         })
         .collect();
 
+    let recent_logs = time_source::recent_logs(&state.db, time_source_id).await?;
     let mut graph = String::new();
-    render_graph(&mut graph, &log).unwrap();
+    render_graph(&mut graph, &recent_logs).unwrap();
 
     Ok(HtmlTemplate(TimeSourceInfoTemplate {
         app,
