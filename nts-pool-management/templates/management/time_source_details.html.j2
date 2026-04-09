@@ -36,6 +36,13 @@
   </section>
 
   <section>
+    <h2>Scores over time</h2>
+    <div class="graph">
+      {{ graph|safe }}
+    </div>
+  </section>
+  
+  <section>
     <h2>Logs</h2>
     {% if let Some(cur_monitor) = cur_monitor %}
       <form method="get" class="table-filter">
@@ -57,9 +64,6 @@
         </div>
         <button class="btn-sm" type="submit">Apply</button>
       </form>
-      <div class="graph">
-	{{ graph|safe }}
-      </div>
       <table class="birowed">
         <thead>
           <th>Time</th>

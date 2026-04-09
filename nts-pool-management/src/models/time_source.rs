@@ -279,7 +279,25 @@ impl std::fmt::Display for LogRow {
     }
 }
 
-pub async fn logs(
+pub async fn recent_logs(
+    conn: impl DbConnLike<'_>,
+    time_source_id: TimeSourceId,
+) -> Result<Vec<LogRow>, sqlx::Error> {
+    sqlx::query_as!(
+        LogRow,
+        r#"
+            SELECT score, protocol as "protocol: IpVersion", monitor_id as monitor, raw_sample AS sample, received_at
+            FROM monitor_samples
+            WHERE time_source_id = $1 AND received_at > (CURRENT_DATE - INTERVAL '2 days')
+            ORDER BY monitor_samples.received_at DESC
+        "#,
+        time_source_id as _,
+    )
+    .fetch_all(conn)
+    .await
+}
+
+pub async fn logs_by_monitor_and_protocol(
     conn: impl DbConnLike<'_>,
     time_source_id: TimeSourceId,
     monitor_id: MonitorId,

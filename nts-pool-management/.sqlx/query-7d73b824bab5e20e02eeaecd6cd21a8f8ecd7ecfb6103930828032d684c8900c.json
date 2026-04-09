@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT score, protocol as \"protocol: IpVersion\", monitor_id as monitor, raw_sample AS sample, received_at\n            FROM monitor_samples\n            WHERE time_source_id = $1 AND received_at > (CURRENT_DATE - INTERVAL '2 days')\n            ORDER BY monitor_samples.received_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "score",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol: IpVersion",
+        "type_info": {
+          "Custom": {
+            "name": "ip_protocol",
+            "kind": {
+              "Enum": [
+                "ipv4",
+                "ipv6",
+                "srvv4",
+                "srvv6"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "monitor",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "sample",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7d73b824bab5e20e02eeaecd6cd21a8f8ecd7ecfb6103930828032d684c8900c"
+}
