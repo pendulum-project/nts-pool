@@ -26,6 +26,12 @@ services:
   management:
     # Annotations to add to the management service
     annotations: {}
+    # The type of the management service (ClusterIP, NodePort, LoadBalancer, etc.)
+    type: ClusterIP
+    # The node port on which the management interface is also enabled
+    managementNodePort: null
+    # The node port on which the internal interface is also enabled
+    internalNodePort: null
   # Configuration for the Key Exchange (KE) service
   ke:
     # Annotations to add to the KE service
@@ -36,6 +42,13 @@ services:
     loadBalancerIP: null
     # The port on which the KE service will be exposed
     port: 4460
+  geodb:
+    # Annotations to add to the geodb service
+    annotations: {}
+    # The type of the geodb caching service (ClusterIp, NodePort, LoadBalancer, etc.)
+    type: ClusterIP
+    # The node port on which the cache server listens
+    nodePort: null
 
 ingresses:
   # Configuration for the management ingress
@@ -67,6 +80,26 @@ ke:
   # Update this to a new value to trigger setting up a new set of key exchange pods
   restartBump: 1
   # Override global image settings for the key exchange service
+  image:
+    pullSecrets: null
+    pullPolicy: null
+    repository: null
+    tag: null
+
+# Configuration for the DNS service
+dns:
+  extraEnv: null
+  # Domain name of the DNS zone served by the DNS service
+  poolDomain: ntspool.example.com.
+  # Domain name of the DNS server
+  nameserverDomain: ns.example.com.
+  # Email address (in domain name form) of the administrator of the domain
+  responsibleDomain: admin.example.com.
+  # Name fo the secret that stores the dnssec key for the service.
+  dnssecSecretName: null
+  # Update this to a new value to trigger setting up a new set of key exchange pods
+  restartBump: 1
+  # Override global image settings for the dns service
   image:
     pullSecrets: null
     pullPolicy: null

@@ -26,7 +26,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/git/db \
     && mkdir -p /build/artifacts \
     && cp target/release/nts-pool-ke /build/artifacts \
     && cp target/release/nts-pool-management /build/artifacts \
-    && cp target/release/nts-pool-monitor /build/artifacts
+    && cp target/release/nts-pool-monitor /build/artifacts \
+    && cp target/release/nts-pool-dns /build/artifacts
 
 # Setup the final actual runner image stage
 FROM debian:bookworm-slim AS runner
@@ -43,6 +44,7 @@ RUN apt update \
 COPY --from=builder /build/artifacts/nts-pool-ke /usr/local/bin/nts-pool-ke
 COPY --from=builder /build/artifacts/nts-pool-management /usr/local/bin/nts-pool-management
 COPY --from=builder /build/artifacts/nts-pool-monitor /usr/local/bin/nts-pool-monitor
+COPY --from=builder /build/artifacts/nts-pool-dns /usr/local/bin/nts-pool-dns
 COPY --from=builder /build/nts-pool-management/assets /opt/nts-pool-management/assets
 
 # Set a default assets directory
