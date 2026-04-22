@@ -13,7 +13,7 @@ use hickory_server::{
         dnssec::{Algorithm, SigSigner, SigningKey, crypto::signing_key_from_der, rdata::DNSKEY},
         rr::{
             Name, RData, Record, RecordSet, RecordType, RrKey,
-            rdata::{SOA, SRV},
+            rdata::{NS, SOA, SRV},
         },
     },
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
@@ -189,6 +189,9 @@ impl GeoHandlerInner {
                 ));
                 let soa_record = Record::from_rdata(config.zone_name.clone(), ttl_secs, soa);
                 authority.upsert_mut(soa_record, serial);
+                let ns = RData::NS(NS(config.dns_server_name.clone()));
+                let ns_record = Record::from_rdata(config.zone_name.clone(), ttl_secs, ns);
+                authority.upsert_mut(ns_record, serial);
                 authority.records_get_mut().insert(
                     RrKey::new(config.zone_name.clone().into(), RecordType::SRV),
                     Arc::new(v),
