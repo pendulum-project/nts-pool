@@ -39,7 +39,7 @@ pool-nts.workspace = true
 rand.workspace = true
 rustls = { workspace = true, features = ["logging", "std"] }
 rustls-platform-verifier = { workspace = true }
-scc = "3.3.2"
+scc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha3.workspace = true
