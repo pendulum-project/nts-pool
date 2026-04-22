@@ -185,7 +185,7 @@ async fn run_nts_pool_dns(config: Config) -> eyre::Result<()> {
         geolocation_db_path: config.zone.geolocation_db_path.clone(),
         algorithm: Algorithm::RSASHA256,
         sign_duration: config.zone.sign_duration,
-        ttl: config.zone.sign_duration,
+        ttl: config.zone.sign_duration / 2,
     };
     let geo_handler = Arc::new(
         GeoHandler::new(geo_config)
