@@ -487,7 +487,7 @@ impl ServerManager for GeographicServerManager {
                     above: region[pick].total_weight_including - weight,
                     weight,
                 });
-                skips.sort_by(|a, b| a.above.cmp(&b.above))
+                skips.sort_by_key(|v| v.above)
             } else {
                 return Some(GeographicServer {
                     server_support_cache: self.server_support_cache.clone(),
