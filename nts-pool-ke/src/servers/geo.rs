@@ -202,8 +202,8 @@ impl GeographicServerManager {
                 let serverdata = serverdata.read().unwrap().clone();
                 server_support_cache
                     .iter_mut_async(|entry| {
-                        if !serverdata.uuid_lookup.contains_key(&entry.0.1)
-                            || entry.1.age + config.server_support_cache_validity
+                        if !serverdata.uuid_lookup.contains_key(&entry.key().1)
+                            || entry.age + config.server_support_cache_validity
                                 < tokio::time::Instant::now()
                         {
                             // delete old entry
@@ -215,7 +215,7 @@ impl GeographicServerManager {
                 let mut connections_to_dispose = Vec::new();
                 server_connection_cache
                     .iter_mut_async(|entry| {
-                        if !serverdata.uuid_lookup.contains_key(&entry.0.1) {
+                        if !serverdata.uuid_lookup.contains_key(&entry.key().1) {
                             let mut consumed = entry.consume();
                             while let Some(CachedConnection { connection, .. }) =
                                 consumed.1.connections.pop()
