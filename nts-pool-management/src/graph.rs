@@ -14,26 +14,36 @@ pub fn render_graph(
     root_drawing_area.fill(&WHITE).unwrap();
 
     // X-axis bounds
-    let from = logs
+    let x_from = logs
         .iter()
         .map(|l| l.received_at.timestamp())
         .min()
         .unwrap_or_default();
-    let to = logs
+    let x_to = logs
         .iter()
         .map(|l| l.received_at.timestamp())
         .max()
         .unwrap_or_default();
 
+    // Y-axis bounds
+    // Value of lowest sample, or 0, whichever is smaller
+    let y_from = logs
+        .iter()
+        .map(|l| l.score)
+        .reduce(f64::min)
+        .unwrap_or_default();
+    let y_to = 22.0;
+
     let mut chart = ChartBuilder::on(&root_drawing_area)
         .set_label_area_size(LabelAreaPosition::Left, 40)
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
-        .build_cartesian_2d(from..to, -100.0..25.0)
+        .build_cartesian_2d(x_from..x_to, y_from..y_to)
         .unwrap();
 
     chart
         .configure_mesh()
         .x_label_formatter(&|vt| format!("{}", DateTime::from_timestamp(*vt, 0).unwrap().time()))
+        .y_label_formatter(&|vt| format!("{}", vt))
         .draw()
         .unwrap();
 
