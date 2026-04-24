@@ -13,6 +13,7 @@ metadata:
 spec:
   type: {{ .Values.services.ke.type }}
   externalTrafficPolicy: Local
+  ipFamilyPolicy: "PreferDualStack"
   {{- if and (eq .Values.services.ke.type "LoadBalancer") .Values.services.ke.loadBalancerIP }}
   loadBalancerIP: {{ .Values.services.ke.loadBalancerIP }}
   {{- end }}
