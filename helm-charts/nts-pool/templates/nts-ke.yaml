@@ -17,8 +17,6 @@ spec:
         app.kubernetes.io/component: ke
         {{- include "nts-pool.selectorLabels" . | nindent 8 }}
     spec:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       volumes:
         - name: geolocation-script
           configMap:
