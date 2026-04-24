@@ -81,7 +81,6 @@ spec:
       name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
     spec:
       accessModes: ["ReadWriteOnce"]
-      storageClassName: sbs-default
       resources:
         requests:
           storage: 1Gi
