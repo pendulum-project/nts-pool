@@ -12,6 +12,7 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.services.ke.type }}
+  externalTrafficPolicy: Local
   {{- if and (eq .Values.services.ke.type "LoadBalancer") .Values.services.ke.loadBalancerIP }}
   loadBalancerIP: {{ .Values.services.ke.loadBalancerIP }}
   {{- end }}
