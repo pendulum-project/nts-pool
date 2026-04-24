@@ -52,6 +52,7 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.services.geodb.type }}
+  ipFamilyPolicy: "PreferDualStack"
   selector:
     app.kubernetes.io/component: geodb-cache
     {{- include "nts-pool.selectorLabels" . | nindent 4 }}
