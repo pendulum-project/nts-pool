@@ -58,7 +58,7 @@ spec:
               volumeMounts:
                 - name: config-updater-script
                   mountPath: "/opt/scripts/"
-                  readonly: true
+                  readOnly: true
               command:
                 - /opt/scripts/config-updater.sh
               env:
@@ -84,7 +84,7 @@ spec:
               volumeMounts:
                 - name: config-updater-script
                   mountPath: "/opt/scripts/"
-                  readonly: true
+                  readOnly: true
               command:
                 - /opt/scripts/config-updater.sh
               env:
