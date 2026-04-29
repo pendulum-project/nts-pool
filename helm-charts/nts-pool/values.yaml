@@ -42,6 +42,15 @@ services:
     loadBalancerIP: null
     # The port on which the KE service will be exposed
     port: 4460
+  dns:
+    # Annotations to add to the KE service
+    annotations: {}
+    # The type of the KE service (ClusterIP, NodePort, LoadBalancer, etc.)
+    type: ClusterIP
+    # For a load balancer service, specify the IP address to use
+    loadBalancerIP: null
+    # The port on which the KE service will be exposed
+    port: 53
   geodb:
     # Annotations to add to the geodb service
     annotations: {}
