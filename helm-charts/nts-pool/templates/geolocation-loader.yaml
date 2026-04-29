@@ -52,6 +52,7 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.services.geodb.type }}
+  ipFamilyPolicy: "PreferDualStack"
   selector:
     app.kubernetes.io/component: geodb-cache
     {{- include "nts-pool.selectorLabels" . | nindent 4 }}
@@ -81,7 +82,6 @@ spec:
       name: {{ include "nts-pool.fullname" . }}-geodb-cache-vol
     spec:
       accessModes: ["ReadWriteOnce"]
-      storageClassName: sbs-default
       resources:
         requests:
           storage: 1Gi

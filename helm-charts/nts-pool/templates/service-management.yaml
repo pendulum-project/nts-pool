@@ -12,6 +12,7 @@ metadata:
   {{- end }}
 spec:
   type: {{.Values.services.management.type }}
+  ipFamilyPolicy: "PreferDualStack"
   selector:
     app.kubernetes.io/component: management
     {{- include "nts-pool.selectorLabels" . | nindent 4 }}

@@ -158,6 +158,8 @@ management:
     cert: null
   # Maximum weight for timesources that can be configured through the management interface
   maxTimesourceWeight: 10
+  # Log level for the pod
+  log: info
   # Update this to a new value to trigger setting up a new set of management pods
   restartBump: 1
   # Override global image settings for the management service
