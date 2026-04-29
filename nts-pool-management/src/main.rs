@@ -252,8 +252,8 @@ async fn main() {
     let router_external = router_external.merge(common::livereload::livereload_router());
 
     // start listening for incoming connections
-    let listener_external = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    let listener_internal = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
+    let listener_external = tokio::net::TcpListener::bind("[::]:3000").await.unwrap();
+    let listener_internal = tokio::net::TcpListener::bind("[::]:3001").await.unwrap();
     tokio::try_join!(
         axum::serve(listener_external, router_external),
         axum::serve(listener_internal, router_internal)
