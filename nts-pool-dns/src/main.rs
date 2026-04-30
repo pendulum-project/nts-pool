@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use eyre::Context as _;
 use hickory_server::proto::{dnssec::Algorithm, rr::Name};
@@ -123,6 +123,7 @@ async fn server_list_updater(
     servers_list_path: PathBuf,
     signing_key_path: PathBuf,
     geolocation_db_path: PathBuf,
+    minimum_refresh_interval: Duration,
 ) -> eyre::Result<tokio::task::JoinHandle<()>> {
     info!(
         "Listening for changes to server list file at {:?}",
@@ -156,7 +157,10 @@ async fn server_list_updater(
         // keep the watcher alive
         let _w = watcher;
         loop {
-            change_receiver.recv().await;
+            tokio::select! {
+                _ = change_receiver.recv() => {}
+                _ = tokio::time::sleep(minimum_refresh_interval) => {}
+            }
             match handler.reload().await {
                 Ok(_) => {
                     info!("Successfully reloaded server list");
@@ -212,6 +216,7 @@ async fn run_nts_pool_dns(config: Config) -> eyre::Result<()> {
             config.zone.servers_list_path.clone(),
             config.zone.private_key_path.clone(),
             config.zone.geolocation_db_path.clone(),
+            config.zone.sign_duration / 2,
         )
         .await?
         .into(),
