@@ -20,6 +20,7 @@ use super::cookies::{CookieService, MessageType, UserContext};
 pub struct AppContext {
     pub path: String,
     pub ke_domain: String,
+    pub srv_domain: String,
     pub user: Option<UnsafeLoggedInUser>,
     pub parent_user: Option<Administrator>,
     pub user_context: UserContext,
@@ -33,6 +34,7 @@ impl Default for AppContext {
         Self {
             path: "/".to_string(),
             ke_domain: "ke.example.com".into(),
+            srv_domain: "srv.example.com".into(),
             user: Default::default(),
             parent_user: Default::default(),
             flash_message: Default::default(),
@@ -107,6 +109,7 @@ async fn extract_context(
             user_context,
             base_url: state.config.base_url.clone(),
             ke_domain: state.config.poolke_name.clone(),
+            srv_domain: state.config.poolsrv_name.clone(),
             max_timesource_weight: state.config.max_timesource_weight,
         },
     ))

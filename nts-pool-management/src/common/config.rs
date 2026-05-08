@@ -7,6 +7,7 @@ use eyre::Context;
 pub struct AppConfig {
     // Base website configuration
     pub base_url: BaseUrl,
+    pub poolsrv_name: String,
     pub assets_path: String,
     pub geolocation_db: std::path::PathBuf,
     // Secret for internal requests
@@ -49,6 +50,8 @@ impl AppConfig {
             std::env::var("NTSPOOL_BASE_URL")
                 .wrap_err("NTSPOOL_BASE_URL not set in environment")?,
         );
+        let poolsrv_name = std::env::var("NTSPOOL_POOLSRV_NAME")
+            .wrap_err("NTSPOOL_POOLSRV_NAME not set in environment")?;
         let assets_path = std::env::var("NTSPOOL_ASSETS_DIR").unwrap_or("./assets".into());
         let geolocation_db = std::env::var("NTSPOOL_GEOLOCATION_DB")
             .wrap_err("NTSPOOL_GEOLOCATION_DB not set in environment")?
@@ -135,6 +138,7 @@ impl AppConfig {
 
         Ok(Self {
             base_url,
+            poolsrv_name,
             assets_path,
             geolocation_db,
             config_updater_secret,
@@ -162,6 +166,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             base_url: BaseUrl::new("http://localhost:3000"),
+            poolsrv_name: "localhost".into(),
             poolke_name: "localhost:4460".into(),
             config_updater_secret: "UNSAFE_SECRET".into(),
             database_url: "postgres://nts-pool@localhost:5432/nts-pool".into(),

@@ -4,7 +4,34 @@
   {% if app.user_context.terms_accepted || app.user|is_logged_in %}
     <section>
       <h1>Using the NTS pool for time synchronization</h1>
-      <p>To configure the nts pool for serving time to your machine, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
+      <p>The NTS pool is available for use in two variants. Both provide the same set of servers, just using a different delivery mechanism. The SRV pool uses SRV records to inform the clients of the available servers in their regions, but requires a modified client. The KELB pool looks identical to a regular NTS time server and can therefore be used by unmodified clients. You can use whichever method is more appropriate to your situation.</p>
+
+      <h1>Using the SRV pool</h1>
+      <p>To configure the srv nts pool for serving time to your machine, you will need a modified NTS capable NTP client. For such a client, add the <code>{{ app.srv_domain }}</code> as a pool source to your NTS client configuration (see below for examples).</p>
+
+      <p>Should you wish to implement SRV pool support for a client, see <a href="https://github.com/pendulum-project/nts-pool/blob/main/documentation/protocol/srv-pool.md">this documentation of the SRV pool</a>.
+
+      <h2>Chrony</h2>
+      <p>
+        A modified version of chrony supporting the SRV pool can be found <a href="https://github.com/pendulum-project/chrony/releases/">here</a>. To configure the SRV pool, add the following to the configuration:
+        <code-block>pool {{ app.srv_domain }} iburst nts</code-block>
+      </p>
+
+      <h2>NTPSec</h2>
+      <p>A modified version of NTPsec supporting the SRV pool can be found <a href="https://github.com/pendulum-project/pool-ntpsec/releases/">here</a>. To configure the SRV pool, add the following to the configuration:
+      <code-block>pool {{ app.srv_domain }} iburst nts</code-block>
+      </p>
+
+      <h2>NTPD-rs</h2>
+      <p>NTPD-rs natively supports SRV pools as of version 1.8. To configure an SRV pool, add the following source to your configuration:
+      <code-block>[[source]]
+mode = "nts-pool"
+enable-srv-resolution = true
+address = "srv.experimental.ntspooltest.org"</code-block>
+      </p>
+
+      <h1>Using the KELB pool</h1>
+      <p>To configure the nts pool for serving time to your machine with an unmodified client, add the servers <code>0.{{ app.ke_domain }}</code> through <code>3.{{ app.ke_domain }}</code> as NTS sources to your NTS clients configuration (see below for examples). If your client supports NTS pools directly, or when only a single server is desired, <code>{{ app.ke_domain }}</code> can be used directly instead.</p>
 
       <h2>NTPSec</h2>
       <p>
