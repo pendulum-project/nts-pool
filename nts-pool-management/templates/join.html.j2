@@ -11,6 +11,8 @@
 
     <p>Your server will now be shown on your <a href="/management/time-sources">Time sources</a> page after logging in. If it is functioning correctly, it's score will start increasing after about 15 minutes. If not, please check the domain name is correct, the server is reachable on that domain name, and that the pool authentication token has been correctly configured.</p>
 
+    <p>Once your server score is above 10, the server will be used. Currently, your server will be used for both the KELB type pool, as well as the SRV type pool. If the score isn't sufficient for one of the two, it won't be used in either.</p>
+
     <h2>Supported server software</h2>
 
     <h3><a href="https://docs.ntpd-rs.pendulum-project.org/guide/nts-pool/">ntpd-rs version 1.7.0-alpha.20251003 or newer</a></h3>

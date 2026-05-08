@@ -98,6 +98,8 @@ Create the name of the service account to use
   value: "{{ .Values.management.baseUrl }}"
 - name: NTSPOOL_POOLKE_NAME
   value: "{{ .Values.ke.domainName }}"
+- name: NTSPOOL_POOLSRV_NAME
+  value: "{{ .Values.dns.poolDomain }}"
 - name: NTSPOOL_MONITOR_RESULT_BATCHSIZE
   value: "{{ .Values.monitor.resultBatchsize }}"
 - name: NTSPOOL_MONITOR_RESULT_BATCHTIME

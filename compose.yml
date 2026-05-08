@@ -88,6 +88,7 @@ services:
       NTSPOOL_SMTP_URL: "smtp://mailcrab:1025"
       NTSPOOL_MAIL_FROM_ADDRESS: "NTS Pool <noreply@example.com>"
       NTSPOOL_BASE_URL: "http://localhost:3000"
+      NTSPOOL_POOLSRV_NAME: "srv.localhost"
       NTSPOOL_POOLKE_NAME: "localhost"
       NTSPOOL_MONITOR_RESULT_BATCHSIZE: "4"
       NTSPOOL_MONITOR_RESULT_BATCHTIME: "60"
