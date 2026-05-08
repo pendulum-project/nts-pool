@@ -8,16 +8,19 @@ use std::{
 
 use eyre::Context as _;
 use hickory_server::{
-    authority::Catalog,
+    net::runtime::{Time, TokioTime},
     proto::{
-        dnssec::{Algorithm, SigSigner, SigningKey, crypto::signing_key_from_der, rdata::DNSKEY},
+        dnssec::{
+            Algorithm, DnssecSigner, SigningKey, crypto::signing_key_from_der, rdata::DNSKEY,
+        },
         rr::{
             Name, RData, Record, RecordSet, RecordType, RrKey,
             rdata::{NS, SOA, SRV},
         },
     },
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
-    store::in_memory::InMemoryAuthority,
+    store::in_memory::InMemoryZoneHandler,
+    zone_handler::Catalog,
 };
 use maxminddb::geoip2;
 use nts_pool_shared::KeyExchangeServer;
@@ -158,17 +161,17 @@ impl GeoHandlerInner {
                 let public_key = signing_key
                     .to_public_key()
                     .wrap_err("Failed to get public key")?;
-                let signer = SigSigner::dnssec(
+                let signer = DnssecSigner::new(
                     DNSKEY::from_key(&public_key),
                     Box::new(signing_key.clone()),
                     config.zone_name.clone(),
                     config.sign_duration,
                 );
 
-                let mut authority = InMemoryAuthority::empty(
+                let mut authority: InMemoryZoneHandler = InMemoryZoneHandler::empty(
                     config.zone_name.clone(),
-                    hickory_server::authority::ZoneType::Primary,
-                    false,
+                    hickory_server::zone_handler::ZoneType::Primary,
+                    hickory_server::zone_handler::AxfrPolicy::Deny,
                     None,
                 );
 
@@ -292,14 +295,16 @@ pub struct GeoHandlerArc(pub Arc<GeoHandler>);
 
 #[async_trait::async_trait]
 impl RequestHandler for GeoHandlerArc {
-    async fn handle_request<R: ResponseHandler>(
+    async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
         response: R,
     ) -> ResponseInfo {
         let inner = self.0.inner.lock().unwrap().clone();
         let region = inner.lookup_region(request.src().ip());
-        region.handle_request(request, response).await
+        region
+            .handle_request::<_, TokioTime>(request, response)
+            .await
     }
 }
 
@@ -307,7 +312,7 @@ impl RequestHandler for GeoHandlerArc {
 mod tests {
     use std::collections::HashSet;
 
-    use hickory_server::{authority::LookupOptions, proto::rr::LowerName};
+    use hickory_server::{proto::rr::LowerName, zone_handler::LookupOptions};
 
     use super::*;
 
@@ -327,7 +332,7 @@ mod tests {
         for authority in catalog.find(name).iter().flat_map(|v| v.iter()) {
             lookup_objs.push(
                 authority
-                    .lookup(name, rtype, LookupOptions::default())
+                    .lookup(name, rtype, None, LookupOptions::default())
                     .await
                     .map_result()
                     .transpose()
@@ -370,7 +375,7 @@ mod tests {
             )
             .await
             {
-                assert_eq!(record.name(), &Name::from_ascii("pool.test.").unwrap());
+                assert_eq!(record.name, Name::from_ascii("pool.test.").unwrap());
             }
         }
 
@@ -382,8 +387,11 @@ mod tests {
             RecordType::SRV,
         )
         .await
-        .filter_map(|v| Record::<SRV>::try_from(v).ok())
-        .map(|v| v.data().target().to_string())
+        .filter_map(|v| match v.data {
+            RData::SRV(srv) => Some(srv),
+            _ => None,
+        })
+        .map(|v| v.target.to_string())
         .collect();
         assert_eq!(domains, HashSet::from(["a.test".into(), "c.test".into()]));
 
@@ -395,8 +403,11 @@ mod tests {
             RecordType::SRV,
         )
         .await
-        .filter_map(|v| Record::<SRV>::try_from(v).ok())
-        .map(|v| v.data().target().to_string())
+        .filter_map(|v| match v.data {
+            RData::SRV(srv) => Some(srv),
+            _ => None,
+        })
+        .map(|v| v.target.to_string())
         .collect();
         assert_eq!(domains, HashSet::from(["a.test".into()]));
     }

@@ -193,7 +193,7 @@ async fn run_nts_pool_dns(config: Config) -> eyre::Result<()> {
             .wrap_err("Failed to create GeoHandler")?,
     );
 
-    let mut server = hickory_server::server::ServerFuture::new(GeoHandlerArc(geo_handler.clone()));
+    let mut server = hickory_server::server::Server::new(GeoHandlerArc(geo_handler.clone()));
     let udp_socket = UdpSocket::bind(config.server.listen_addr)
         .await
         .wrap_err("Failed to bind UDP socket")?;
@@ -218,7 +218,11 @@ async fn run_nts_pool_dns(config: Config) -> eyre::Result<()> {
     );
 
     server.register_socket(udp_socket);
-    server.register_listener(tcp_socket, config.server.tcp_timeout);
+    server.register_listener(
+        tcp_socket,
+        config.server.tcp_timeout,
+        config.server.response_buffer_size,
+    );
     server.block_until_done().await.wrap_err("Server error")?;
 
     Ok(())
