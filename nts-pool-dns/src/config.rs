@@ -63,11 +63,18 @@ pub struct DnsServerConfig {
         deserialize_with = "duration_millis"
     )]
     pub tcp_timeout: Duration,
+    #[serde(default = "default_response_buffer_size")]
+    pub response_buffer_size: usize,
 }
 
 /// Default TCP timeout duration
 fn default_tcp_timeout() -> Duration {
     Duration::from_secs(5)
+}
+
+/// Default TCP response buffer size
+fn default_response_buffer_size() -> usize {
+    64 * 1024
 }
 
 fn duration_millis<'de, D>(deserializer: D) -> Result<Duration, D::Error>
