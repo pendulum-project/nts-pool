@@ -146,6 +146,11 @@ impl GeoHandlerInner {
         let mut regions = HashMap::new();
 
         for server in &servers {
+            let server_usable =
+                server.ipv4_capable.unwrap_or(true) || server.ipv6_capable.unwrap_or(true);
+            if !server_usable {
+                continue;
+            }
             Self::add_to_region(&mut regions, GLOBAL, server, serial, config)?;
             for region in &server.regions {
                 Self::add_to_region(&mut regions, region, server, serial, config)?;
@@ -155,7 +160,7 @@ impl GeoHandlerInner {
         // Convert the records to catalogs and sign them
         let signing_key = config.load_key().await?;
 
-        let regions = regions
+        let mut regions = regions
             .into_iter()
             .map(|(k, v)| {
                 let public_key = signing_key
@@ -213,6 +218,58 @@ impl GeoHandlerInner {
             })
             .collect::<eyre::Result<HashMap<_, _>>>()?;
 
+        // Ensure we always at least have a global region, even if its empty
+        if !regions.contains_key(GLOBAL) {
+            let public_key = signing_key
+                .to_public_key()
+                .wrap_err("Failed to get public key")?;
+            let signer = DnssecSigner::new(
+                DNSKEY::from_key(&public_key),
+                Box::new(signing_key.clone()),
+                config.zone_name.clone(),
+                config.sign_duration,
+            );
+
+            let mut authority: InMemoryZoneHandler = InMemoryZoneHandler::empty(
+                config.zone_name.clone(),
+                hickory_server::zone_handler::ZoneType::Primary,
+                hickory_server::zone_handler::AxfrPolicy::Deny,
+                None,
+            );
+
+            let ttl_secs = config
+                .ttl
+                .as_secs()
+                .try_into()
+                .wrap_err("TTL value too large")?;
+
+            let soa = RData::SOA(SOA::new(
+                config.dns_server_name.clone(),
+                config.responsible_name.clone(),
+                serial,
+                3600,
+                600,
+                86400,
+                ttl_secs,
+            ));
+            let soa_record = Record::from_rdata(config.zone_name.clone(), ttl_secs, soa);
+            authority.upsert_mut(soa_record, serial);
+            let ns = RData::NS(NS(config.dns_server_name.clone()));
+            let ns_record = Record::from_rdata(config.zone_name.clone(), ttl_secs, ns);
+            authority.upsert_mut(ns_record, serial);
+
+            authority
+                .add_zone_signing_key_mut(signer)
+                .wrap_err("Failed to add zone signing key")?;
+            authority
+                .secure_zone_mut()
+                .wrap_err("Failed to sign zone")?;
+
+            let mut catalog = Catalog::new();
+            catalog.upsert(config.zone_name.clone().into(), vec![Arc::new(authority)]);
+            regions.insert(GLOBAL.to_owned(), catalog);
+        }
+
         let geodb = maxminddb::Reader::from_source(
             tokio::fs::read(config.geolocation_db_path.as_path())
                 .await
@@ -230,9 +287,19 @@ impl GeoHandlerInner {
         serial: u32,
         config: &GeoHandlerConfig,
     ) -> eyre::Result<()> {
-        let region_lookup = regions
-            .entry(regionname.to_owned())
-            .or_insert_with(|| RecordSet::new(config.zone_name.clone(), RecordType::SRV, serial));
+        let region_lookup = regions.entry(regionname.to_owned()).or_insert_with(|| {
+            RecordSet::new(
+                config
+                    .zone_name
+                    .clone()
+                    .prepend_label("_tcp")
+                    .unwrap()
+                    .prepend_label("_ntske")
+                    .unwrap(),
+                RecordType::SRV,
+                serial,
+            )
+        });
         let record = SRV::new(
             0,
             0,
