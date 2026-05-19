@@ -402,6 +402,7 @@ impl ServerManager for GeographicServerManager {
         } else {
             &inner.regions_ipv6
         };
+        let fallback_empty = RegionLookups::default();
         let region = if let Ok(Some(location)) = inner
             .geodb
             .lookup(address.ip())
@@ -425,7 +426,7 @@ impl ServerManager for GeographicServerManager {
         }
         .unwrap_or_else(|| {
             debug!("Falling back to global, continent and country zone does not exist");
-            regions.get(GLOBAL).unwrap()
+            regions.get(GLOBAL).unwrap_or(&fallback_empty)
         });
 
         let region = match domain {
