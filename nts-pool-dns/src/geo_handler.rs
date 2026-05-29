@@ -201,7 +201,17 @@ impl GeoHandlerInner {
                 let ns_record = Record::from_rdata(config.zone_name.clone(), ttl_secs, ns);
                 authority.upsert_mut(ns_record, serial);
                 authority.records_get_mut().insert(
-                    RrKey::new(config.zone_name.clone().into(), RecordType::SRV),
+                    RrKey::new(
+                        config
+                            .zone_name
+                            .clone()
+                            .prepend_label("_tcp")
+                            .unwrap()
+                            .prepend_label("_ntske")
+                            .unwrap()
+                            .into(),
+                        RecordType::SRV,
+                    ),
                     Arc::new(v),
                 );
 
@@ -450,7 +460,7 @@ mod tests {
         let region = inner.regions.get("NL").unwrap();
         let domains: HashSet<String> = test_lookup(
             region,
-            &Name::from_ascii("pool.test.").unwrap().into(),
+            &Name::from_ascii("_ntske._tcp.pool.test.").unwrap().into(),
             RecordType::SRV,
         )
         .await
@@ -466,7 +476,7 @@ mod tests {
         let region = inner.lookup_region("81.2.69.193".parse().unwrap());
         let domains: HashSet<String> = test_lookup(
             region,
-            &Name::from_ascii("pool.test.").unwrap().into(),
+            &Name::from_ascii("_ntske._tcp.pool.test.").unwrap().into(),
             RecordType::SRV,
         )
         .await
