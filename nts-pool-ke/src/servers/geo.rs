@@ -1355,50 +1355,48 @@ mod tests {
                     .iter()
                     .flat_map(|v| v.iter())
                     .any(|v| v.index == i),
-                server.ipv4_capable
+                server.ipv6_capable
             );
             for region in server.regions.iter() {
                 assert_eq!(
                     inner
                         .regions_ipv4
                         .get(region)
-                        .unwrap()
-                        .all
-                        .iter()
-                        .any(|v| v.index == i),
+                        .map(|region| region.all.iter().any(|v| v.index == i))
+                        .unwrap_or_default(),
                     server.ipv4_capable
                 );
                 assert_eq!(
                     inner
                         .regions_ipv4
                         .get(region)
-                        .unwrap()
-                        .numbered_domains
-                        .iter()
-                        .flat_map(|v| v.iter())
-                        .any(|v| v.index == i),
+                        .map(|region| region
+                            .numbered_domains
+                            .iter()
+                            .flat_map(|v| v.iter())
+                            .any(|v| v.index == i))
+                        .unwrap_or_default(),
                     server.ipv4_capable
                 );
                 assert_eq!(
                     inner
                         .regions_ipv6
                         .get(region)
-                        .unwrap()
-                        .all
-                        .iter()
-                        .any(|v| v.index == i),
+                        .map(|region| region.all.iter().any(|v| v.index == i))
+                        .unwrap_or_default(),
                     server.ipv6_capable
                 );
                 assert_eq!(
                     inner
                         .regions_ipv6
                         .get(region)
-                        .unwrap()
-                        .numbered_domains
-                        .iter()
-                        .flat_map(|v| v.iter())
-                        .any(|v| v.index == i),
-                    server.ipv4_capable
+                        .map(|region| region
+                            .numbered_domains
+                            .iter()
+                            .flat_map(|v| v.iter())
+                            .any(|v| v.index == i))
+                        .unwrap_or_default(),
+                    server.ipv6_capable
                 );
             }
         }
