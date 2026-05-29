@@ -9,7 +9,7 @@ dns-server-name = "example.com."
 responsible-name = "example.com."
 private-key-path = "./nts-pool-dns/testdata/pool.test.key"
 servers-list-path = "./nts-pool-dns/testdata/testservers.json"
+geolocation-db-path = "./nts-pool-dns/testdata/GeoLite2-Country-Test.mmdb"
 
 [server]
 listen = "0.0.0.0:5354"
-
