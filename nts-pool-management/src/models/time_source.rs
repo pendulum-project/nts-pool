@@ -102,6 +102,10 @@ fn check_hostname_reasonable(hostname: &str, context: &AppContext) -> Result<(),
         return Err(eyre::eyre!("Invalid domain name").into());
     }
 
+    if hostname.parse::<std::net::IpAddr>().is_ok() {
+        return Err(eyre::eyre!("Ip address not allowed as hostname for server").into());
+    }
+
     Ok(())
 }
 
