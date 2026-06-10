@@ -171,8 +171,12 @@ pub async fn poolke_servers(
                     .into_iter()
                     .filter(|v| regions.contains(v))
                     .collect(),
-                ipv4_capable: Some(ts.ipv4_score > 10.0),
-                ipv6_capable: Some(ts.ipv6_score > 10.0),
+                ipv4_capable: Some(
+                    ts.ipv4_score > 10.0 && ts.srv4_score > 10.0 && ts.srv6_score > 10.0,
+                ),
+                ipv6_capable: Some(
+                    ts.ipv6_score > 10.0 && ts.srv4_score > 10.0 && ts.srv6_score > 10.0,
+                ),
             })
             .collect::<Vec<_>>(),
     ))
