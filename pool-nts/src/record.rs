@@ -376,12 +376,12 @@ impl<'a> NtsRecord<'a> {
             5 => Self::parse_new_cookie(body),
             6 => Self::parse_server(body),
             7 => Self::parse_port(body).await,
-            0x4000 => Self::parse_keep_alive(body),
-            0x4004 => Self::parse_supported_next_protocol_list(body),
-            0x4001 => Self::parse_supported_algorithm_list(body),
-            0x4002 => Self::parse_fixed_key_request(body),
-            0x4003 => Self::parse_ntp_server_deny(body),
-            0x4005 => Self::parse_authentication_token(body).await,
+            8 => Self::parse_keep_alive(body),
+            9 => Self::parse_supported_next_protocol_list(body),
+            10 => Self::parse_supported_algorithm_list(body),
+            12 => Self::parse_fixed_key_request(body),
+            13 => Self::parse_ntp_server_deny(body),
+            14 => Self::parse_authentication_token(body).await,
             0x4F01 => Self::parse_uuid_request(body).await,
             _ => {
                 let mut data = vec![0; size.into()];
@@ -564,12 +564,12 @@ impl<'a> NtsRecord<'a> {
                 critical,
                 ..
             } => record_type | if *critical { CRITICAL_BIT } else { 0 },
-            NtsRecord::KeepAlive => 0x4000,
-            NtsRecord::SupportedNextProtocolList { .. } => 0x4004 | CRITICAL_BIT,
-            NtsRecord::SupportedAlgorithmList { .. } => 0x4001 | CRITICAL_BIT,
-            NtsRecord::FixedKeyRequest { .. } => 0x4002 | CRITICAL_BIT,
-            NtsRecord::NtpServerDeny { .. } => 0x4003,
-            NtsRecord::AuthenticationToken { .. } => 0x4005,
+            NtsRecord::KeepAlive => 8,
+            NtsRecord::SupportedNextProtocolList { .. } => 9 | CRITICAL_BIT,
+            NtsRecord::SupportedAlgorithmList { .. } => 10 | CRITICAL_BIT,
+            NtsRecord::FixedKeyRequest { .. } => 12 | CRITICAL_BIT,
+            NtsRecord::NtpServerDeny { .. } => 13,
+            NtsRecord::AuthenticationToken { .. } => 14,
             NtsRecord::UUIDRequest { .. } => 0x4F01 | CRITICAL_BIT,
         }
     }
@@ -926,28 +926,25 @@ mod tests {
 
     #[test]
     fn test_keep_alive() {
+        assert!(matches!(parse(&mut [0, 8, 0, 0]), Ok(NtsRecord::KeepAlive)));
         assert!(matches!(
-            parse(&mut [0x40, 0, 0, 0]),
+            parse(&mut [0x80, 8, 0, 2, 0, 3]),
             Ok(NtsRecord::KeepAlive)
         ));
         assert!(matches!(
-            parse(&mut [0xC0, 0, 0, 2, 0, 3]),
+            parse(&mut [0, 8, 0, 0, 0, 3]),
             Ok(NtsRecord::KeepAlive)
         ));
-        assert!(matches!(
-            parse(&mut [0x40, 0, 0, 0, 0, 3]),
-            Ok(NtsRecord::KeepAlive)
-        ));
-        assert!(parse(&mut [0x40, 0, 0, 2]).is_err());
+        assert!(parse(&mut [0, 8, 0, 2]).is_err());
 
         let mut buf = vec![];
         serialize(NtsRecord::KeepAlive, &mut buf);
-        assert_eq!(buf, [0x40, 0, 0, 0]);
+        assert_eq!(buf, [0, 8, 0, 0]);
     }
 
     #[test]
     fn test_supported_next_protocol_list() {
-        let rec = &mut [0xC0, 4, 0, 0];
+        let rec = &mut [0x80, 9, 0, 0];
         let Ok(NtsRecord::SupportedNextProtocolList {
             supported_protocols,
         }) = parse(rec)
@@ -959,7 +956,7 @@ mod tests {
             [].as_slice() as &[u16]
         );
 
-        let rec = &mut [0xC0, 4, 0, 4, 0, 0, 0, 1];
+        let rec = &mut [0x80, 9, 0, 4, 0, 0, 0, 1];
         let Ok(NtsRecord::SupportedNextProtocolList {
             supported_protocols,
         }) = parse(rec)
@@ -971,7 +968,7 @@ mod tests {
             [0, 1].as_slice()
         );
 
-        let rec = &mut [0x40, 4, 0, 4, 0, 0, 0, 1, 2, 3, 4, 5];
+        let rec = &mut [0, 9, 0, 4, 0, 0, 0, 1, 2, 3, 4, 5];
         let Ok(NtsRecord::SupportedNextProtocolList {
             supported_protocols,
         }) = parse(rec)
@@ -983,8 +980,8 @@ mod tests {
             [0, 1].as_slice()
         );
 
-        assert!(parse(&mut [0xC0, 4, 0, 4, 0, 0]).is_err());
-        assert!(parse(&mut [0xC0, 4, 0, 3, 0, 0, 1]).is_err());
+        assert!(parse(&mut [0x80, 9, 0, 4, 0, 0]).is_err());
+        assert!(parse(&mut [0x80, 9, 0, 3, 0, 0, 1]).is_err());
 
         let mut buf = vec![];
         serialize(
@@ -993,7 +990,7 @@ mod tests {
             },
             &mut buf,
         );
-        assert_eq!(buf, [0xC0, 4, 0, 4, 0, 1, 0, 2]);
+        assert_eq!(buf, [0x80, 9, 0, 4, 0, 1, 0, 2]);
 
         let mut buf = vec![];
         serialize(
@@ -1002,12 +999,12 @@ mod tests {
             },
             &mut buf,
         );
-        assert_eq!(buf, [0xC0, 4, 0, 0]);
+        assert_eq!(buf, [0x80, 9, 0, 0]);
     }
 
     #[test]
     fn test_supported_algorithm_list() {
-        let rec = &mut [0xC0, 1, 0, 0];
+        let rec = &mut [0x80, 10, 0, 0];
         let Ok(NtsRecord::SupportedAlgorithmList {
             supported_algorithms,
         }) = parse(rec)
@@ -1019,7 +1016,7 @@ mod tests {
             [].as_slice()
         );
 
-        let rec = &mut [0xC0, 1, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32];
+        let rec = &mut [0x80, 10, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32];
         let Ok(NtsRecord::SupportedAlgorithmList {
             supported_algorithms,
         }) = parse(rec)
@@ -1035,7 +1032,7 @@ mod tests {
             .as_slice()
         );
 
-        let rec = &mut [0xC0, 1, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32];
+        let rec = &mut [0x80, 10, 0, 8, 0, 0, 0, 16, 0, 1, 0, 32];
         let Ok(NtsRecord::SupportedAlgorithmList {
             supported_algorithms,
         }) = parse(rec)
@@ -1058,7 +1055,7 @@ mod tests {
             },
             &mut buf,
         );
-        assert_eq!(buf, [0xc0, 1, 0, 0]);
+        assert_eq!(buf, [0x80, 10, 0, 0]);
 
         let mut buf = vec![];
         serialize(
@@ -1069,27 +1066,27 @@ mod tests {
             },
             &mut buf,
         );
-        assert_eq!(buf, [0xc0, 1, 0, 4, 0, 0, 0, 32]);
+        assert_eq!(buf, [0x80, 10, 0, 4, 0, 0, 0, 32]);
     }
 
     #[test]
     fn test_fixed_key_request() {
-        let rec = &mut [0xC0, 2, 0, 0];
+        let rec = &mut [0x80, 12, 0, 0];
         let Ok(NtsRecord::FixedKeyRequest { c2s, s2c }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(c2s, [].as_slice() as &[u8]);
         assert_eq!(s2c, [].as_slice() as &[u8]);
 
-        let rec = &mut [0x40, 2, 0, 4, 1, 2, 3, 4];
+        let rec = &mut [0, 12, 0, 4, 1, 2, 3, 4];
         let Ok(NtsRecord::FixedKeyRequest { c2s, s2c }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(c2s, [1, 2].as_slice());
         assert_eq!(s2c, [3, 4].as_slice());
 
-        assert!(parse(&mut [0xC0, 2, 0, 3, 1, 2, 3]).is_err());
-        assert!(parse(&mut [0xC0, 2, 0, 4, 1, 2, 3]).is_err());
+        assert!(parse(&mut [0x80, 12, 0, 3, 1, 2, 3]).is_err());
+        assert!(parse(&mut [0x80, 12, 0, 4, 1, 2, 3]).is_err());
 
         let mut buf = vec![];
         serialize(
@@ -1099,24 +1096,24 @@ mod tests {
             },
             &mut buf,
         );
-        assert_eq!(buf, [0xc0, 2, 0, 4, 5, 6, 7, 8]);
+        assert_eq!(buf, [0x80, 12, 0, 4, 5, 6, 7, 8]);
     }
 
     #[test]
     fn test_server_deny() {
-        let rec = &mut [0x40, 3, 0, 5, b'h', b'e', b'l', b'l', b'o'];
+        let rec = &mut [0, 13, 0, 5, b'h', b'e', b'l', b'l', b'o'];
         let Ok(NtsRecord::NtpServerDeny { denied }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(denied, "hello");
 
-        let rec = &mut [0xC0, 3, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
+        let rec = &mut [0x80, 13, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
         let Ok(NtsRecord::NtpServerDeny { denied }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(denied, "hello");
 
-        assert!(parse(&mut [0x40, 3, 0, 5, b'h', b'e', b'l']).is_err());
+        assert!(parse(&mut [0, 13, 0, 5, b'h', b'e', b'l']).is_err());
 
         let mut buf = vec![];
         serialize(
@@ -1125,31 +1122,31 @@ mod tests {
             },
             &mut buf,
         );
-        assert_eq!(buf, &[0x40, 3, 0, 2, b'h', b'i']);
+        assert_eq!(buf, &[0, 13, 0, 2, b'h', b'i']);
     }
 
     #[test]
     fn test_authentication() {
-        let rec = &mut [0x40, 5, 0, 5, b'h', b'e', b'l', b'l', b'o'];
+        let rec = &mut [0, 14, 0, 5, b'h', b'e', b'l', b'l', b'o'];
         let Ok(NtsRecord::AuthenticationToken { key }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(key, "hello");
 
-        let rec = &mut [0xC0, 5, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
+        let rec = &mut [0x80, 14, 0, 5, b'h', b'e', b'l', b'l', b'o', b' ', b'w'];
         let Ok(NtsRecord::AuthenticationToken { key }) = parse(rec) else {
             panic!("Expected succesful parse");
         };
         assert_eq!(key, "hello");
 
-        assert!(parse(&mut [0x40, 5, 0, 5, b'h', b'e', b'l']).is_err());
+        assert!(parse(&mut [0, 14, 0, 5, b'h', b'e', b'l']).is_err());
 
         let mut buf = vec![];
         serialize(
             NtsRecord::AuthenticationToken { key: "hi".into() },
             &mut buf,
         );
-        assert_eq!(buf, &[0x40, 5, 0, 2, b'h', b'i']);
+        assert_eq!(buf, &[0, 14, 0, 2, b'h', b'i']);
     }
 
     #[test]
