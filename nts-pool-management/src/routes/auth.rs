@@ -925,7 +925,7 @@ mod tests {
         let challenge_input = html.element("input[name=captcha_challenge]");
         assert_eq!(challenge_input[0].attr("value").unwrap().len(), 32);
         let form = html.element("form#register-form");
-        assert_eq!(form[0].attr("data-captcha-difficulty"), Some("5"));
+        assert_eq!(form[0].attr("data-captcha-difficulty"), Some("6"));
         assert_eq!(form[0].attr("data-captcha-mem"), Some("8192"));
         assert_eq!(form[0].attr("data-captcha-time"), Some("1"));
         html.element("input[name=captcha_nonce]").exists();
