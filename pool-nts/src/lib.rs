@@ -931,7 +931,7 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0x80, 1, 0, 4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0, 13, 0, 4, b't', b'e',
+                0x80, 1, 0, 4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0x40, 3, 0, 4, b't', b'e',
                 b's', b't', 0x80, 0, 0, 0
             ]
         );
@@ -956,7 +956,7 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0, 14, 0, 3, b'k', b'e', b'y', 0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 1, 0,
+                0x40, 5, 0, 3, b'k', b'e', b'y', 0xCF, 1, 0, 4, b'u', b'u', b'i', b'd', 0x80, 1, 0,
                 4, 0, 0, 0, 1, 0x80, 4, 0, 4, 0, 0, 0, 1, 0x80, 0, 0, 0
             ]
         );
@@ -978,7 +978,7 @@ mod tests {
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let mut arr2 = [
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0, 13, 0, 5, b'h', b'e', b'l', b'l', b'o',
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x40, 3, 0, 5, b'h', b'e', b'l', b'l', b'o',
             0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Ordinary {
@@ -1030,7 +1030,7 @@ mod tests {
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 8, 0, 0, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 0, 0, 0, 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Ordinary {
             algorithms,
@@ -1075,7 +1075,7 @@ mod tests {
         assert_eq!(denied_servers, [] as [String; 0]);
 
         let mut arr5 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Ordinary {
             algorithms,
@@ -1101,15 +1101,15 @@ mod tests {
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr2).is_err());
         let mut arr3 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 9, 0, 0, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 4, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr3).is_err());
         let mut arr4 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 10, 0, 0, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 1, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr4).is_err());
         let mut arr5 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 12, 0, 4, 1, 2, 3, 4, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 2, 0, 4, 1, 2, 3, 4, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr5).is_err());
         let mut arr6 = [
@@ -1125,8 +1125,8 @@ mod tests {
     #[test]
     fn test_client_request_uuid_basic() {
         let mut arr = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+            b'c', b'd', 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Uuid {
             algorithms,
@@ -1150,8 +1150,8 @@ mod tests {
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr1).is_err());
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'c', b'd', 0, 14, 0, 2, b'a',
-            b'b',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0xCF, 1, 0, 2, b'c', b'd', 0x40, 5, 0, 2,
+            b'a', b'b',
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr2).is_err());
     }
@@ -1159,8 +1159,8 @@ mod tests {
     #[test]
     fn test_client_request_uuid_ignores_non_problematic() {
         let mut arr1 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+            b'c', b'd', 0x80, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Uuid {
             algorithms,
@@ -1177,8 +1177,8 @@ mod tests {
         assert_eq!(uuid, "cd");
 
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 0, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 0, 2, b'a', b'b', 0xCF, 1, 0, 2,
+            b'c', b'd', 0x80, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
         ];
         let Ok(ClientRequest::Uuid {
             algorithms,
@@ -1198,62 +1198,62 @@ mod tests {
     #[test]
     fn test_client_request_uuid_reject_problematic() {
         let mut arr1 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 1, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr1).is_err());
         let mut arr2 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 2, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr2).is_err());
         let mut arr3 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 3, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr3).is_err());
         let mut arr4 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 4, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr4).is_err());
         let mut arr5 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0x80, 5, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr5).is_err());
         let mut arr6 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 9, 0, 0, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0xC0, 4, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr6).is_err());
         let mut arr7 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 10, 0, 0, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0xC0, 1, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr7).is_err());
         let mut arr8 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 14, 0, 0, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0xC0, 5, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr8).is_err());
         let mut arr9 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0x80, 12, 0, 2, 1, 2, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr9).is_err());
         let mut arr10 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0, 13, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0x40, 3, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr10).is_err());
         let mut arr11 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
-            b'd', 0, 14, 0, 2, 5, 6, 0x80, 0, 0, 0,
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            b'd', 0x40, 5, 0, 2, 5, 6, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr11).is_err());
         let mut arr12 = [
-            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0, 14, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
+            0x80, 4, 0, 2, 0, 0, 0x80, 1, 0, 2, 0, 0, 0x40, 5, 2, b'a', b'b', 0xCF, 1, 0, 2, b'c',
             b'd', 0xCF, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ClientRequest::parse, &mut arr12).is_err());
@@ -1276,7 +1276,7 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0, 14, 0, 4, b'a', b'b', b'c', b'd', 0x80, 10, 0, 0, 0x80, 9, 0, 0, 0x80, 0, 0, 0
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x80, 0, 0, 0
             ]
         );
 
@@ -1295,7 +1295,7 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0, 14, 0, 4, b'a', b'b', b'c', b'd', 0x80, 10, 0, 0, 0x80, 9, 0, 0, 0, 8, 0, 0,
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 1, 0, 0, 0xC0, 4, 0, 0, 0x40, 0, 0, 0,
                 0x80, 0, 0, 0
             ]
         );
@@ -1304,7 +1304,7 @@ mod tests {
     #[test]
     fn test_server_information_response_basic() {
         let mut rec = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(ServerInformationResponse::parse, &mut rec) else {
             panic!("Expected succesfull parse");
@@ -1321,18 +1321,18 @@ mod tests {
 
     #[test]
     fn test_server_information_request_rejects_incomplete() {
-        let mut arr1 = [0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0];
+        let mut arr1 = [0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr1).is_err());
-        let mut arr2 = [0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 0, 0, 0];
+        let mut arr2 = [0xC0, 1, 0, 4, 0, 0, 0, 16, 0x80, 0, 0, 0];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr2).is_err());
-        let mut arr3 = [0x80, 9, 0, 2, 0, 0, 0x80, 0, 0, 0];
+        let mut arr3 = [0xC0, 4, 0, 2, 0, 0, 0x80, 0, 0, 0];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr3).is_err());
     }
 
     #[test]
     fn test_server_information_request_rejects_unknown_critical() {
         let mut arr = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x80, 40, 0, 0, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 40, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr).is_err());
     }
@@ -1340,28 +1340,28 @@ mod tests {
     #[test]
     fn test_server_information_request_rejects_problematic() {
         let mut arr1 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x80, 12, 0, 2, 1, 2, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr1).is_err());
         let mut arr2 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 13, 0, 2, b'h', b'i', 0x80, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x40, 3, 0, 2, b'h', b'i', 0x80, 0, 0,
             0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr2).is_err());
         let mut arr3 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x80, 5, 0, 2, 1, 2, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 5, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr3).is_err());
         let mut arr4 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 4, 0, 2, 0, 1, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 4, 0, 2, 0, 1, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr4).is_err());
         let mut arr5 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 1, 0, 2, 0, 0, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 1, 0, 2, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr5).is_err());
         let mut arr6 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x4F, 1, 0, 2, 1, 2, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x4F, 1, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(ServerInformationResponse::parse, &mut arr6).is_err());
     }
@@ -1374,7 +1374,7 @@ mod tests {
             Err(NtsError::Error(ErrorCode::InternalServerError))
         ));
         let mut arr2 = [
-            0x80, 3, 0, 2, 0, 0, 0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x80, 0, 0, 0,
+            0x80, 3, 0, 2, 0, 0, 0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(matches!(
             dbg!(pwrap!(ServerInformationResponse::parse, &mut arr2)),
@@ -1385,7 +1385,7 @@ mod tests {
     #[test]
     fn test_server_information_request_ignores_irrelevant() {
         let mut arr1 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 8, 0, 0, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x40, 0, 0, 0, 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(ServerInformationResponse::parse, &mut arr1) else {
             panic!("Expected succesfull parse");
@@ -1400,7 +1400,7 @@ mod tests {
         );
 
         let mut arr2 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 6, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(ServerInformationResponse::parse, &mut arr2) else {
             panic!("Expected succesfull parse");
@@ -1415,7 +1415,7 @@ mod tests {
         );
 
         let mut arr3 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 7, 0, 2, 0, 123, 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(ServerInformationResponse::parse, &mut arr3) else {
             panic!("Expected succesfull parse");
@@ -1430,7 +1430,7 @@ mod tests {
         );
 
         let mut arr4 = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0, 50, 0, 0, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0, 50, 0, 0, 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(ServerInformationResponse::parse, &mut arr4) else {
             panic!("Expected succesfull parse");
@@ -1442,7 +1442,7 @@ mod tests {
         assert_eq!(response.supported_protocols.iter().collect::<Vec<_>>(), [0]);
 
         let mut arr = [
-            0x80, 10, 0, 4, 0, 0, 0, 16, 0x80, 9, 0, 2, 0, 0, 0x4f, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
+            0xC0, 1, 0, 4, 0, 0, 0, 16, 0xC0, 4, 0, 2, 0, 0, 0x4f, 0, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(ServerInformationResponse::parse, &mut arr) else {
             panic!("Expected succesfull parse");
@@ -1475,7 +1475,7 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0, 14, 0, 4, b'a', b'b', b'c', b'd', 0x80, 12, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
                 1, 0x80, 4, 0, 2, 0, 2, 0x80, 0, 0, 0
             ]
         );
@@ -1499,8 +1499,8 @@ mod tests {
         assert_eq!(
             buf,
             [
-                0, 14, 0, 4, b'a', b'b', b'c', b'd', 0x80, 12, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
-                1, 0x80, 4, 0, 2, 0, 2, 0, 8, 0, 0, 0x80, 0, 0, 0
+                0x40, 5, 0, 4, b'a', b'b', b'c', b'd', 0xC0, 2, 0, 4, 1, 2, 3, 4, 0x80, 1, 0, 2, 0,
+                1, 0x80, 4, 0, 2, 0, 2, 0x40, 0, 0, 0, 0x80, 0, 0, 0
             ]
         );
     }
@@ -1580,7 +1580,7 @@ mod tests {
 
         let mut arr = [
             0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 5, 0, 2, 1, 2, 0x80, 5, 0, 2, 3, 4,
-            0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 5, 0, 8, 0, 0, 0x80, 0, 0, 0,
+            0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 5, 0x40, 0, 0, 0, 0x80, 0, 0, 0,
         ];
         let Ok(response) = pwrap!(KeyExchangeResponse::parse, &mut arr) else {
             panic!("Expected succesful parse");
@@ -1633,19 +1633,19 @@ mod tests {
     #[test]
     fn test_key_exchange_response_reject_problematic() {
         let mut arr1 = [
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 9, 0, 0, 0x80, 0, 0, 0,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 4, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(KeyExchangeResponse::parse, &mut arr1).is_err());
         let mut arr2 = [
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 10, 0, 0, 0x80, 0, 0, 0,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 1, 0, 0, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(KeyExchangeResponse::parse, &mut arr2).is_err());
         let mut arr3 = [
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 12, 0, 2, 1, 2, 0x80, 0, 0, 0,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 2, 0, 2, 1, 2, 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(KeyExchangeResponse::parse, &mut arr3).is_err());
         let mut arr4 = [
-            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0x80, 13, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
+            0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0xC0, 3, 0, 2, b'h', b'i', 0x80, 0, 0, 0,
         ];
         assert!(pwrap!(KeyExchangeResponse::parse, &mut arr4).is_err());
         let mut arr5 = [
@@ -1856,7 +1856,7 @@ mod tests {
             buf,
             [
                 0x80, 1, 0, 2, 0, 0, 0x80, 4, 0, 2, 0, 4, 0, 5, 0, 3, 1, 2, 3, 0, 5, 0, 2, 4, 5,
-                0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 15, 0, 8, 0, 0, 0x80, 0, 0, 0
+                0x80, 6, 0, 2, b'h', b'i', 0x80, 7, 0, 2, 0, 15, 0x40, 0, 0, 0, 0x80, 0, 0, 0
             ]
         );
     }
