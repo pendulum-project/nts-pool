@@ -38,6 +38,10 @@ pub fn create_router() -> Router<AppState> {
         .route("/login", get(auth::login).post(auth::login_submit))
         .route("/register", get(auth::register).post(auth::register_submit))
         .route(
+            "/register/submit",
+            get(auth::register_confirm).post(auth::register_confirm_submit),
+        )
+        .route(
             "/register/activate",
             get(auth::register_activate).post(auth::register_activate_submit),
         )
