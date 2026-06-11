@@ -34,6 +34,8 @@ pub struct AppConfig {
     pub monitor_ntp_timeout: Duration,
     // timesource weight configuration
     pub max_timesource_weight: i32,
+    // Registration captcha configuration
+    pub captcha_params: crate::captcha::PowParams,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,6 +138,30 @@ impl AppConfig {
             .parse()
             .wrap_err("NTSPOOL_MAX_TIMESOURCE_WEIGHT should be an integer")?;
 
+        // Registration captcha configuration
+        let default_captcha_params = crate::captcha::PowParams::default();
+        let captcha_params = crate::captcha::PowParams {
+            difficulty: match std::env::var("NTSPOOL_CAPTCHA_DIFFICULTY") {
+                Ok(v) => v
+                    .parse()
+                    .wrap_err("NTSPOOL_CAPTCHA_DIFFICULTY should be a number of bits")?,
+                Err(_) => default_captcha_params.difficulty,
+            },
+            mem_kib: match std::env::var("NTSPOOL_CAPTCHA_MEM_KIB") {
+                Ok(v) => v
+                    .parse()
+                    .wrap_err("NTSPOOL_CAPTCHA_MEM_KIB should be a number of KiB")?,
+                Err(_) => default_captcha_params.mem_kib,
+            },
+            time_cost: match std::env::var("NTSPOOL_CAPTCHA_TIME_COST") {
+                Ok(v) => v
+                    .parse()
+                    .wrap_err("NTSPOOL_CAPTCHA_TIME_COST should be an integer")?,
+                Err(_) => default_captcha_params.time_cost,
+            },
+        };
+        captcha_params.validate()?;
+
         Ok(Self {
             base_url,
             poolsrv_name,
@@ -158,6 +184,7 @@ impl AppConfig {
             monitor_nts_timeout,
             monitor_ntp_timeout,
             max_timesource_weight,
+            captcha_params,
         })
     }
 }
@@ -186,6 +213,7 @@ impl Default for AppConfig {
             monitor_nts_timeout: Duration::from_millis(1000),
             monitor_ntp_timeout: Duration::from_millis(1000),
             max_timesource_weight: 10,
+            captcha_params: crate::captcha::PowParams::default(),
         }
     }
 }

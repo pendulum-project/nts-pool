@@ -1,14 +1,29 @@
 {% extends "../layout.html.j2" %}
 
+{% block head %}
+  <script src="/assets/argon2-bundled.min.js" defer></script>
+  <script src="/assets/captcha.js" defer></script>
+{% endblock %}
+
 {% block content %}
   <h1>Register</h1>
   <section class="form">
   {% if !fields_with_errors.is_empty() %}
     <aside class="error">
+      {% if fields_with_errors.contains(&"captcha") %}
+      <p>We could not verify that your browser completed the anti-spam check, please try again.</p>
+      {% else %}
       <p>There were some errors in the register form, please fix the invalid fields.</p>
+      {% endif %}
     </aside>
   {% endif %}
-    <form method="post">
+    <form
+      method="post"
+      id="register-form"
+      data-captcha-difficulty="{{ captcha.params.difficulty }}"
+      data-captcha-mem="{{ captcha.params.mem_kib }}"
+      data-captcha-time="{{ captcha.params.time_cost }}"
+    >
       <fieldset>
         <label for="email">E-mail</label>
         <input id="email" name="email" type="email" autocomplete="email username" value="{{ data_email.as_deref().unwrap_or_default() }}"required {% if fields_with_errors.contains(&"email") %}class="error"{% endif %} />
@@ -35,7 +50,15 @@
           <span>I Agree to <a href="/terms">the Terms and Conditions</a></span>
         </label>
       </fieldset>
+      <fieldset class="extra-confirm" aria-hidden="true">
+        <label for="website">Website</label>
+        <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+      </fieldset>
+      <input type="hidden" name="captcha_challenge" value="{{ captcha.challenge }}" />
+      <input type="hidden" name="captcha_nonce" value="" />
       <button type="submit">Register</button>
+      <p id="captcha-status" hidden>Verifying that you are human, this should only take a few seconds&hellip;</p>
+      <noscript><p>JavaScript is required to complete the anti-spam check when registering.</p></noscript>
     </form>
   </section>
 {% endblock %}

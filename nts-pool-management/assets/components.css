@@ -394,3 +394,12 @@ table.autowidth {
 .nowrap {
   white-space: nowrap;
 }
+
+/* Anti-spam field: invisible to humans and must remain empty. */
+form fieldset.extra-confirm {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

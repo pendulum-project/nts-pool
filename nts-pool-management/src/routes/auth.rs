@@ -6,7 +6,7 @@ use axum::{
     extract::{Query, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::{CookieJar, PrivateCookieJar};
 use eyre::{Context, OptionExt};
 use jsonwebtoken::EncodingKey;
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,8 @@ use crate::{
         JwtClaims, UnsafeLoggedInUser, generate_session_revoke_token, is_too_large_password,
         is_valid_password, login_into,
     },
+    captcha,
+    config::AppConfig,
     context::AppContext,
     email::Mailer,
     error::AppError,
@@ -167,9 +169,15 @@ struct RegisterPageTemplate {
     app: AppContext,
     fields_with_errors: Vec<&'static str>,
     data_email: Option<String>,
+    captcha: captcha::Challenge,
 }
 
-pub async fn register(user: Option<UnsafeLoggedInUser>, app: AppContext) -> impl IntoResponse {
+pub async fn register(
+    user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
+    State(config): State<AppConfig>,
+    captcha_jar: PrivateCookieJar,
+) -> impl IntoResponse {
     if let Some(user) = user {
         if !user.is_activated() {
             return Redirect::to("/register/activate").into_response();
@@ -180,12 +188,17 @@ pub async fn register(user: Option<UnsafeLoggedInUser>, app: AppContext) -> impl
         }
     }
 
-    HtmlTemplate(RegisterPageTemplate {
-        app,
-        fields_with_errors: Vec::new(),
-        data_email: None,
-    })
-    .into_response()
+    let (captcha_jar, challenge) = captcha::issue_challenge(captcha_jar, config.captcha_params);
+    (
+        captcha_jar,
+        HtmlTemplate(RegisterPageTemplate {
+            app,
+            fields_with_errors: Vec::new(),
+            data_email: None,
+            captcha: challenge,
+        }),
+    )
+        .into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -194,15 +207,25 @@ pub struct RegisterForm {
     password: String,
     confirm_password: String,
     accept_terms: bool,
+    #[serde(default)]
+    captcha_challenge: String,
+    #[serde(default)]
+    captcha_nonce: String,
+    /// Honeypot, hidden from real users and must remain empty.
+    #[serde(default)]
+    website: String,
 }
 
+#[allow(clippy::too_many_arguments, reason = "every argument is an extractor")]
 pub async fn register_submit(
     auth_user: Option<UnsafeLoggedInUser>,
     app: AppContext,
     State(pool): State<PgPool>,
     State(encoding_key): State<EncodingKey>,
     State(mailer): State<Mailer>,
+    State(config): State<AppConfig>,
     cookie_jar: CookieJar,
+    captcha_jar: PrivateCookieJar,
     Form(data): Form<RegisterForm>,
 ) -> Result<impl IntoResponse, AppError> {
     if auth_user.is_some() {
@@ -210,6 +233,16 @@ pub async fn register_submit(
     }
 
     let mut fields_with_errors = Vec::new();
+
+    // the challenge is always consumed, a failed attempt requires a new one
+    let (captcha_jar, challenge) = captcha::take_challenge(captcha_jar);
+    if !data.website.is_empty()
+        || !challenge.is_some_and(|challenge| {
+            captcha::verify_solution(&challenge, &data.captcha_challenge, &data.captcha_nonce)
+        })
+    {
+        fields_with_errors.push("captcha");
+    }
 
     if !data.email.contains('@') || lettre::Address::from_str(&data.email).is_err() {
         fields_with_errors.push("email");
@@ -235,12 +268,17 @@ pub async fn register_submit(
     }
 
     if !fields_with_errors.is_empty() {
-        Ok(HtmlTemplate(RegisterPageTemplate {
-            app,
-            fields_with_errors,
-            data_email: Some(data.email),
-        })
-        .into_response())
+        let (captcha_jar, challenge) = captcha::issue_challenge(captcha_jar, config.captcha_params);
+        Ok((
+            captcha_jar,
+            HtmlTemplate(RegisterPageTemplate {
+                app,
+                fields_with_errors,
+                data_email: Some(data.email),
+                captcha: challenge,
+            }),
+        )
+            .into_response())
     } else {
         // we start by storing the new user in the database
         let (activation_token, activation_expires_at) = crate::auth::generate_activation_token();
@@ -277,7 +315,7 @@ pub async fn register_submit(
         // we log the user in and send them to the confirmation page, waiting for them entering the activation token
         let cookie_jar = crate::auth::login_into(&user, None, None, &encoding_key, cookie_jar)?;
 
-        Ok((cookie_jar, Redirect::to("/register/activate")).into_response())
+        Ok((captcha_jar, cookie_jar, Redirect::to("/register/activate")).into_response())
     }
 }
 
@@ -625,10 +663,16 @@ pub async fn reset_password_submit(
 #[cfg(test)]
 mod tests {
     use axum::{Form, extract::State, response::IntoResponse};
-    use axum_extra::extract::CookieJar;
+    use axum_extra::extract::{
+        CookieJar, PrivateCookieJar,
+        cookie::{Cookie, Key},
+    };
 
     use crate::{
+        captcha,
+        config::AppConfig,
         context::AppContext,
+        email::{MailTransport, Mailer},
         models::{
             authentication_method::{AuthenticationVariant, PasswordAuthentication},
             user::{NewUser, UserRole},
@@ -796,5 +840,189 @@ mod tests {
                 .get(axum::http::header::SET_COOKIE)
                 .is_some()
         );
+    }
+
+    /// A mailer that is never used by the tests, but is required to call the
+    /// register_submit handler.
+    fn test_mailer() -> Mailer {
+        Mailer::new(
+            MailTransport::from_url("smtp://localhost:25")
+                .unwrap()
+                .build(),
+            "noreply@example.com".parse().unwrap(),
+        )
+    }
+
+    /// A database pool that connects lazily, for tests that never touch it.
+    fn test_lazy_pool() -> sqlx::PgPool {
+        sqlx::PgPool::connect_lazy("postgres://localhost:5432/unused").unwrap()
+    }
+
+    /// A register form that passes every check except the captcha related
+    /// fields, without requiring a database (the invalid email short-circuits
+    /// before the existence lookup).
+    fn register_form_without_captcha() -> super::RegisterForm {
+        super::RegisterForm {
+            email: "not-an-email".into(),
+            password: "some-password".into(),
+            confirm_password: "some-password".into(),
+            accept_terms: true,
+            captcha_challenge: String::new(),
+            captcha_nonce: String::new(),
+            website: String::new(),
+        }
+    }
+
+    async fn submit_register(
+        config: AppConfig,
+        captcha_jar: PrivateCookieJar,
+        data: super::RegisterForm,
+    ) -> axum::response::Response {
+        crate::routes::auth::register_submit(
+            None,
+            AppContext::default(),
+            State(test_lazy_pool()),
+            State(jsonwebtoken::EncodingKey::from_secret(b"secret")),
+            State(test_mailer()),
+            State(config),
+            CookieJar::new(),
+            captcha_jar,
+            Form(data),
+        )
+        .await
+        .unwrap()
+        .into_response()
+    }
+
+    fn captcha_cookie_header(response: &axum::response::Response) -> String {
+        response
+            .headers()
+            .get_all(axum::http::header::SET_COOKIE)
+            .iter()
+            .map(|v| v.to_str().unwrap())
+            .filter(|v| v.starts_with(&format!("{}=", captcha::CAPTCHA_COOKIE_NAME)))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_register_page_issues_challenge() {
+        let response = crate::routes::auth::register(
+            None,
+            AppContext::default(),
+            State(AppConfig::default()),
+            PrivateCookieJar::new(Key::generate()),
+        )
+        .await
+        .into_response();
+        assert!(response.status().is_success());
+
+        // a challenge cookie is set
+        assert!(!captcha_cookie_header(&response).is_empty());
+
+        let html = response.into_html().await;
+
+        // the challenge and its parameters are embedded for the solver script
+        let challenge_input = html.element("input[name=captcha_challenge]");
+        assert_eq!(challenge_input[0].attr("value").unwrap().len(), 32);
+        let form = html.element("form#register-form");
+        assert_eq!(form[0].attr("data-captcha-difficulty"), Some("5"));
+        assert_eq!(form[0].attr("data-captcha-mem"), Some("8192"));
+        assert_eq!(form[0].attr("data-captcha-time"), Some("1"));
+        html.element("input[name=captcha_nonce]").exists();
+        html.element("input[name=website]").exists();
+        html.element("script[src='/assets/captcha.js']").exists();
+        html.element("script[src='/assets/argon2-bundled.min.js']")
+            .exists();
+    }
+
+    #[tokio::test]
+    async fn test_register_submit_rejects_missing_captcha() {
+        let response = submit_register(
+            AppConfig::default(),
+            PrivateCookieJar::new(Key::generate()),
+            register_form_without_captcha(),
+        )
+        .await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+
+        // a fresh challenge is issued for the retry
+        assert!(!captcha_cookie_header(&response).is_empty());
+
+        let html = response.into_html().await;
+        html.element("aside.error").contains_text("anti-spam check");
+    }
+
+    #[tokio::test]
+    async fn test_register_submit_rejects_replayed_challenge() {
+        // a cookie jar that no longer contains the challenge, as after a
+        // previous submission consumed it
+        let jar = PrivateCookieJar::new(Key::generate());
+        let (jar, challenge) = captcha::issue_challenge(jar, captcha::PowParams::default());
+        let jar = jar.remove(Cookie::from(captcha::CAPTCHA_COOKIE_NAME));
+
+        let response = submit_register(
+            AppConfig::default(),
+            jar,
+            super::RegisterForm {
+                captcha_challenge: challenge.challenge,
+                captcha_nonce: "0".into(),
+                ..register_form_without_captcha()
+            },
+        )
+        .await;
+
+        let html = response.into_html().await;
+        html.element("aside.error").contains_text("anti-spam check");
+    }
+
+    #[tokio::test]
+    async fn test_register_submit_rejects_filled_honeypot() {
+        let mut config = AppConfig::default();
+        config.captcha_params.difficulty = 0;
+
+        let jar = PrivateCookieJar::new(Key::generate());
+        let (jar, challenge) = captcha::issue_challenge(jar, config.captcha_params);
+
+        let response = submit_register(
+            config,
+            jar,
+            super::RegisterForm {
+                captcha_challenge: challenge.challenge,
+                captcha_nonce: "0".into(),
+                website: "https://spam.example.com".into(),
+                ..register_form_without_captcha()
+            },
+        )
+        .await;
+
+        let html = response.into_html().await;
+        html.element("aside.error").contains_text("anti-spam check");
+    }
+
+    #[tokio::test]
+    async fn test_register_submit_accepts_valid_captcha() {
+        let mut config = AppConfig::default();
+        config.captcha_params.difficulty = 0;
+
+        let jar = PrivateCookieJar::new(Key::generate());
+        let (jar, challenge) = captcha::issue_challenge(jar, config.captcha_params);
+
+        // at difficulty 0 any nonce solves the challenge; the invalid email
+        // still fails, proving the captcha check itself passed
+        let response = submit_register(
+            config,
+            jar,
+            super::RegisterForm {
+                captcha_challenge: challenge.challenge,
+                captcha_nonce: "0".into(),
+                ..register_form_without_captcha()
+            },
+        )
+        .await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+
+        let html = response.into_html().await;
+        html.element("aside.error")
+            .contains_text("fix the invalid fields");
     }
 }

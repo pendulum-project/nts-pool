@@ -39,3 +39,8 @@ The management server is configured primarily through environment variables, whi
 
 ## Time source weight configuration
 - `NTSPOOL_MAX_TIMESOURCE_WEIGHT`: Maximum weight that can be given to a timesource by the user. (Example: `10`)
+
+## Registration captcha configuration
+- `NTSPOOL_CAPTCHA_DIFFICULTY`: Difficulty of the registration proof-of-work captcha, as the number of leading zero bits required in the hash output, at most 32. Each extra bit doubles the average solve time in the browser, optional.
+- `NTSPOOL_CAPTCHA_MEM_KIB`: Argon2 memory cost of the registration captcha in KiB, between 8 and 262144, optional.
+- `NTSPOOL_CAPTCHA_TIME_COST`: Argon2 time cost (iterations) of the registration captcha, between 1 and 16, optional.
