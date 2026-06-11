@@ -201,6 +201,27 @@ pub async fn register(
         .into_response()
 }
 
+#[derive(Template)]
+#[template(path = "login/register_confirm.html.j2")]
+struct RegisterConfirmTemplate {
+    app: AppContext,
+}
+
+pub async fn register_confirm(
+    _auth_user: Option<UnsafeLoggedInUser>,
+    app: AppContext,
+) -> Result<impl IntoResponse, AppError> {
+    Ok(HtmlTemplate(RegisterConfirmTemplate { app }).into_response())
+}
+
+pub async fn register_confirm_submit(
+    auth_user: UnsafeLoggedInUser,
+    State(mailer): State<Mailer>,
+) -> Result<impl IntoResponse, AppError> {
+    crate::email::send_activation_email(&mailer, &auth_user).await?;
+    Ok(Redirect::to("/register/activate").into_response())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RegisterForm {
     email: String,
@@ -222,7 +243,6 @@ pub async fn register_submit(
     app: AppContext,
     State(pool): State<PgPool>,
     State(encoding_key): State<EncodingKey>,
-    State(mailer): State<Mailer>,
     State(config): State<AppConfig>,
     cookie_jar: CookieJar,
     captcha_jar: PrivateCookieJar,
@@ -309,13 +329,10 @@ pub async fn register_submit(
 
         tx.commit().await.wrap_err("Transaction commit failed")?;
 
-        // we send an activation email to the user
-        crate::email::send_activation_email(&mailer, &user).await?;
-
         // we log the user in and send them to the confirmation page, waiting for them entering the activation token
         let cookie_jar = crate::auth::login_into(&user, None, None, &encoding_key, cookie_jar)?;
 
-        Ok((captcha_jar, cookie_jar, Redirect::to("/register/activate")).into_response())
+        Ok((captcha_jar, cookie_jar, Redirect::to("/register/submit")).into_response())
     }
 }
 
@@ -672,7 +689,6 @@ mod tests {
         captcha,
         config::AppConfig,
         context::AppContext,
-        email::{MailTransport, Mailer},
         models::{
             authentication_method::{AuthenticationVariant, PasswordAuthentication},
             user::{NewUser, UserRole},
@@ -842,17 +858,6 @@ mod tests {
         );
     }
 
-    /// A mailer that is never used by the tests, but is required to call the
-    /// register_submit handler.
-    fn test_mailer() -> Mailer {
-        Mailer::new(
-            MailTransport::from_url("smtp://localhost:25")
-                .unwrap()
-                .build(),
-            "noreply@example.com".parse().unwrap(),
-        )
-    }
-
     /// A database pool that connects lazily, for tests that never touch it.
     fn test_lazy_pool() -> sqlx::PgPool {
         sqlx::PgPool::connect_lazy("postgres://localhost:5432/unused").unwrap()
@@ -883,7 +888,6 @@ mod tests {
             AppContext::default(),
             State(test_lazy_pool()),
             State(jsonwebtoken::EncodingKey::from_secret(b"secret")),
-            State(test_mailer()),
             State(config),
             CookieJar::new(),
             captcha_jar,
