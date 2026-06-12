@@ -62,6 +62,7 @@
       {% endif %}
 
       <aside class="info experimental-alert">
+        {% if app.testing %} This is a test environment for the pool at <a href="https://sectime.org">sectime.org</a>. See that site for a more stable pool.<br/><br/> {% endif %}
         The NTS pool is experimental. Please help us by leaving your feedback and reporting problems
         at <a href="https://github.com/pendulum-project/nts-pool/discussions">our discussion forum</a>,
         <a href="https://github.com/pendulum-project/nts-pool/issues">our issue tracker</a>, or via
