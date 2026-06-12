@@ -171,6 +171,8 @@ management:
   log: info
   # Update this to a new value to trigger setting up a new set of management pods
   restartBump: 1
+  # Whether the site should refer to the production pool.
+  testing: "false"
   # Override global image settings for the management service
   image:
     pullSecrets: null

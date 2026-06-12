@@ -36,6 +36,8 @@ pub struct AppConfig {
     pub max_timesource_weight: i32,
     // Registration captcha configuration
     pub captcha_params: crate::captcha::PowParams,
+    // Whether the site is in testing mode
+    pub testing: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,6 +164,11 @@ impl AppConfig {
         };
         captcha_params.validate()?;
 
+        // Site testing mode configuration
+        let testing = std::env::var("NTSPOOL_TESTING").map_or(Err(eyre::eyre!("")), |v| {
+            v.parse().wrap_err("NTSPOOL_TESTING should be a boolean")
+        })?;
+
         Ok(Self {
             base_url,
             poolsrv_name,
@@ -185,6 +192,7 @@ impl AppConfig {
             monitor_ntp_timeout,
             max_timesource_weight,
             captcha_params,
+            testing,
         })
     }
 }
@@ -214,6 +222,7 @@ impl Default for AppConfig {
             monitor_ntp_timeout: Duration::from_millis(1000),
             max_timesource_weight: 10,
             captcha_params: crate::captcha::PowParams::default(),
+            testing: true,
         }
     }
 }
