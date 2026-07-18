@@ -165,7 +165,7 @@ impl AppConfig {
         captcha_params.validate()?;
 
         // Site testing mode configuration
-        let testing = std::env::var("NTSPOOL_TESTING").map_or(Err(eyre::eyre!("")), |v| {
+        let testing = std::env::var("NTSPOOL_TESTING").map_or(Ok(false), |v| {
             v.parse().wrap_err("NTSPOOL_TESTING should be a boolean")
         })?;
 
