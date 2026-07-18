@@ -22,10 +22,10 @@ pub async fn time_source_fixture(
 
     impl GeoLookupSource for TestGeoSource {
         fn lookup(&self, _ip: std::net::IpAddr) -> Result<GeoLookupResult, eyre::Error> {
-            return Ok(GeoLookupResult::new(
+            Ok(GeoLookupResult::new(
                 Some("NL".into()),
                 Some("EUROPE".into()),
-            ));
+            ))
         }
     }
 

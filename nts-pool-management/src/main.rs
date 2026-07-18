@@ -178,7 +178,7 @@ async fn main() {
             .begin()
             .await
             .expect("Failed to start database transaction for fixtures");
-        fixtures::default_fixture(&mut *tx)
+        fixtures::default_fixture(&mut tx)
             .await
             .expect("Failed to load default fixture");
         tx.commit().await.expect("Failed to load fixtures");

@@ -442,7 +442,7 @@ mod tests {
             .expect("Failed to create test handler");
         let inner = authority.inner.lock().unwrap().clone();
 
-        for (_, region) in inner.regions.iter() {
+        for region in inner.regions.values() {
             assert!(region.contains(&Name::from_ascii("pool.test.").unwrap().into()));
 
             for record in test_lookup(
