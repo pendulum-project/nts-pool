@@ -397,7 +397,7 @@ impl ServerManager for GeographicServerManager {
     ) -> Option<Self::Server<'_>> {
         debug!("Assigning server through geolocation");
         let inner = self.inner.read().unwrap().clone();
-        let regions = if address.is_ipv4() {
+        let regions = if address.ip().to_canonical().is_ipv4() {
             &inner.regions_ipv4
         } else {
             &inner.regions_ipv6
@@ -1202,18 +1202,6 @@ mod tests {
         crate::test_init();
         let servers: Box<_> = [
             KeyExchangeServer {
-                uuid: "UUID-both".into(),
-                domain: "both.test".into(),
-                server_name: ServerName::try_from("both.test").unwrap(),
-                connection_address: ("both.test".into(), 4460),
-                base_key_index: 0,
-                randomizer: "".into(),
-                weight: 1,
-                regions: vec![],
-                ipv4_capable: true,
-                ipv6_capable: true,
-            },
-            KeyExchangeServer {
                 uuid: "UUID-ipv4".into(),
                 domain: "ipv4.test".into(),
                 server_name: ServerName::try_from("ipv4.test").unwrap(),
@@ -1279,6 +1267,11 @@ mod tests {
 
         let ipv4 = manager
             .assign_server("127.0.0.1:4460".parse().unwrap(), None, &[])
+            .unwrap();
+        assert!(ipv4.inner.servers[ipv4.index].ipv4_capable);
+
+        let ipv4 = manager
+            .assign_server("[::ffff:127.0.0.1]:4460".parse().unwrap(), None, &[])
             .unwrap();
         assert!(ipv4.inner.servers[ipv4.index].ipv4_capable);
 
