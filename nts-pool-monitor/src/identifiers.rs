@@ -54,11 +54,11 @@ mod tests {
 
     #[test]
     fn referenceid_kiss_codes() {
-        let a = [b'R', b'S', b'T', b'R'];
+        let a = *b"RSTR";
         let b = ReferenceId::from_bytes(a);
         assert!(b.is_rstr());
 
-        let a = [b'D', b'E', b'N', b'Y'];
+        let a = *b"DENY";
         let b = ReferenceId::from_bytes(a);
         assert!(b.is_deny());
     }

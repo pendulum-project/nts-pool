@@ -90,7 +90,7 @@ impl ErrorCode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum WarningCode {
+pub enum WarningCode {
     Unknown(u16),
 }
 

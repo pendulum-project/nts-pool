@@ -175,6 +175,12 @@ impl FixtureContext {
     }
 }
 
+impl Default for FixtureContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 type FixtureFn = for<'a> fn(
     &'a mut PgConnection,
     FixtureContext,
@@ -205,6 +211,12 @@ impl FixtureRunner {
         }
 
         Ok(context)
+    }
+}
+
+impl Default for FixtureRunner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
