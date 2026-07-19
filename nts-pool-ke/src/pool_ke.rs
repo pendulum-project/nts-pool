@@ -415,6 +415,9 @@ impl<S: ServerManager + 'static> NtsPoolKe<S> {
             source_address = addr;
         }
 
+        let source_address =
+            SocketAddr::new(source_address.ip().to_canonical(), source_address.port());
+
         debug!("Handling client with source address {}", source_address);
 
         // handle the initial client to pool
