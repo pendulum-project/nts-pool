@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::{Arc, OnceLock, RwLock},
     time::Duration,
 };
@@ -44,9 +44,9 @@ pub enum ConnectionType {
 
 impl From<SocketAddr> for ConnectionType {
     fn from(value: SocketAddr) -> Self {
-        match value {
-            SocketAddr::V4(_) => ConnectionType::IpV4,
-            SocketAddr::V6(_) => ConnectionType::IpV6,
+        match value.ip().to_canonical() {
+            IpAddr::V4(_) => ConnectionType::IpV4,
+            IpAddr::V6(_) => ConnectionType::IpV6,
         }
     }
 }
@@ -54,13 +54,12 @@ impl From<SocketAddr> for ConnectionType {
 impl ConnectionType {
     #[must_use]
     fn is_of_type(&self, a: SocketAddr) -> bool {
-        match (self, a) {
-            (ConnectionType::IpV4, SocketAddr::V4(_))
-            | (ConnectionType::IpV6, SocketAddr::V6(_))
-            | (ConnectionType::Either, SocketAddr::V4(_))
-            | (ConnectionType::Either, SocketAddr::V6(_)) => true,
-            (ConnectionType::IpV4, SocketAddr::V6(_))
-            | (ConnectionType::IpV6, SocketAddr::V4(_)) => false,
+        match (self, a.ip().to_canonical()) {
+            (ConnectionType::IpV4, IpAddr::V4(_))
+            | (ConnectionType::IpV6, IpAddr::V6(_))
+            | (ConnectionType::Either, IpAddr::V4(_))
+            | (ConnectionType::Either, IpAddr::V6(_)) => true,
+            (ConnectionType::IpV4, IpAddr::V6(_)) | (ConnectionType::IpV6, IpAddr::V4(_)) => false,
         }
     }
 }

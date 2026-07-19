@@ -653,8 +653,8 @@ impl Server for GeographicServer {
         }
 
         debug!(
-            "Looking up name {:?}",
-            self.inner.servers[self.index].connection_address
+            "Looking up name {:?} for type {:?}",
+            self.inner.servers[self.index].connection_address, connection_type,
         );
         let addr = resolve_with_type(
             &self.inner.servers[self.index].connection_address,
