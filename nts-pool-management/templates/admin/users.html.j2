@@ -38,7 +38,20 @@
         {%- for user in users %}
           <tr>
             <td>{{ user.email }}</td>
-            <td>{{ user.role }} {% if !user.is_activated() %}(unconfirmed){%endif%}</td>
+            <td>
+
+	      {% match user.role %}
+	        {% when UserRole::Manager %}
+		  <form action="/admin/users/{{ user.id }}/set-administrator" method="POST">
+		    <button title="Set role to Administrator" class="btn-alt btn-xs" type="submit">▲</button>
+		  </form>
+	        {% when UserRole::Administrator %}
+		  <form action="/admin/users/{{ user.id }}/set-manager" method="POST">
+		    <button title="Set role to Manager" class="btn-alt btn-xs" type="submit">▼</button>
+		  </form>
+	      {% endmatch %}
+	      {{ user.role }} {% if !user.is_activated() %}(unconfirmed){% endif %}
+	    </td>
             <td>{{ user.last_login_at.format("%Y-%m-%d %H:%M") }}</td>
             <td>
               {% if let Some(disabled_since) = user.disabled_since %}

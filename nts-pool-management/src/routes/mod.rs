@@ -59,6 +59,14 @@ pub fn create_router() -> Router<AppState> {
         .route("/admin/users", get(admin::users))
         .route("/admin/users/{id}/block", post(admin::user_block))
         .route("/admin/users/{id}/unblock", post(admin::user_unblock))
+        .route(
+            "/admin/users/{id}/set-administrator",
+            post(admin::user_set_administrator),
+        )
+        .route(
+            "/admin/users/{id}/set-manager",
+            post(admin::user_set_manager),
+        )
         .route("/admin/users/{id}/login-as", post(admin::login_as))
         .route("/admin/monitors", get(admin::monitors))
         .route("/admin/monitors/new", post(admin::create_monitor))

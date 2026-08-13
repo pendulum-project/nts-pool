@@ -315,6 +315,36 @@ pub async fn unblock_user(conn: impl DbConnLike<'_>, id: UserId) -> Result<User,
     .await
 }
 
+pub async fn set_admin(conn: impl DbConnLike<'_>, id: UserId) -> Result<User, sqlx::Error> {
+    sqlx::query_as!(
+        User,
+        r#"
+            UPDATE users
+            SET role = 'administrator'
+            WHERE id = $1
+            RETURNING id, email, role AS "role: _", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at
+        "#,
+        id as _,
+    )
+    .fetch_one(conn)
+    .await
+}
+
+pub async fn set_manager(conn: impl DbConnLike<'_>, id: UserId) -> Result<User, sqlx::Error> {
+    sqlx::query_as!(
+        User,
+        r#"
+            UPDATE users
+            SET role = 'manager'
+            WHERE id = $1
+            RETURNING id, email, role AS "role: _", session_revoke_token, activation_token, activation_expires_at, activated_since, last_login_at, disabled_since, created_at, updated_at
+        "#,
+        id as _,
+    )
+    .fetch_one(conn)
+    .await
+}
+
 pub async fn update_last_login(conn: impl DbConnLike<'_>, id: UserId) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
         User,

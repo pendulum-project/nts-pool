@@ -8,6 +8,7 @@ use axum_extra::extract::CookieJar;
 use eyre::{Context, OptionExt, eyre};
 use serde::Deserialize;
 
+use crate::routes::admin::user::UserRole;
 use crate::{
     AppState,
     auth::{self, Administrator, JwtClaims, login_into},
@@ -202,6 +203,26 @@ pub async fn user_block(
     if admin.id != user_id {
         user::block_user(&state.db, user_id).await?;
     }
+
+    Ok(Redirect::to("/admin/users"))
+}
+
+pub async fn user_set_administrator(
+    _admin: Administrator,
+    Path(user_id): Path<UserId>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    user::set_admin(&state.db, user_id).await?;
+
+    Ok(Redirect::to("/admin/users"))
+}
+
+pub async fn user_set_manager(
+    _admin: Administrator,
+    Path(user_id): Path<UserId>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    user::set_manager(&state.db, user_id).await?;
 
     Ok(Redirect::to("/admin/users"))
 }
