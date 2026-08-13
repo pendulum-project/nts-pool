@@ -58,6 +58,11 @@ a.btn {
   padding: 0 var(--space-sm);
 }
 
+.btn-xs {
+  max-width: fit-content;
+  padding: 0 var(--space-xs);
+}
+
 highlight-actions {
   display: flex;
   justify-content: start;
@@ -300,6 +305,17 @@ table {
     font-size: var(--font-size-table);
     white-space: nowrap;
     padding: var(--space-sm);
+
+    .actions {
+      float: right;
+      display: flex;
+      gap: var(--space-xs);
+      white-space: nowrap;
+    }
+
+    form {
+      display: inline;
+    }
   }
   
   tbody {
@@ -307,14 +323,6 @@ table {
       border-bottom: 1px solid var(--grey);
       color: var(--table-text-color);
     }
-  }
-
-
-  td.actions {
-    float: right;
-    display: flex;
-    gap: var(--space-xs);
-    white-space: nowrap;
   }
 }
 
