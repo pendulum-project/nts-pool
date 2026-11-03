@@ -3,8 +3,8 @@
 {% block content %}
   {% if app.user_context.terms_accepted || app.user|is_logged_in %}
     <section>
-      <h1>Using the NTS pool for time synchronization</h1>
-      <p>The NTS pool is available for use in two variants. Both provide the same set of servers, just using a different delivery mechanism. The SRV pool uses SRV records to inform the clients of the available servers in their regions, but requires a modified client. The KELB pool looks identical to a regular NTS time server and can therefore be used by unmodified clients. You can use whichever method is more appropriate to your situation.</p>
+      <h1>Using the sectime.org NTS pool for time synchronization</h1>
+      <p>Sectime.org is available for use in two pooling variants. Both provide the same set of servers, just using a different delivery mechanism. The SRV pool uses SRV records to inform the clients of the available servers in their regions, but requires a modified client. The KELB pool looks identical to a regular NTS time server and can therefore be used by unmodified clients. You can use whichever method is more appropriate to your situation.</p>
 
       <h1>Using the SRV pool</h1>
       <p>To configure the srv nts pool for serving time to your machine, you will need a modified NTS capable NTP client. For such a client, add the <code>{{ app.srv_domain }}</code> as a pool source to your NTS client configuration (see below for examples).</p>
