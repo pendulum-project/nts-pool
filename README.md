@@ -1,4 +1,4 @@
-# NTS Pool
+# Sectime.org
 This project contains a work in progress pool management system for NTS servers.
 
 ## Development
