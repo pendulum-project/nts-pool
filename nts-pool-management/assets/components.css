@@ -116,7 +116,7 @@ input[type="password"].error {
 
 h1 {
   font-size: var(--font-size-huge);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-xs);
 }
 
 h2 {
@@ -124,7 +124,12 @@ h2 {
 }
 
 h3 {
-  color: var(--primary);
+    margin: var(--space-md) 0 var(--space-xs) 0;
+}
+
+.subheader {
+    font-weight: normal;
+    margin-bottom: var(--space-md);
 }
 
 section > p,
