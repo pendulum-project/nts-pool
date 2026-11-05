@@ -28,5 +28,6 @@ license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 [advisories]
 ignore = [
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser is only used on local fonts" },
-    { id = "RUSTSEC-2026-0374", reason = "crate is unmaintained, but there are no underlying security issues." }
+    { id = "RUSTSEC-2026-0374", reason = "crate is unmaintained, but there are no underlying security issues." },
+    { id = "RUSTSEC-2026-0440", reason = "only used in testing" }
 ]
